@@ -10,6 +10,8 @@ import { CampaignBadge, ErrorState, Loading, PageHeader, RelationBadge, Strength
 import { EvidenceBrief } from "@/components/evidence"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 
 cytoscape.use(fcose)
 
@@ -31,6 +33,7 @@ type Sel = { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge }
 export default function GraphPage() {
   const { data, error, isLoading } = useApi<GraphData>("/api/graph")
   const [sel, setSel] = useState<Sel>(null)
+  const [showSimilar, setShowSimilar] = useState(true)
   const box = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
 
@@ -95,8 +98,9 @@ export default function GraphPage() {
         { selector: "edge", style: { "curve-style": "bezier", "line-color": "#3a3a38", width: 1.5, opacity: 0.9 } },
         { selector: "edge[relation='same_campaign']", style: { width: "mapData(p, 0.4, 1, 2, 6)" } },
         { selector: "edge[relation='duplicate']", style: { width: 7, "line-color": "#0b0b0b" } },
-        { selector: "edge[relation='similar']", style: { "line-style": "dashed", "line-color": "#8a8984", width: 1.5, "line-dash-pattern": [6, 4] } },
+        { selector: "edge[relation='similar']", style: { "line-color": "#b4b3ad", width: 1 } },
         { selector: ".faded", style: { opacity: 0.15 } },
+        { selector: ".off", style: { display: "none" } },
         { selector: "edge:selected", style: { "line-color": "#256abf", label: "data(label)", "font-size": 11, "text-background-color": "#fff", "text-background-opacity": 1, "text-background-padding": "2px" } },
         { selector: "node[kind='material']:selected", style: { "border-color": "#256abf", "border-width": 4 } },
       ],
@@ -138,6 +142,17 @@ export default function GraphPage() {
     }
   }, [elements, data])
 
+  // hiding is a style change, not a new layout: the nodes stay where they are
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    cy.edges("[relation='similar']").toggleClass("off", !showSimilar)
+    if (!showSimilar) {
+      setSel((s) => (s?.kind === "edge" && s.edge.relation === "similar" ? null : s))
+      cy.elements().removeClass("faded")
+    }
+  }, [showSimilar, elements, data])
+
   if (isLoading && !data) return <Loading />
   if (error || !data) return <ErrorState error={error} />
 
@@ -150,13 +165,19 @@ export default function GraphPage() {
     <>
       <PageHeader
         title="Graf powiązań"
-        description="Kółko to materiał, ramka to kampania. Ciągła linia: ta sama kampania (grubsza = bliżej), przerywana: podobna treść w różnych kampaniach. Kliknij materiał lub linię, aby zobaczyć dlaczego."
+        description="Kółko to materiał, ramka to kampania. Ciemna linia: ta sama kampania (grubsza = bliżej), cienka szara: podobna treść w różnych kampaniach. Kliknij materiał lub linię, aby zobaczyć dlaczego."
       />
       <Card className="relative overflow-hidden py-0">
         <div ref={box} className="h-[70vh] min-h-[480px] w-full bg-[#fcfcfb]" aria-label="Graf powiązań materiałów" role="img" />
-        <Button variant="outline" size="icon" className="absolute top-3 left-3 bg-card" onClick={() => cyRef.current?.fit(undefined, 30)} aria-label="Dopasuj widok" title="Dopasuj widok">
-          <Maximize2 />
-        </Button>
+        <div className="absolute top-3 left-3 flex items-center gap-2">
+          <Button variant="outline" size="icon" className="bg-card" onClick={() => cyRef.current?.fit(undefined, 30)} aria-label="Dopasuj widok" title="Dopasuj widok">
+            <Maximize2 />
+          </Button>
+          <div className="flex h-9 items-center gap-2 rounded-md border bg-card px-3">
+            <Switch id="show-similar" checked={showSimilar} onCheckedChange={setShowSimilar} />
+            <Label htmlFor="show-similar" className="text-sm font-normal">Podobna treść między kampaniami</Label>
+          </div>
+        </div>
         {sel && (
           <div className="absolute top-3 right-3 bottom-3 w-[22rem] max-w-[calc(100%-1.5rem)] overflow-y-auto">
             <SelectionPanel sel={sel} data={data} onClose={close} />
