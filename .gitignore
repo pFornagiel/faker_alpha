@@ -9,6 +9,7 @@ data/cache/
 data/artifacts/
 data/uploads/
 data/exports/
+data/harvest/
 data/*.log
 data/reference_faces/**/*.jpg
 data/reference_faces/_gallery_cache.npz
