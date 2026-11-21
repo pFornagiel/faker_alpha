@@ -264,14 +264,63 @@ def camp_ref(ci: int | None, cl: dict | None = None) -> dict | None:
     return {"id": ci, "code": f"C{ci + 1}", "name": names[ci], "size": p["size"], "color": color_slot(ci, p["size"])}
 
 
+def short_name(raw: str | None) -> str:
+    """Short, non-overflowing display label for a material (especially URL-captured ones)."""
+    s = str(raw or "").strip()
+    if not s:
+        return "—"
+    if s.startswith(("http://", "https://")):
+        from urllib.parse import urlparse
+
+        u = urlparse(s)
+        host = (u.netloc or "").removeprefix("www.")
+        path = (u.path or "").strip("/")
+        if not path:
+            return host[:24] + ("…" if len(host) > 24 else "")
+        tail = path.split("/")[-1]
+        if len(tail) > 10:
+            tail = "…" + tail[-6:]
+        out = f"{host}/{tail}"
+        return out if len(out) <= 24 else out[:23] + "…"
+    return s if len(s) <= 28 else s[:27] + "…"
+
+
+def _material_signals(f: dict) -> dict:
+    """Compact feature-coverage flags for visual cards & filtering."""
+    ind = f.get("indicators") or {}
+    w = f.get("web") or {}
+    llm = f.get("llm") or {}
+    imgs = f.get("images") or []
+    n_ind = sum(len(set(v)) for t, v in ind.items() if t in DISPLAY_TYPES)
+    n_link = sum(len(set(v)) for t, v in ind.items() if t in config.IDENTIFIER_GROUP)
+    n_faces = len(set(f.get("persons_visual") or []))
+    has_ocr = any((im.get("ocr_text") or "").strip() for im in imgs)
+    has_web = bool(w.get("landing_urls") or w.get("landing_domains") or w.get("ips") or f.get("infra"))
+    has_infra = bool(f.get("infra"))
+    has_llm = llm.get("_backend") not in (None, "rules", "none")
+    return {
+        "has_web": has_web,
+        "has_infra": has_infra,
+        "has_faces": n_faces > 0,
+        "has_ocr": has_ocr,
+        "has_llm": has_llm,
+        "has_images": len(imgs) > 0,
+        "n_indicators": n_ind,
+        "n_linking_indicators": n_link,
+        "n_faces": n_faces,
+        "n_domains": len(w.get("landing_domains") or []),
+    }
+
+
 def mat_summary(mid: str, f: dict, cl: dict | None = None) -> dict:
     cl = cl or _cl()
     llm = f.get("llm") or {}
     thumb, thumb_kind = _thumb(f)
     titles = f.get("text", {}).get("titles") or []
     m = f.get("_material") or {}
+    raw_name = str(f.get("name") or mid)
     return {
-        "id": mid, "name": str(f.get("name") or mid),
+        "id": mid, "name": raw_name, "display_name": short_name(raw_name),
         "title": titles[0] if titles else (llm.get("summary_pl") or "")[:120],
         "source": m.get("source") or "", "source_label": SOURCE_PL.get(m.get("source", ""), m.get("source", "")),
         "created_at": m.get("created_at"),
@@ -282,15 +331,16 @@ def mat_summary(mid: str, f: dict, cl: dict | None = None) -> dict:
         "domains": f.get("web", {}).get("landing_domains", [])[:5],
         "thumb": thumb, "thumb_kind": thumb_kind,
         "counts": {"pages": f.get("n_pages", 0), "images": f.get("n_images", 0), "videos": f.get("n_videos", 0)},
+        "signals": _material_signals(f),
     }
 
 
 def _name(items: dict, mid: str) -> str:
-    return str(items[mid][0].get("name")) if mid in items else mid
+    return short_name(items[mid][0].get("name")) if mid in items else short_name(mid)
 
 
 def link_brief(l: Link, items: dict, cl: dict, me: str | None = None) -> dict:
-    d = {"a": l.a, "b": l.b, "p": round(l.p, 3), "distance": round(l.distance, 3), "relation": l.relation,
+    d = {"a": l.a, "b": l.b, "p": round(l.p, 3), "distance": round(l.distance, 4), "relation": l.relation,
          "relation_label": RELATION_PL[l.relation], "evidence": evidence_list(l), "reasons": reasons_of(l, len(items)),
          "comparable": l.comparable}
     if me is not None:
@@ -367,7 +417,7 @@ def explain_link(l: Link, items: dict | None = None) -> dict:
              for v in VIEWS]
     formula = (f"d = 1 − ({' + '.join(f'{l.views[v]:.2f}' for v in VIEWS if v in l.views)}) / {k} = {l.distance:.2f}"
                if k else "d = 1 (brak widoku dostępnego po obu stronach)")
-    return {"p": round(l.p, 3), "distance": round(l.distance, 3), "relation": l.relation,
+    return {"p": round(l.p, 3), "distance": round(l.distance, 4), "relation": l.relation,
             "relation_label": RELATION_PL[l.relation], "relation_hint": RELATION_HINT[l.relation], "rule": _rule(l, n),
             "basis": link_basis(l), "comparable": l.comparable, "must_link": l.must_link, "identifiers": identifiers,
             "ignored": ignored, "views": views, "n_views": k, "formula": formula, "evidence": evidence_list(l)}
@@ -512,7 +562,7 @@ def join_chain(mem: list[str], inner: list[Link], items: dict) -> list[dict]:
             continue
         parent[ra] = rb
         out.append({"a": l.a, "b": l.b, "a_name": _name(items, l.a), "b_name": _name(items, l.b), "p": round(l.p, 3),
-                    "distance": round(l.distance, 3), "relation": l.relation, "basis": link_basis(l),
+                    "distance": round(l.distance, 4), "relation": l.relation, "basis": link_basis(l),
                     "reasons": [r["detail"] for r in reasons_of(l, len(items))]})
     return out
 
@@ -524,14 +574,34 @@ def overview():
     rel = Counter(l.relation for l in cl["links"])
     fams = [{"id": fi, "campaigns": sorted({cl["campaign_of"][m] for m in fam}), "size": len(fam)}
             for fi, fam in enumerate(cl["families"]) if len({cl["campaign_of"][m] for m in fam}) > 1]
+    dups = [[mat_summary(m, items[m][0], cl) for m in grp if m in items] for grp in cl["duplicates"]]
     return {
         "n_materials": len(items), "n_campaigns": len(camps),
         "n_multi": sum(1 for c in camps if c["size"] > 1), "n_singletons": sum(1 for c in camps if c["size"] == 1),
         "n_in_multi": sum(c["size"] for c in camps if c["size"] > 1),
-        "n_duplicate_groups": len(cl["duplicates"]), "links": {k: rel.get(k, 0) for k in RELATION_PL},
+        "n_duplicate_groups": len(cl["duplicates"]),
+        "duplicates": [g for g in dups if len(g) > 1],
+        "links": {k: rel.get(k, 0) for k in RELATION_PL},
         "families": [{**f, "refs": [camp_ref(c, cl) for c in f["campaigns"]]} for f in fams],
-        "campaigns": camps, "examples": examples(items, cl),
+        "campaigns": camps, "examples": examples(items, cl), "thresholds": _thresholds(),
     }
+
+
+def _campaign_view_profile(inner: list[Link], outer_all: list[Link]) -> list[dict]:
+    """Mean similarity per content view inside the campaign vs against materials outside."""
+    out = []
+    for v in VIEWS:
+        in_vals = [l.views[v] for l in inner if v in l.views]
+        out_vals = [l.views[v] for l in outer_all if v in l.views]
+        out.append({
+            "view": v,
+            "label": view_label(v),
+            "inside": round(sum(in_vals) / len(in_vals), 3) if in_vals else None,
+            "outside": round(sum(out_vals) / len(out_vals), 3) if out_vals else None,
+            "n_inside": len(in_vals),
+            "n_outside": len(out_vals),
+        })
+    return out
 
 
 @app.get("/api/campaigns/{ci}")
@@ -544,8 +614,8 @@ def campaign_detail(ci: int):
     card = campaign_card(ci, cl, items)
     mset = set(mem)
     inner = sorted([l for l in cl["links"] if l.a in mset and l.b in mset], key=lambda l: (-l.p, l.distance))
-    outer = sorted([l for l in cl["links"] if (l.a in mset) ^ (l.b in mset) and l.relation != "none"],
-                   key=lambda l: (-l.p, l.distance))
+    outer_all = [l for l in cl["links"] if (l.a in mset) ^ (l.b in mset)]
+    outer = sorted([l for l in outer_all if l.relation != "none"], key=lambda l: (-l.p, l.distance))
     nearest, seen = [], set()
     for l in outer:
         other = l.b if l.a in mset else l.a
@@ -565,7 +635,8 @@ def campaign_detail(ci: int):
         siblings = [camp_ref(c, cl) for c in sorted({cl["campaign_of"][m] for m in cl["families"][fam_i]}) if c != ci]
     return {**card, "matrix": _rows_cached(ci, items, cl), "chain": join_chain(mem, inner, items),
             "links": [link_brief(l, items, cl) for l in inner], "nearest_outside": nearest, "siblings": siblings,
-            "titles": p["titles"],
+            "titles": p["titles"], "view_profile": _campaign_view_profile(inner, outer_all),
+            "thresholds": _thresholds(),
             "n_pairs": len(mem) * (len(mem) - 1) // 2}
 
 
@@ -658,6 +729,257 @@ def material_detail(mid: str):
             "links": [link_brief(l, items, cl, me=mid) for l in links if l.p >= 0.05][:12]}
 
 
+@app.get("/api/materials/{mid}/seeds")
+def material_seeds(mid: str):
+    """Ready-to-search queries extracted from one material for inline further investigation."""
+    items, cl = _items(), _cl()
+    if mid not in items:
+        raise HTTPException(404, "Nie znaleziono materiału o tym identyfikatorze.")
+    f = items[mid][0]
+    ind = f.get("indicators") or {}
+    llm = f.get("llm") or {}
+    t = f.get("text") or {}
+    seeds: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(kind: str, kind_label: str, value: str, *, can_library: bool = True, can_analyse_url: bool = False):
+        v = str(value or "").strip()
+        if not v or len(v) < 2:
+            return
+        key = (kind, fold(v))
+        if key in seen:
+            return
+        seen.add(key)
+        seeds.append({
+            "kind": kind,
+            "kind_label": kind_label,
+            "value": v,
+            "query": v,
+            "can_library_search": can_library,
+            "can_analyse_url": can_analyse_url,
+        })
+
+    for d in (f.get("web") or {}).get("landing_domains") or []:
+        add("domain", "Domena", d, can_library=True, can_analyse_url=True)
+    if llm.get("product_or_platform_name"):
+        add("product", "Produkt / platforma", llm["product_or_platform_name"], can_library=True)
+    for aid in ind.get("advertiser_id", [])[:3]:
+        add("advertiser_id", "ID reklamodawcy", aid, can_library=True)
+    for aname in ind.get("advertiser_name", [])[:3]:
+        add("advertiser_name", "Reklamodawca", aname, can_library=True)
+    for p in list(f.get("persons_visual") or []) + list(f.get("persons_named") or []):
+        add("person", "Osoba", p, can_library=True)
+    for u in sorted(set(ind.get("ocr_domain", [])) | {q for im in f.get("images", []) for q in im.get("qr", [])}):
+        add("ocr_link", "Link z OCR / QR", u, can_library=True, can_analyse_url=True)
+    for kw in (t.get("keywords") or [])[:5]:
+        if len(kw.strip()) >= 4:
+            add("keyword", "Słowo kluczowe", kw, can_library=True)
+
+    return {
+        "material_id": mid,
+        "campaign": camp_ref(cl["campaign_of"].get(mid), cl),
+        "seeds": seeds[:20],
+    }
+
+
+def _build_dendrogram(items: dict, cl: dict) -> dict | None:
+    """Serialize the UPGMA dendrogram (exact same linkage as ftf/cluster.py) for SVG rendering."""
+    ids = [m for c in cl["campaigns"] for m in c]
+    n = len(ids)
+    if n < 2:
+        return None
+    from scipy.cluster.hierarchy import linkage
+    from scipy.spatial.distance import squareform
+
+    from .cluster import distance_matrix
+
+    D, _ = distance_matrix(ids, cl["links"])
+    Z = linkage(squareform(D, checks=False), method="average")
+
+    # Recursively compute leaf ordering (in-order traversal) and internal node coordinates.
+    children: dict[int, tuple[int, int, float]] = {}
+    for row_i, row in enumerate(Z):
+        children[n + row_i] = (int(row[0]), int(row[1]), round(float(row[2]), 4))
+
+    leaf_order: list[int] = []
+    pos_map: dict[int, float] = {}
+
+    def walk_pos(node_id: int) -> float:
+        if node_id < n:
+            pos = float(len(leaf_order))
+            leaf_order.append(node_id)
+            pos_map[node_id] = pos
+            return pos
+        l, r, _ = children[node_id]
+        p = (walk_pos(l) + walk_pos(r)) / 2.0
+        pos_map[node_id] = p
+        return p
+
+    root = 2 * n - 2
+    walk_pos(root)
+
+    leaves = []
+    for x, idx in enumerate(leaf_order):
+        mid = ids[idx]
+        s = mat_summary(mid, items[mid][0], cl)
+        leaves.append({
+            "idx": idx,
+            "x": x,
+            "id": mid,
+            "name": s["display_name"],
+            "title": s["title"],
+            "campaign": s["campaign"],
+        })
+
+    merges = []
+    for row_i, row in enumerate(Z):
+        nid = n + row_i
+        l, r, dist = int(row[0]), int(row[1]), round(float(row[2]), 4)
+        hl = 0.0 if l < n else children[l][2]
+        hr = 0.0 if r < n else children[r][2]
+        merges.append({
+            "id": nid,
+            "left_x": pos_map[l],
+            "right_x": pos_map[r],
+            "x": pos_map[nid],
+            "left_y": hl,
+            "right_y": hr,
+            "y": dist,
+        })
+
+    return {
+        "leaves": leaves,
+        "merges": merges,
+        "max_d": round(max(1.0, float(Z[:, 2].max())), 3),
+        "thresholds": _thresholds(),
+    }
+
+
+@app.get("/api/metrics/overview")
+def metrics_overview():
+    """Aggregated metrics & chart series explaining how the database is grouped and what features exist."""
+    items, cl = _items(), _cl()
+    n = len(items)
+    links_all = cl["links"]
+
+    # 1. Pairwise content distance histogram (10 bins in [0, 1]) + must-link counts
+    bins = [{"range": f"{i / 10:.1f}–{(i + 1) / 10:.1f}", "lo": round(i / 10, 1), "hi": round((i + 1) / 10, 1),
+             "must_link": 0, "same_campaign": 0, "similar": 0, "none": 0, "total": 0}
+            for i in range(10)]
+    n_must_link = 0
+    for l in links_all:
+        bi = min(9, max(0, int(l.distance * 10)))
+        b = bins[bi]
+        b["total"] += 1
+        if l.must_link:
+            b["must_link"] += 1
+            n_must_link += 1
+        elif l.relation in ("same_campaign", "duplicate"):
+            b["same_campaign"] += 1
+        elif l.relation == "similar":
+            b["similar"] += 1
+        else:
+            b["none"] += 1
+
+    # 2. What drives links across the DB (signal group attribution)
+    sig_pairs: Counter[str] = Counter()
+    for l in links_all:
+        if l.relation not in ("same_campaign", "duplicate"):
+            continue
+        if l.must_link:
+            groups = set()
+            if l.same_file:
+                groups.add("file_sha")
+            for s in l.shared_ids:
+                if not s.ignored:
+                    groups.add(s.group)
+            for g in groups:
+                sig_pairs[g] += 1
+        else:
+            sig_pairs["content_only"] += 1
+
+    sig_labels = {
+        **{g: group_label(g) for g in GROUP_ORDER},
+        "file_sha": "identyczny plik (sha256)",
+        "content_only": "wyłącznie podobieństwo treści",
+    }
+    signal_attribution = [
+        {"group": g, "label": sig_labels.get(g, g), "pairs": cnt}
+        for g, cnt in sig_pairs.most_common()
+    ]
+
+    # 3. Feature coverage across materials
+    sigs = [_material_signals(f) for f, _ in items.values()]
+    cov_defs = [
+        ("has_web", "Strona docelowa (HTML / URL)", sum(1 for s in sigs if s["has_web"])),
+        ("has_images", "Kreacje / zrzuty / klatki", sum(1 for s in sigs if s["has_images"])),
+        ("has_ocr", "Tekst odczytany z obrazu (OCR)", sum(1 for s in sigs if s["has_ocr"])),
+        ("has_faces", "Rozpoznane twarze (ArcFace)", sum(1 for s in sigs if s["has_faces"])),
+        ("has_linking", "Identyfikatory techniczne (piksele/kit/domena)", sum(1 for s in sigs if s["n_linking_indicators"] > 0)),
+        ("has_infra", "Metadane domen (RDAP / DNS / CERT)", sum(1 for s in sigs if s["has_infra"])),
+        ("has_llm", "Atrybuty opisowe (LLM)", sum(1 for s in sigs if s["has_llm"])),
+    ]
+    feature_coverage = [
+        {"key": k, "label": lab, "count": cnt, "total": n, "pct": round(100 * cnt / max(1, n))}
+        for k, lab, cnt in cov_defs
+    ]
+
+    # 4. Scam types & top impersonated persons
+    scam_cnt: Counter[str] = Counter()
+    person_vis: Counter[str] = Counter()
+    person_named: Counter[str] = Counter()
+    person_any: Counter[str] = Counter()
+    for f, _ in items.values():
+        st = (f.get("llm") or {}).get("scam_type")
+        scam_cnt[enum_label(st) if st else "nieokreślony"] += 1
+        vis = set(f.get("persons_visual") or [])
+        nam = set(f.get("persons_named") or [])
+        for p in vis:
+            person_vis[p] += 1
+        for p in nam:
+            person_named[p] += 1
+        for p in vis | nam:
+            person_any[p] += 1
+
+    scam_types = [{"label": k, "count": v} for k, v in scam_cnt.most_common()]
+    top_persons = [
+        {"name": p, "count": cnt, "visual": person_vis[p], "named": person_named[p]}
+        for p, cnt in person_any.most_common(10)
+    ]
+
+    # 5. View separation summary (mean similarity inside same campaign vs different campaigns)
+    camp_of = cl["campaign_of"]
+    view_summary = []
+    for v in VIEWS:
+        same_vals = [l.views[v] for l in links_all if v in l.views and camp_of.get(l.a) == camp_of.get(l.b)]
+        diff_vals = [l.views[v] for l in links_all if v in l.views and camp_of.get(l.a) != camp_of.get(l.b)]
+        view_summary.append({
+            "view": v,
+            "label": view_label(v),
+            "mean_same": round(sum(same_vals) / len(same_vals), 3) if same_vals else 0.0,
+            "mean_diff": round(sum(diff_vals) / len(diff_vals), 3) if diff_vals else 0.0,
+            "n_same": len(same_vals),
+            "n_diff": len(diff_vals),
+        })
+
+    return {
+        "n_materials": n,
+        "n_campaigns": len(cl["campaigns"]),
+        "n_multi": sum(1 for c in cl["campaigns"] if len(c) > 1),
+        "n_singletons": sum(1 for c in cl["campaigns"] if len(c) == 1),
+        "n_pairs": len(links_all),
+        "n_must_link": n_must_link,
+        "thresholds": _thresholds(),
+        "distance_histogram": bins,
+        "signal_attribution": signal_attribution,
+        "feature_coverage": feature_coverage,
+        "scam_types": scam_types,
+        "top_persons": top_persons,
+        "view_summary": view_summary,
+        "dendrogram": _build_dendrogram(items, cl),
+    }
+
+
 @app.get("/api/pair/{a}/{b}")
 def pair_detail(a: str, b: str):
     items, cl = _items(), _cl()
@@ -692,7 +1014,7 @@ def graph(traces: bool = False):
     for mid, (f, _) in items.items():
         ci = cl["campaign_of"].get(mid)
         s = mat_summary(mid, f, cl)
-        nodes.append({"id": mid, "kind": "material", "label": s["name"], "parent": f"C{ci}" if ci is not None else None,
+        nodes.append({"id": mid, "kind": "material", "label": s["display_name"], "parent": f"C{ci}" if ci is not None else None,
                       "title": s["title"], "campaign": s["campaign"], "thumb": s["thumb"], "scam_type_label": s["scam_type_label"]})
     for l in cl["links"]:
         if l.relation == "none":
@@ -741,7 +1063,7 @@ def matrix():
     for l in cl["links"]:
         i, j = idx[l.a], idx[l.b]
         P[i][j] = P[j][i] = round(l.p, 3)
-        Dm[i][j] = Dm[j][i] = round(l.distance, 3)
+        Dm[i][j] = Dm[j][i] = round(l.distance, 4)
         R[i][j] = R[j][i] = l.relation
     return {"materials": [{"id": m, "name": _name(items, m), "campaign": camp_ref(cl["campaign_of"].get(m), cl)} for m in order],
             "p": P, "distance": Dm, "relation": R, "thresholds": _thresholds()}
@@ -991,7 +1313,7 @@ def _analysis_payload(res: dict, keep: bool, meta: dict) -> dict:
     links_out = []
     for l in res["links"][:10]:
         other = l.b
-        links_out.append({"p": round(l.p, 3), "distance": round(l.distance, 3), "relation": l.relation,
+        links_out.append({"p": round(l.p, 3), "distance": round(l.distance, 4), "relation": l.relation,
                           "relation_label": RELATION_PL[l.relation], "evidence": evidence_list(l),
                           "other": mat_summary(other, items[other][0], cl) if other in items else {"id": other, "name": other},
                           "explain": explain_link(l, all_items)})
