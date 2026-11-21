@@ -359,6 +359,30 @@ class TestCanonicalWebParsing(unittest.TestCase):
         self.assertFalse(web.is_generic("novumfy.com"))
         self.assertFalse(web.is_decoy_or_generic_domain("novumfy.com"))
 
+    def test_shared_hosting_customers_are_distinct_and_platform_is_generic(self):
+        a = "xd-f1cf3d4fdb19408ea770fc6f80817dcb.ecs.us-east-1.on.aws"
+        b = "dv-c3e594c6d429469e90b54478358619c3.ecs.us-east-1.on.aws"
+        self.assertEqual(web.registrable_domain(f"https://{a}/api"), a)
+        self.assertNotEqual(web.registrable_domain(a), web.registrable_domain(b))
+        self.assertEqual(web.registrable_domain("890012.weebly.com"), "890012.weebly.com")
+        self.assertFalse(web.is_generic(a))
+        for platform in ("on.aws", "weebly.com", "base44.app"):
+            with self.subTest(platform=platform):
+                self.assertTrue(web.is_generic(platform))
+        self.assertEqual(web.registrable_domain("www.dorquesio.click"), "dorquesio.click")
+
+    def test_public_services_and_platform_endpoints_never_link(self):
+        for dom in ("flagcdn.com", "ipapi.co", "api.frankfurter.dev", "example.com"):
+            with self.subTest(public=dom):
+                self.assertTrue(web.is_generic(web.registrable_domain(dom)))
+        for endpoint in ("POST /cdn-cgi/rum", "POST /wp-admin/admin-ajax.php", "us.i.posthog.com/e/", "POST /api/collect"):
+            with self.subTest(platform=endpoint):
+                self.assertTrue(web.is_platform_endpoint(endpoint))
+        for endpoint in ("POST /api/v1/trigger/field/{id}/", "dorquesio.click/api/v1/trigger/field/{id}/",
+                         "POST /.events/v2/page_view"):
+            with self.subTest(operator=endpoint):
+                self.assertFalse(web.is_platform_endpoint(endpoint))
+
     def test_fb_pixel_canonical_equivalence_across_sources(self):
         html_ind = web.extract_html("<script>fbq('init', '1071875908635809');</script>")["indicators"]
         url_pxl = web.url_indicators("https://lander.click/go?pxl=1071875908635809")

@@ -93,6 +93,10 @@ def identifiers(f: dict) -> dict[tuple[str, str], set[str]]:
                 v = web.registrable_domain(v)
                 if not v or (web.is_decoy_or_generic_domain(v) if t == "ocr_domain" else web.is_generic(v)):
                     continue
+            elif t in ("api_template", "form_endpoint") and web.is_platform_endpoint(str(v)):
+                continue               # also filters features stored before the endpoint list existed
+            elif t == "email" and web.is_generic(str(v).rsplit("@", 1)[-1]):
+                continue               # placeholder addresses such as name@example.com
             out[(g, str(v))].add(t)
     return out
 

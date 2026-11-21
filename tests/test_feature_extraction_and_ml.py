@@ -183,6 +183,22 @@ def _unrelated(i: int) -> tuple[dict, dict]:
 
 
 class TestSimilarityAndClustering(unittest.TestCase):
+    def test_shared_platform_host_and_public_service_do_not_must_link(self):
+        """Two unrelated pages on AWS ECS that both load a public flag CDN and report to Cloudflare RUM share nothing."""
+        def entry(mid: str, ecs: str) -> tuple[dict, dict]:
+            return _make_material_entry(mid, indicators={
+                "page_host": [f"{ecs}.ecs.us-east-1.on.aws", "flagcdn.com"],
+                "api_template": ["POST /cdn-cgi/rum"], "email": ["name@example.com"]})
+
+        items = {"a": entry("a", "xd-f1cf3d4f"), "b": entry("b", "dv-c3e594c6"), "c": entry("c", "xd-f1cf3d4f")}
+        corpus = similarity.Corpus(items)
+        ab = similarity.pair("a", *items["a"], "b", *items["b"], corpus)
+        ac = similarity.pair("a", *items["a"], "c", *items["c"], corpus)
+        self.assertFalse(ab.must_link)
+        self.assertEqual(ab.shared_ids, [])
+        self.assertTrue(ac.must_link)
+        self.assertEqual([s.value for s in ac.shared_ids], ["xd-f1cf3d4f.ecs.us-east-1.on.aws"])
+
     def test_gower_distance_is_mean_of_available_views(self):
         items = {
             "a": _make_material_entry("a", text_summary={"minhash_masked": _sig(128, 1)},

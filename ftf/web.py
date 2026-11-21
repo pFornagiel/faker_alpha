@@ -37,7 +37,22 @@ GENERIC_DOMAINS = {
     "wikipedia.org", "wikimedia.org", "pinterest.com", "whatsapp.com", "telegram.org", "t.me",
     "shopify.com", "amazonaws.com", "cloudfront.net", "akamaihd.net", "unsplash.com", "er-api.com",
     "b-cdn.net", "polyfill.io", "hcaptcha.com",
+    # Public services, placeholders and default-server pages that joined three or more unrelated kit families in a
+    # background corpus of CERT Polska warning-list pages (tools/research_corpus.py).
+    "flagcdn.com", "ipapi.co", "ipinfo.io", "frankfurter.dev", "alicdn.com", "klaviyo.com", "shopifysvc.com",
+    "shop.app", "posthog.com", "vimeocdn.com", "tradingview.com", "tradingview-widget.com", "plesk.com",
+    "nginx.com", "nginx.org", "example.com", "example.org", "domain.com", "email.com", "ejemplo.com",
 }
+# Hosting platforms where every customer gets a sub-host and the public-suffix list does not say so. The registrable
+# domain there is the platform, shared by unrelated operators; the full host is what identifies the customer.
+SHARED_HOSTING_SUFFIXES = {
+    "on.aws", "weebly.com", "weeblysite.com", "base44.app", "edgeone.dev", "edgeone.app", "godaddysites.com",
+    "wordpress.com", "surge.sh", "wstd.io", "mystrikingly.com", "webnode.page", "tilda.ws", "ucoz.net",
+    "hostingersite.com", "translate.goog", "softr.app", "durable.co", "site123.me",
+}
+# Request paths owned by a hosting platform or an analytics SDK, identical on every site that uses it.
+_PLATFORM_PATH_RX = re.compile(
+    r"^/(?:cdn-cgi/|wp-admin/admin-ajax\.php|wp-json/|\.well-known/|__l5e/|(?:api/collect|v1/metrics|collect|e)/?$)", re.I)
 _GOOGLE_CC_RX = re.compile(r"^(?:[\w-]+\.)*google(?:\.[a-z]{2,3}){1,2}$", re.I)
 
 # Domains frequently shown as decoys/spoofed news/platforms in ad creatives (filter from ocr_domain).
@@ -102,7 +117,11 @@ def registrable_domain(url_or_host: str) -> str:
         return host if "." in host else ""
     if not ext.domain:
         return host
-    return f"{ext.domain}.{ext.suffix}".lower()
+    reg = f"{ext.domain}.{ext.suffix}".lower()
+    for shared in SHARED_HOSTING_SUFFIXES:
+        if reg == shared or reg.endswith("." + shared):
+            return host            # customer sub-host of a shared platform, e.g. <id>.ecs.us-east-1.on.aws
+    return reg
 
 
 def is_generic(domain: str) -> bool:
@@ -111,7 +130,19 @@ def is_generic(domain: str) -> bool:
         return True
     if _GOOGLE_CC_RX.match(d):
         return True
+    if d in SHARED_HOSTING_SUFFIXES:
+        return True                # the platform itself; its customer sub-hosts are not generic
     return d in GENERIC_DOMAINS or any(d.endswith("." + g) for g in GENERIC_DOMAINS)
+
+
+def is_platform_endpoint(value: str) -> bool:
+    """True for an `api_template` ("POST /path") or `form_endpoint` ("host/path") that belongs to a hosting platform
+    or analytics SDK (Cloudflare RUM, WordPress AJAX, PostHog, ...) rather than to the page's operator."""
+    v = (value or "").split(" ", 1)[-1]
+    host, path = ("", v) if v.startswith("/") else (v.split("/", 1)[0], "/" + v.partition("/")[2])
+    if host and is_generic(registrable_domain(host)):
+        return True
+    return bool(_PLATFORM_PATH_RX.match(path))
 
 
 def is_decoy_or_generic_domain(dom: str) -> bool:
@@ -405,8 +436,8 @@ def parse_har(path: str | Path, keep_images: bool = True) -> dict:
             posts_summary.append(url[:300])
             if "/trigger/" in pr.path.lower() or "session" in pr.path.lower():
                 session_uuids.update(u.lower() for u in UUID_RX.findall(pr.path))
-            if not is_generic(dom):
-                tmpl = template_path(pr.path)
+            tmpl = template_path(pr.path)
+            if not is_generic(dom) and not is_platform_endpoint(tmpl):
                 ind.setdefault("form_endpoint", set()).add(f"{host}{tmpl}")
                 if tmpl.count("/") >= 2:
                     ind.setdefault("api_template", set()).add(f"POST {tmpl}")
