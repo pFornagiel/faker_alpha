@@ -86,6 +86,72 @@ python -m ftf.scheduler --once [--analyse]             # skan bibliotek reklam /
 python -m ftf.scheduler --once --watch                 # + obserwacja kampanii: szukanie nowych materiałów po ich domenach / ID reklamodawców / produktach
 ```
 
+## Większy zbiór badawczy (CERT Polska + urlscan.io)
+
+Zbiór organizatora to kilkanaście przypadków — za mało, by sprawdzić, które ślady naprawdę łączą kampanie, a które
+tylko tak wyglądają. `tools/harvest_urlscan.py` buduje publiczny korpus tła: bierze domeny z listy ostrzeżeń CERT Polska
+i pobiera ich **historyczne** skany z urlscan.io (zrzut ekranu, DOM, lista żądań, IP / ASN / TLS). Stron oszustów nie
+odwiedzamy sami. Każda domena trafia do folderu w tym samym układzie co przypadki organizatora, więc czyta go zwykły potok.
+
+```bash
+# 1. klucz: darmowe konto urlscan.io -> plik .env w katalogu repo (jest w .gitignore)
+echo 'URLSCAN_API_KEY=...' > .env
+
+# 2. pobranie: co 10. domena z listy CERT (rozrzut po ~6 miesiącach), do 2000 przypadków -> data/harvest/urlscan/<domena>/
+python tools/harvest_urlscan.py --limit 2000 --stride 10 --max-domains 12000
+
+# 3. ekstrakcja cech równolegle, do osobnej bazy (demo w data/store/ftf.sqlite zostaje nietknięte)
+FTF_STORE=data/store/ftf_harvest.sqlite python tools/ingest_parallel.py data/harvest/urlscan \
+    --source urlscan --workers 8 --threads 2 --require page.html
+
+# 4. badanie: które cechy łączą strony + jak reguła must-link zachowuje się w tej skali
+FTF_STORE=data/store/ftf_harvest.sqlite python tools/research_corpus.py data/harvest/urlscan \
+    --store --pipeline-sample 400 --out data/harvest/research.json
+
+# 5. panel na tym korpusie (na serwerze), a z laptopa tunel: ssh -N -L 8790:127.0.0.1:8790 <serwer>
+FTF_STORE=data/store/ftf_harvest.sqlite python -m ftf.cli serve --port 8790
+```
+
+Uwagi praktyczne:
+
+- **Limity urlscan.io** (darmowy klucz, stan z listopada 2026): 1000 wyszukiwań i 10 000 pobrań wyników dziennie; przebieg
+  na 2000 przypadków zużywa ok. 280 wyszukiwań i trwa ok. 45 min. Bez klucza dostępny jest tylko zrzut ekranu i metadane
+  hostingu (100 wyszukiwań na godzinę); późniejsze uruchomienie z kluczem uzupełnia takie przypadki.
+- **Wznawianie i kolejne porcje:** skrypt pomija gotowe przypadki. Inny wycinek listy: `--skip 5 --stride 10`.
+  Domeny podszywające się pod banki, kurierów i serwisy ogłoszeniowe są domyślnie pomijane (`--include-phishing`).
+- **Puste strony:** ok. 25 % skanów ma pusty DOM (strona martwa albo cloaking wobec skanera). `--require page.html`
+  pomija je przy ekstrakcji cech.
+- **Wspólny serwer:** `ingest_parallel.py` ogranicza wątki każdego procesu i przypina całość do `workers × threads` rdzeni.
+  Bez tego onnxruntime i OCR startują po jednym wątku na rdzeń w każdym procesie.
+- **Panel przy większej liczbie materiałów:** porównanie par jest kwadratowe (ok. 10 s dla 250 materiałów, szacunkowo 6 min dla
+  1500). Do przeglądania wygodniej wyciąć próbkę kilkuset materiałów do osobnej bazy.
+- **Dane nie trafiają do repo:** `data/harvest/` jest w `.gitignore`; treści skanów urlscan.io nie redystrybuujemy.
+
+### Co pokazał korpus (1503 strony z pełnym skanem, listopad 2026)
+
+- **Kity zmieniają skórkę na każdej domenie.** Jedna operacja to 107 domen na 3 dedykowanych serwerach, każda z inną
+  marką i tytułem w innym języku; tylko 8 % par wygląda podobnie. Stały jest szkielet kitu: hashe własnych skryptów,
+  szablony ścieżek, zmienne globalne JS, nazwy ciasteczek. Odcisk złożony z tych cech grupuje 80 % stron w 74 rodziny.
+- **Sieć widoczna tylko po szkielecie:** 224 domeny `.store` o losowych 10-literowych nazwach zwracają skanerowi
+  „Page not found”, a mają ten sam kod sklepu i to samo ciasteczko śledzące.
+- **Czas wystawienia certyfikatu TLS** w tej samej minucie: 91 % takich par należy do jednej rodziny kitu (średnio 5 %).
+  Wpis na listę CERT w odstępie do godziny: 43–55 %.
+- **Słabe sygnały osobno:** data rejestracji domeny, podsieć /24, ASN.
+- **Fałszywe must-linki.** Przed poprawką publiczne usługi (`flagcdn.com`, `ipapi.co`), endpointy platform
+  (`POST /cdn-cgi/rum` Cloudflare) i wspólne sufiksy hostingu (`on.aws`, `weebly.com`) łączyły niezwiązane strony
+  i przez przechodniość sklejały połowę próby w jedną kampanię. Po poprawce (`ftf/web.py`: `SHARED_HOSTING_SUFFIXES`,
+  `is_platform_endpoint`, rozszerzone `GENERIC_DOMAINS`) na tej samej próbie 400 stron:
+
+  | | największa kampania | pary w kampaniach ze wspólnym odciskiem kitu | odzyskane silne pary kitu |
+  |---|---|---|---|
+  | przed | 200 z 400 | 19 % | 88 % |
+  | po | 69 z 400 | 85 % | 79 % |
+  | same widoki treści, bez identyfikatorów | 69 z 400 | 83 % | 69 % |
+
+Korpus nie ma etykiet, więc to zgodność z niezależnymi sygnałami (szkielet kitu, szablon tytułu, dedykowany IP),
+a nie precyzja względem prawdy. Na materiałach organizatora poprawka zmienia jedno: przypadek teaserowy `p10`
+(inny produkt, inna usługa AWS) przestaje być doklejany do kampanii inwestycyjnej przez wspólny sufiks `on.aws`.
+
 ## LLM (augmentacja cech)
 `FTF_LLM=auto` (domyślnie): **Claude Code CLI** w trybie headless (`claude -p --model haiku
 --json-schema …`, korzysta z subskrypcji Claude, bez klucza API) → **Gemini** (`GEMINI_API_KEY`) →
@@ -111,6 +177,7 @@ Z tokenem scheduler przeszukuje **wszystkie reklamy emitowane w UE (także niepo
 | Microsoft Ad Library API | publiczne, bez klucza | reklamy EOG |
 | Google Ads Transparency Center | publiczne (wewn. RPC) | brak wyszukiwania pełnotekstowego |
 | Meta Ad Library API | token (wyżej) | automatyczny scraping UI jest sprzeczny z ToS Meta — używamy API/yt-dlp per ID |
+| urlscan.io — historyczne skany domen z listy CERT (`tools/harvest_urlscan.py`) | klucz API (darmowe konto) | limity dzienne; tylko korpus badawczy, treści skanów nie są w repo (`data/harvest/` w `.gitignore`) |
 | Wikimedia Commons (baza twarzy) | publiczne | licencje CC/PD zapisane w `data/reference_faces/*/sources.json` |
 | Zbiór organizatora | tylko na potrzeby wyzwania | **nie jest publikowany w repo** (`.gitignore`) |
 
@@ -144,5 +211,6 @@ ftf/graph.py           NetworkX, pyvis, Neo4j/Cypher
 ftf/sources.py         CERT PL, MS Ad Library, Google ATC, Meta API/yt-dlp, LinkedIn
 ftf/scheduler.py       APScheduler: skan → triage → analiza
 tools/                 pobieranie modeli, baza twarzy, ewaluacja, rozwiązanie CTF
+tools/harvest_urlscan.py, ingest_parallel.py, research_corpus.py   korpus badawczy: pobranie, równoległa ekstrakcja, badanie cech
 research/              raporty z researchu (źródła, infrastruktura, modele, prior art)
 ```
