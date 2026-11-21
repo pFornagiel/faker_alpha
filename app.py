@@ -14,7 +14,7 @@ import streamlit.components.v1 as components
 
 from ftf import config, ingest
 from ftf.engine import Engine
-from ftf.similarity import FAMILY_PL
+from ftf.similarity import GROUP_PL, TYPE_PL, VIEW_PL
 
 logging.basicConfig(level=logging.WARNING)
 st.set_page_config(page_title="FakeTrace – Follow the Fake", page_icon="🕵️", layout="wide")
@@ -23,8 +23,7 @@ DECISION_PL = {
     "duplicate": ("🟣 DUPLIKAT", "Materiał jest duplikatem już przeanalizowanego zgłoszenia."),
     "known_campaign": ("🔴 ZNANA KAMPANIA", "Materiał przypisano do istniejącej kampanii."),
     "merge_proposal": ("🟠 PROPOZYCJA SCALENIA", "Materiał silnie łączy się z więcej niż jedną kampanią — możliwe, że to jedna kampania."),
-    "candidate_review": ("🟡 MOŻLIWY WARIANT", "Podobieństwo umiarkowane — wymaga weryfikacji analityka."),
-    "new_campaign": ("🟢 NOWY WZORZEC", "Brak wystarczających powiązań — prawdopodobnie nowa kampania."),
+    "new_campaign": ("🟢 NOWY WZORZEC", "Brak wspólnych identyfikatorów i bliskiej treści — prawdopodobnie nowa kampania."),
 }
 
 
@@ -37,24 +36,29 @@ def name_of(items, mid):
     return items[mid][0].get("name", mid) if mid in items else mid
 
 
+def views_txt(l) -> str:
+    return ", ".join(f"{VIEW_PL[k]}={v:.2f}" for k, v in sorted(l.views.items(), key=lambda kv: -kv[1]))
+
+
 def show_links(links, items, top=10):
     rows = []
     for l in links[:top]:
-        rows.append({"materiał": name_of(items, l.b), "p": round(l.p, 3), "relacja": l.relation,
-                     "rodziny dowodów": ", ".join(f"{FAMILY_PL.get(k, k)}={v:.2f}" for k, v in sorted(l.families.items(), key=lambda kv: -kv[1])),
-                     "uzasadnienie": l.explain(5)})
+        rows.append({"materiał": name_of(items, l.b), "p": round(l.p, 3), "d": round(l.distance, 3), "relacja": l.relation,
+                     "widoki treści": views_txt(l), "uzasadnienie": l.explain(5)})
     if rows:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 def show_evidence(link):
-    ev = pd.DataFrame([e.as_dict() for e in link.evidence])
-    if ev.empty:
+    rows = [{"rodzaj": f"identyfikator: {GROUP_PL.get(s.group, s.group)}", "typ": TYPE_PL.get(s.type.split("+")[0], s.type),
+             "wartość": s.value, "podobieństwo": None, "df": s.df, "pominięty (zbyt popularny)": s.ignored} for s in link.shared_ids]
+    rows += [{"rodzaj": "widok treści", "typ": VIEW_PL[v], "wartość": "", "podobieństwo": round(x, 3), "df": None,
+              "pominięty (zbyt popularny)": False} for v, x in sorted(link.views.items(), key=lambda kv: -kv[1])]
+    if not rows:
         st.caption("brak dowodów")
         return
-    ev["rodzina"] = ev["family"].map(lambda f: FAMILY_PL.get(f, f))
-    st.dataframe(ev[["rodzina", "signal", "detail", "weight", "ignored"]].sort_values("weight", ascending=False),
-                 use_container_width=True, hide_index=True)
+    st.caption(f"odległość treści d = {link.distance:.3f} (Gower: 1 − średnia dostępnych widoków); p = {link.p:.3f}")
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 def show_features(f: dict):
@@ -73,7 +77,7 @@ def show_features(f: dict):
     with c2:
         st.markdown("**📝 Tekst / narracja**")
         t = f.get("text", {})
-        st.write({"tytuły": t.get("titles"), "szablony tytułów": t.get("title_templates"), "słowa kluczowe": t.get("keywords"),
+        st.write({"tytuły": t.get("titles"), "słowa kluczowe": t.get("keywords"),
                   "kwoty": t.get("amounts"), "osoby (tekst)": f.get("persons_named"), "osoby (twarze)": f.get("persons_visual"),
                   "marki": t.get("brands_text"), "media": t.get("media_text"), "daty": f.get("dates")})
         st.markdown(f"**🤖 Atrybuty LLM** (backend: `{f.get('llm', {}).get('_backend')}`)")
@@ -188,10 +192,10 @@ with tabs[0]:
         if res["campaign"] is not None and res["campaign"] < len(cl.get("profiles", [])):
             camp_txt = f" → **C{res['campaign'] + 1}: {cl['profiles'][res['campaign']]['name']}**"
         st.markdown(f"### {lab}{camp_txt}")
-        if res.get("similar_playbook") is not None and res["similar_playbook"] < len(cl.get("profiles", [])):
-            st.info(f"Nowa kampania, ale podobny playbook do C{res['similar_playbook'] + 1}: "
-                    f"{cl['profiles'][res['similar_playbook']]['name']} (brak wspólnych śladów operatora/kitu/kreacji)")
-        st.caption(desc + f"  Wyniki kampanii (śr. top-2 p): {res['campaign_scores']}")
+        if res.get("similar_family") is not None and res["similar_family"] < len(cl.get("profiles", [])):
+            st.info(f"Nowa kampania, ale treść podobna do C{res['similar_family'] + 1}: "
+                    f"{cl['profiles'][res['similar_family']]['name']} (ta sama rodzina, brak wspólnych identyfikatorów)")
+        st.caption(desc + f"  Kampanie (1 − odległość do najbliższego członka): {res['campaign_scores']}")
         st.markdown("#### Najbardziej podobne materiały (z uzasadnieniem)")
         show_links(res["links"], items)
         if res["links"]:
@@ -207,7 +211,7 @@ with tabs[1]:
         st.info("Baza jest pusta — wczytaj zbiór w panelu bocznym.")
     else:
         cl = eng.clustering()
-        st.subheader(f"{len(cl['campaigns'])} kampanii · {len(cl['families'])} rodzin (playbooków) · {len(cl['duplicates'])} grup duplikatów")
+        st.subheader(f"{len(cl['campaigns'])} kampanii · {len(cl['families'])} rodzin (podobna treść) · {len(cl['duplicates'])} grup duplikatów")
         rows = []
         for ci, p in enumerate(cl["profiles"]):
             rows.append({"kampania": f"C{ci + 1}", "nazwa": p["name"], "liczność": p["size"],
@@ -220,13 +224,12 @@ with tabs[1]:
             with st.expander(f"C{ci + 1} · {p['name']} · {p['size']} mat."):
                 c1, c2 = st.columns([2, 1])
                 with c1:
-                    st.markdown("**Wspólne ślady (shared indicators)**")
+                    st.markdown("**Wspólne identyfikatory**")
                     if p["shared_indicators"]:
-                        st.dataframe(pd.DataFrame(p["shared_indicators"])[["type", "value", "count"]], hide_index=True, use_container_width=True)
-                    st.markdown("**Warianty przekazu w kampanii:** " + " · ".join(
-                        "{" + ", ".join(name_of(items, x) for x in g) + "}" for g in cl.get("variants", {}).get(ci, [])))
+                        st.dataframe(pd.DataFrame(p["shared_indicators"])[["group", "type", "value", "count"]], hide_index=True,
+                                     use_container_width=True)
                     st.markdown("**Tytuły:** " + " | ".join(p["titles"]))
-                    st.write({"narracje": p["narratives"], "produkty": p["products"], "rodziny dowodów (wewn.)": p["link_families"]})
+                    st.write({"produkty": p["products"], "grupy identyfikatorów": p["shared_groups"]})
                 with c2:
                     for mm in p["members"][:6]:
                         f = items[mm][0]
@@ -237,10 +240,11 @@ with tabs[1]:
                             st.caption(f"{f.get('name')}: {(f.get('text', {}).get('titles') or [''])[0][:80]}")
         if cl["duplicates"]:
             st.markdown("**Duplikaty:** " + "; ".join(" = ".join(name_of(items, x) for x in g) for g in cl["duplicates"]))
-        st.markdown("**Rodziny (ten sam playbook, możliwie różni operatorzy):** " +
-                    "; ".join("{" + ", ".join(name_of(items, x) for x in fam) + "}" for fam in cl["families"] if len(fam) > 1))
+        st.markdown("**Rodziny (kampanie o podobnej treści, bez wspólnego identyfikatora):** " +
+                    "; ".join("{" + ", ".join(name_of(items, x) for x in fam) + "}" for fam in cl["families"]
+                              if len({cl["campaign_of"][x] for x in fam}) > 1))
         if cl.get("hdbscan"):
-            st.caption("Baseline HDBSCAN (na 1-p): " + json.dumps({name_of(items, k): v for k, v in cl["hdbscan"].items()}, ensure_ascii=False))
+            st.caption("Baseline HDBSCAN (na D): " + json.dumps({name_of(items, k): v for k, v in cl["hdbscan"].items()}, ensure_ascii=False))
 
 # =============================================================================== graph
 with tabs[2]:
@@ -255,7 +259,7 @@ with tabs[2]:
 
                 cl = eng.clustering()
                 st.info(push_neo4j(build_graph(items, cl, cl["profiles"])))
-            st.caption("Krawędzie: czerwone = ta sama kampania, pomarańczowe przerywane = podobny playbook, czarne = duplikat. "
+            st.caption("Krawędzie: czerwone = ta sama kampania, pomarańczowe przerywane = podobna treść, czarne = duplikat. "
                        "Najedź na krawędź, aby zobaczyć uzasadnienie.")
         with c2:
             p = eng.graph_html(config.EXPORTS / "graph_ui.html", with_entities=ent)
@@ -267,9 +271,8 @@ with tabs[3]:
         cl = eng.clustering()
         rel = st.multiselect("Relacje", ["duplicate", "same_campaign", "similar", "none"], default=["duplicate", "same_campaign", "similar"])
         links = sorted([l for l in cl["links"] if l.relation in rel], key=lambda l: -l.p)
-        df = pd.DataFrame([{"A": name_of(items, l.a), "B": name_of(items, l.b), "p": round(l.p, 3), "relacja": l.relation,
-                            "rodziny": ", ".join(f"{FAMILY_PL.get(k, k)}={v:.2f}" for k, v in sorted(l.families.items(), key=lambda kv: -kv[1])),
-                            "uzasadnienie": l.explain(6)} for l in links])
+        df = pd.DataFrame([{"A": name_of(items, l.a), "B": name_of(items, l.b), "p": round(l.p, 3), "d": round(l.distance, 3),
+                            "relacja": l.relation, "widoki treści": views_txt(l), "uzasadnienie": l.explain(6)} for l in links])
         st.dataframe(df, use_container_width=True, hide_index=True)
         if links:
             opts = [f"{name_of(items, l.a)} — {name_of(items, l.b)} (p={l.p:.2f})" for l in links]

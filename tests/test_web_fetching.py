@@ -412,16 +412,20 @@ class TestCanonicalWebParsing(unittest.TestCase):
         self.assertIn(builder_uuid, ind.get("tenant_uuid", set()))
         self.assertIn("POST /api/v1/trigger/field/{id}/", ind.get("api_template", set()))
 
-    def test_chrome_css_duplicate_suffix_stripped_and_generic_filtered(self):
+    def test_chrome_duplicate_suffix_stripped_and_removed_indicators_not_emitted(self):
+        self.assertEqual(web._clean_asset_filename("scam_lander_kit(1).css"), "scam_lander_kit.css")
+        self.assertEqual(web._clean_asset_filename("bundle.js.pobrane"), "bundle.js")
         html = (
-            '<html><head>'
-            '<link rel="stylesheet" href="page_files/main(1).css">'
-            '<link rel="stylesheet" href="page_files/comments(2).css">'
-            '<link rel="stylesheet" href="page_files/scam_lander_kit(1).css">'
-            '</head><body></body></html>'
+            '<html><head><link rel="stylesheet" href="page_files/scam_lander_kit(1).css">'
+            '<script src="https://op-one.click/lander_core.js"></script>'
+            '<script>ym(12345678, "init"); var buildId = "abcdEFGH1234";</script></head>'
+            '<body><form action="https://op-one.click/api/lead"><input name="phone"></form></body></html>'
         )
         ind = web.extract_html(html)["indicators"]
-        self.assertEqual(ind.get("css_name"), {"scam_lander_kit.css"})
+        for removed in ("css_name", "script_name", "form_fields", "ym", "build_id", "param_signature"):
+            self.assertNotIn(removed, ind)
+        self.assertEqual(ind.get("form_endpoint"), {"op-one.click/api/lead"})
+        self.assertNotIn("param_signature", web.url_indicators("https://op-one.click/?acc=abc123&pxl=1071875908635809"))
 
     def test_parse_mhtml_handles_none_payload_without_crashing(self):
         raw = (
@@ -463,39 +467,6 @@ class TestEnrichment(unittest.TestCase):
             self.assertEqual(enrich.enrich_domains(["example.com"]), {})
         with mock.patch.dict(os.environ, {"FTF_ENRICH": "1"}):
             self.assertTrue(enrich.is_enabled())
-
-    def test_indicators_skips_generic_ns_and_emits_cloudflare_pair_and_reg_burst(self):
-        generic_info = {
-            "rdap": {
-                "registrar": "Dynadot Inc",
-                "created": "2026-10-15T10:00:00Z",
-                "nameservers": ["ns1.dyna-ns.net.", "ns2.dyna-ns.net."],
-            },
-            "dns": {"NS": ["ns1.dyna-ns.net.", "ns2.dyna-ns.net."]},
-        }
-        g_ind = enrich.indicators(generic_info)
-        self.assertNotIn("ns_pair", g_ind)
-        self.assertNotIn("reg_burst", g_ind)
-
-        cf1 = enrich.indicators({
-            "rdap": {
-                "registrar": "NameCheap, Inc.",
-                "created": "2026-10-15T08:11:00Z",
-                "nameservers": ["kurt.ns.cloudflare.com.", "braelyn.ns.cloudflare.com."],
-            }
-        })
-        cf2 = enrich.indicators({
-            "rdap": {
-                "registrar": "Namecheap Inc.",
-                "created": "2026-10-15T19:45:00Z",
-                "nameservers": ["braelyn.ns.cloudflare.com", "kurt.ns.cloudflare.com"],
-            }
-        })
-        self.assertEqual(cf1["ns_pair"], {"braelyn.ns.cloudflare.com+kurt.ns.cloudflare.com"})
-        self.assertEqual(cf1["ns_pair"], cf2["ns_pair"])
-        self.assertEqual(cf1["reg_burst"], {"namecheap inc|braelyn.ns.cloudflare.com+kurt.ns.cloudflare.com|2026-10-15"})
-        self.assertEqual(cf1["reg_burst"], cf2["reg_burst"])
-        self.assertNotIn("registrar", cf1)
 
     def test_crtsh_http_503_returns_error_not_zero_certs(self):
         resp = mock.MagicMock(status_code=503)

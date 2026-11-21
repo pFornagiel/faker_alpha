@@ -1,6 +1,7 @@
 """Public sources of suspicious ads and scam domains:
 
   cert_pl_new          CERT Polska warning list (hole.cert.pl) — ETag cached, delta by RegisterPositionId
+  cert_pl_watch        the same list matched against known campaigns' stems (campaign watch, own watermark)
   ms_adlib_search      Microsoft Ad Library REST API (keyless) — EEA ads incl. destination URL, PL=151
   google_atc_*         Google Ads Transparency Center internal RPC — advertiser/domain pivots (PL=2616)
   meta_api_search      Meta Ad Library Graph API `ads_archive` (needs META_ACCESS_TOKEN)
@@ -122,32 +123,37 @@ def _fetch_cert_pl_json() -> list[dict]:
     return data
 
 
-def cert_pl_new(store, keywords: list[str] | None = None, limit: int = 200) -> list[dict]:
-    """Return newly added CERT Polska domains matching scam stems/keywords since last watermark."""
+def _cert_new_entries(store, watermark_key: str) -> tuple[list[dict], int]:
+    """Active CERT Polska entries added since the watermark `watermark_key` (advanced to the newest id)."""
     try:
         data = _fetch_cert_pl_json()
     except requests.HTTPError as exc:
         code = exc.response.status_code if exc.response is not None else 0
         _set_status("cert_pl", _http_error_status(code), f"HTTP {code}: {exc}")
-        log.warning("cert_pl_new HTTP error: %s", exc)
+        log.warning("cert_pl HTTP error: %s", exc)
         raise
     except Exception as exc:
         _set_status("cert_pl", "error", str(exc)[:200])
-        log.warning("cert_pl_new failed: %s", exc)
+        log.warning("cert_pl fetch failed: %s", exc)
         raise
 
-    last = int(store.get("cert_pl_last_id", 0) or 0)
-    kw_stems = [tok for k in (keywords or []) for tok in re.split(r"\s+", fold(k)) if len(tok) >= 3]
-    stems = list(dict.fromkeys(kw_stems + DOMAIN_STEMS))
-
+    last = int(store.get(watermark_key, 0) or 0)
     active_new = [d for d in data if int(d.get("RegisterPositionId", 0)) > last and not d.get("DeleteDate")]
     all_max_id = max((int(d.get("RegisterPositionId", 0)) for d in data), default=last)
     if all_max_id > last:
-        store.put("cert_pl_last_id", all_max_id)
+        store.put(watermark_key, all_max_id)
 
     if last == 0:
         # First run: scan only the newest 2000 active entries
         active_new = sorted(active_new, key=lambda d: -int(d["RegisterPositionId"]))[:2000]
+    return active_new, all_max_id
+
+
+def cert_pl_new(store, keywords: list[str] | None = None, limit: int = 200) -> list[dict]:
+    """Return newly added CERT Polska domains matching scam stems/keywords since last watermark."""
+    active_new, all_max_id = _cert_new_entries(store, "cert_pl_last_id")
+    kw_stems = [tok for k in (keywords or []) for tok in re.split(r"\s+", fold(k)) if len(tok) >= 3]
+    stems = list(dict.fromkeys(kw_stems + DOMAIN_STEMS))
 
     out: list[dict] = []
     for d in active_new:
@@ -166,6 +172,25 @@ def cert_pl_new(store, keywords: list[str] | None = None, limit: int = 200) -> l
             )
     result = out[:limit]
     _set_status("cert_pl", "ok", f"scanned {len(active_new)} new entries (watermark={all_max_id})", len(result))
+    return result
+
+
+def cert_pl_watch(store, stems: list[str], limit: int = 200) -> list[dict]:
+    """Campaign watch: new CERT Polska entries whose domain contains one of a known campaign's stems
+    (its distinctive second-level domain label or product name). Keeps its own watermark, so the keyword
+    scan (`cert_pl_new`) and the campaign watch each see every new entry once."""
+    stems = [s for s in dict.fromkeys(x.strip().lower() for x in stems) if s]
+    active_new, all_max_id = _cert_new_entries(store, "cert_pl_watch_last_id")
+    out: list[dict] = []
+    for d in active_new:
+        dom = d.get("DomainAddress", "")
+        # also match with hyphens removed, so 'switowin-zyskarnia.pl' matches the product stem 'switowinzyskarnia'
+        hits = list(dict.fromkeys(_match_domain_stems(dom, stems) + _match_domain_stems(dom.replace("-", ""), stems)))
+        if hits:
+            out.append({"source": "cert_pl", "domain": dom, "url": f"https://{dom}/", "inserted": d.get("InsertDate"),
+                        "id": d.get("RegisterPositionId"), "match": hits[:4]})
+    result = out[:limit]
+    _set_status("cert_pl", "ok", f"watch: scanned {len(active_new)} new entries (watermark={all_max_id})", len(result))
     return result
 
 

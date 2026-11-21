@@ -51,7 +51,8 @@ class Engine:
         cl = self.clustering() if items else {"campaign_of": {}, "campaigns": [], "profiles": []}
         f, v = analyze(m, use_llm=use_llm, progress=progress)
         res = assign(m.id, f, v, {k: x for k, x in items.items() if k != m.id}, cl) if items else \
-            {"decision": "new_campaign", "campaign": None, "links": [], "campaign_scores": [], "duplicates": []}
+            {"decision": "new_campaign", "campaign": None, "links": [], "campaign_scores": [], "duplicates": [],
+             "similar_family": None, "nearest": None}
         if keep:
             self.store.upsert(m, f, v)
             self.store.log("analysed", {"id": m.id, "name": m.name, "decision": res["decision"], "campaign": res["campaign"]})

@@ -8,7 +8,7 @@
        recompressed    - screenshots cropped 8 %, downscaled x0.6, JPEG q=55
        domain_swap     - landing HTML with every occurrence of its domain replaced by a fresh one
        person_swap     - landing HTML with the main impersonated person's surname replaced
-     expected: assigned to the source material's campaign (known_campaign / duplicate / candidate)
+     expected: assigned to the source material's campaign (known_campaign / duplicate / merge_proposal)
   3. labels (optional): --labels data/labels.csv -> pairwise P/R/F1, B-cubed, ARI
 
     .venv/bin/python tools/evaluate.py [--variants creative_only,recompressed,...] [--no-llm] [--labels ...]
@@ -32,8 +32,8 @@ from ftf.cluster import assign, build  # noqa: E402
 from ftf.engine import Engine  # noqa: E402
 from ftf.pipeline import analyze  # noqa: E402
 
-OK = {"known_campaign", "duplicate", "merge_proposal"}
-SOFT = OK | {"candidate_review"}
+OK = {"known_campaign", "duplicate"}
+SOFT = OK | {"merge_proposal"}          # right campaign proposed, but together with another one
 SWAP = {"Brzosk": "Kulczyk", "Olejnik": "Wellman", "Stanowsk": "Rymanowsk", "Sekielsk": "Kraśk", "Glapińsk": "Sołowow"}
 
 
@@ -52,11 +52,10 @@ def leave_one_out(items: dict) -> list[dict]:
             soft = r["decision"] in SOFT and r["campaign"] == target
             exp = "known_campaign"
         else:
-            ok = soft = r["decision"] in ("new_campaign", "candidate_review")
-            ok = r["decision"] == "new_campaign"
+            ok = soft = r["decision"] == "new_campaign"
             exp = "new_campaign"
         out.append({"material": f["name"], "expected": exp, "decision": r["decision"], "ok": ok, "soft_ok": soft,
-                    "best": r["campaign_scores"][:2]})
+                    "nearest": r["nearest"], "best": r["campaign_scores"][:2]})
     return out
 
 
@@ -132,6 +131,7 @@ def run_variants(items: dict, kinds: list[str], use_llm: bool, only: list[str] |
                         "expected_campaign": target, "ok": r["decision"] in OK and r["campaign"] == target,
                         "soft_ok": r["decision"] in SOFT and r["campaign"] == target,
                         "p_to_source": round(src_link.p, 3) if src_link else None,
+                        "d_to_source": round(src_link.distance, 3) if src_link else None,
                         "why": src_link.explain(4) if src_link else ""})
             print(json.dumps(res[-1], ensure_ascii=False), flush=True)
     return res

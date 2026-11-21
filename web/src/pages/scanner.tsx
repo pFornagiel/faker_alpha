@@ -1,13 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { ExternalLink, Play, RotateCcw, Search, Square, Timer } from "lucide-react"
+import { ExternalLink, Play, Radar, RotateCcw, Search, Square, Timer } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router"
 import { toast } from "sonner"
 
-import { api, type EventView, type Job, type ScanItem, type ScannerStatus } from "@/lib/api"
-import { fmtDate, fmtP, useApi } from "@/lib/format"
+import { api, type EventView, type Job, type ScanItem, type ScannerStatus, type WatchResult, type WatchSeed } from "@/lib/api"
+import { fmtDate, fmtP, plural, useApi } from "@/lib/format"
 import { ErrorState, HelpTip, Loading, PageHeader, Section } from "@/components/common"
 import { JobProgress, useJob } from "@/components/job"
+import { SeedList, WATCH_HINT, WatchHits } from "@/components/watch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,7 @@ export default function ScannerPage() {
   const qc = useQueryClient()
   const [kw, setKw] = useState("")
   const [analyse, setAnalyse] = useState(false)
+  const [watch, setWatch] = useState(false)
   const [minutes, setMinutes] = useState(30)
   const [jobId, setJobId] = useState<string | null>(null)
   const job = useJob<{ found: number; fresh: number; errors: Record<string, string> }>(jobId)
@@ -38,11 +40,11 @@ export default function ScannerPage() {
   const minutesOk = minutes >= 5 && minutes <= 1440
 
   const run = useMutation({
-    mutationFn: () => api.post<Job>("/api/scanner/run", { keywords, analyse }),
+    mutationFn: () => api.post<Job>("/api/scanner/run", { keywords, analyse, watch }),
     onSuccess: (j) => setJobId(j.id),
   })
   const startStop = useMutation({
-    mutationFn: (on: boolean) => (on ? api.post<{ message: string }>("/api/scanner/start", { minutes, keywords, analyse }) : api.post<{ message: string }>("/api/scanner/stop")),
+    mutationFn: (on: boolean) => (on ? api.post<{ message: string }>("/api/scanner/start", { minutes, keywords, analyse, watch }) : api.post<{ message: string }>("/api/scanner/stop")),
     onSuccess: (r) => {
       toast(r.message)
       qc.invalidateQueries({ queryKey: ["/api/scanner"] })
@@ -77,6 +79,12 @@ export default function ScannerPage() {
                 Od razu analizuj nowe pozycje z oceną ≥ 0.50 i zapisz je w bazie (do 5 na skan; używa modelu językowego, trwa kilka minut)
               </Label>
             </div>
+            <div className="flex items-start gap-2">
+              <Checkbox id="wt" checked={watch} onCheckedChange={(v) => setWatch(v === true)} className="mt-0.5" />
+              <Label htmlFor="wt" className="leading-snug font-normal">
+                Po skanie po słowach kluczowych szukaj też materiałów znanych kampanii (ich domeny, ID reklamodawców i produkty jako hasła — sekcja niżej)
+              </Label>
+            </div>
             <div className="space-y-2 border-t pt-4">
               <p className="text-sm">Skan jednorazowy kontaktuje się z: {SOURCES}{data.meta_token ? "" : " (Meta pominięta — brak tokenu)"}. Trwa zwykle 10–60 s.</p>
               <Button onClick={() => run.mutate()} disabled={busy || !keywords.length}>
@@ -102,7 +110,7 @@ export default function ScannerPage() {
             </div>
             {data.running && data.config && (
               <p className="text-xs text-muted-foreground">
-                co {data.config.minutes} min · słowa: {data.config.keywords.slice(0, 4).join(", ")}{data.config.keywords.length > 4 ? "…" : ""} · analiza: {data.config.analyse ? "tak" : "nie"}
+                co {data.config.minutes} min · słowa: {data.config.keywords.slice(0, 4).join(", ")}{data.config.keywords.length > 4 ? "…" : ""} · analiza: {data.config.analyse ? "tak" : "nie"} · obserwacja kampanii: {data.config.watch ? "tak" : "nie"}
               </p>
             )}
             <div className="flex flex-wrap items-center gap-2">
@@ -123,10 +131,64 @@ export default function ScannerPage() {
         </Section>
       </div>
 
+      <CampaignWatch metaToken={data.meta_token} />
+      {data.watch_found.length > 0 && (
+        <Section
+          title="Materiały znalezione przez znane kampanie"
+          description={`${data.watch_found.length} zapisanych tropów (najnowsze u góry). Kolumna „Weryfikacja” pokazuje wynik zwykłego przypisania — tylko ono łączy materiał z kampanią.`}
+        >
+          <WatchHits items={data.watch_found} />
+        </Section>
+      )}
       <LibrarySearch />
       <FoundTable items={data.found} />
       <EventLog title="Dziennik skanów" events={data.events} empty="Jeszcze nie uruchomiono skanu." />
     </>
+  )
+}
+
+function CampaignWatch({ metaToken }: { metaToken: boolean }) {
+  const [analyse, setAnalyse] = useState(false)
+  const [jobId, setJobId] = useState<string | null>(null)
+  const job = useJob<WatchResult>(jobId)
+  const seeds = useApi<{ seeds: WatchSeed[]; max_campaigns: number; max_seeds: number }>("/api/scanner/seeds")
+  const run = useMutation({
+    mutationFn: () => api.post<Job>("/api/scanner/watch", { analyse }),
+    onSuccess: (j) => setJobId(j.id),
+  })
+  const busy = run.isPending || job.data?.status === "running" || job.data?.status === "queued"
+  const res = job.data?.status === "done" ? job.data.result : null
+  return (
+    <Section
+      title={<span className="flex items-center gap-1">Szukaj materiałów znanych kampanii <HelpTip label="Skąd biorą się ziarna">{WATCH_HINT}</HelpTip></span>}
+      description={`Wyszukiwanie po identyfikatorach wykrytych kampanii: domeny → Google Ads Transparency, Microsoft Ad Library i nowe wpisy CERT Polska; ID reklamodawcy Google → Google Ads Transparency; nazwy produktów → Microsoft Ad Library${metaToken ? ", Meta Ad Library" : ""} i CERT Polska. Do ${seeds.data?.max_campaigns ?? 8} największych kampanii, po ${seeds.data?.max_seeds ?? 4} ziarna.`}
+    >
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_1.2fr]">
+        <div className="space-y-3">
+          <div className="flex items-start gap-2">
+            <Checkbox id="wan" checked={analyse} onCheckedChange={(v) => setAnalyse(v === true)} className="mt-0.5" />
+            <Label htmlFor="wan" className="leading-snug font-normal">
+              Od razu przeanalizuj nowe trafienia (do 5) i sprawdź zwykłym przypisaniem, czy należą do kampanii — zapisuje je w bazie
+            </Label>
+          </div>
+          <Button onClick={() => run.mutate()} disabled={busy || !seeds.data?.seeds.length}>
+            <Radar /> {busy ? "Szukam…" : "Szukaj materiałów znanych kampanii"}
+          </Button>
+          {jobId && <JobProgress job={job.data} error={job.error} />}
+          {res && (
+            <p className="text-sm">
+              {plural(res.seeds.length, "ziarno", "ziarna", "ziaren")} · znaleziono {res.found}, nowych <span className="font-medium">{res.fresh}</span>
+              {res.analysed.length > 0 && <>, przeanalizowano {res.analysed.length}, potwierdzono <span className="font-medium">{res.confirmed}</span></>}.
+              {Object.keys(res.errors).length > 0 && <span className="text-muted-foreground"> Niedostępne: {Object.keys(res.errors).slice(0, 4).join(", ")}{Object.keys(res.errors).length > 4 ? "…" : ""}.</span>}
+            </p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Ziarna wyszukiwania</p>
+          {seeds.isLoading ? <Loading /> : <div className="max-h-72 overflow-y-auto"><SeedList seeds={seeds.data?.seeds ?? []} /></div>}
+        </div>
+      </div>
+    </Section>
   )
 }
 
@@ -220,7 +282,10 @@ function ItemsList({ items }: { items: ScanItem[] }) {
                   <div className="truncate font-medium" title={r.title || r.name || r.domain}>{r.title || r.name || r.domain || r.advertiser || "—"}</div>
                   <div className="truncate font-mono text-xs text-muted-foreground">{r.domain || r.url || r.advertiser}</div>
                 </TableCell>
-                <TableCell className="max-w-sm"><div className="flex flex-wrap gap-1">{r.why.map((w) => <Badge key={w} variant="secondary" className="font-normal">{w}</Badge>)}</div></TableCell>
+                <TableCell className="max-w-sm"><div className="flex flex-wrap gap-1">
+                  {r.seed && <Badge variant="outline" className="font-normal" title={r.seed.campaign_label}>ziarno {r.seed.campaign_label.split(" · ")[0]}: {r.seed.value}</Badge>}
+                  {r.why.map((w) => <Badge key={w} variant="secondary" className="font-normal">{w}</Badge>)}
+                </div></TableCell>
                 <TableCell>
                   {target(r) && (
                     <div className="flex items-center gap-1">

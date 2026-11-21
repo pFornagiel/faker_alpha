@@ -3,7 +3,7 @@ import { useMemo } from "react"
 import { Link, useSearchParams } from "react-router"
 
 import type { LinkBrief, Relation } from "@/lib/api"
-import { useApi } from "@/lib/format"
+import { fmtP, useApi } from "@/lib/format"
 import { CampaignDot, ErrorState, Loading, PageHeader, RelationBadge, Strength, StrengthLegend } from "@/components/common"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -14,7 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 const REL: { value: Relation; label: string }[] = [
   { value: "same_campaign", label: "Ta sama kampania" },
   { value: "duplicate", label: "Duplikat" },
-  { value: "similar", label: "Podobny playbook" },
+  { value: "similar", label: "Podobna treść" },
   { value: "none", label: "Brak powiązania" },
 ]
 
@@ -64,7 +64,7 @@ export default function LinksPage() {
     <>
       <PageHeader
         title="Powiązania (pary materiałów)"
-        description="Każda para materiałów dostaje siłę powiązania p (0–1) i relację. To tabelaryczna wersja grafu i macierzy — kliknij „Dlaczego?”, by zobaczyć pełne uzasadnienie pary."
+        description="Każda para materiałów dostaje relację, odległość treści d i bliskość p (1 przy wspólnym identyfikatorze, inaczej 1 − d). To tabelaryczna wersja grafu i macierzy — kliknij „Dlaczego?”, by zobaczyć pełne uzasadnienie pary."
       />
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -96,9 +96,9 @@ export default function LinksPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="pl-4">Para</TableHead>
-              <TableHead className="w-48">Siła p</TableHead>
+              <TableHead className="w-48">Bliskość p</TableHead>
               <TableHead>Relacja</TableHead>
-              <TableHead>Najmocniejsze dowody</TableHead>
+              <TableHead>Najważniejsze dowody</TableHead>
               <TableHead className="w-28" />
             </TableRow>
           </TableHeader>
@@ -106,7 +106,7 @@ export default function LinksPage() {
             {rows.map((l) => (
               <TableRow key={`${l.a}-${l.b}`}>
                 <TableCell className="pl-4 whitespace-nowrap"><PairName l={l} /></TableCell>
-                <TableCell><Strength p={l.p} /></TableCell>
+                <TableCell><Strength p={l.p} /><div className="mt-0.5 pl-12 text-xs text-muted-foreground tabular">d = {fmtP(l.distance)}</div></TableCell>
                 <TableCell><RelationBadge relation={l.relation} /></TableCell>
                 <TableCell className="max-w-xl">
                   <ul className="space-y-0.5 text-sm">

@@ -1,10 +1,8 @@
 """Download the ONNX models used by the pipeline (CPU-only, no PyTorch).
 
-Total ~ 460 MB. Run once:  python tools/download_models.py
+Total ~ 310 MB. Run once:  python tools/download_models.py
 Models (licences):
-  * intfloat/multilingual-e5-small (MIT) - ONNX int8 export by Xenova  -> text/narrative embeddings
-  * openai/clip-vit-base-patch32 (MIT) - ONNX int8 vision tower by Xenova -> "look" of the ad
-  * facebook/dinov2-small (Apache-2.0) - ONNX int8 by Xenova            -> layout/template similarity
+  * intfloat/multilingual-e5-small (MIT) - ONNX int8 export by Xenova  -> semantic view (narrative embedding)
   * InsightFace buffalo_l: SCRFD det_10g + ArcFace w600k_r50 (code MIT, weights NON-COMMERCIAL research only)
 """
 from __future__ import annotations
@@ -21,8 +19,6 @@ HF = "https://huggingface.co/{repo}/resolve/main/{path}"
 FILES = {
     "e5/model.onnx": ("Xenova/multilingual-e5-small", "onnx/model_int8.onnx"),
     "e5/tokenizer.json": ("Xenova/multilingual-e5-small", "tokenizer.json"),
-    "clip/vision_model.onnx": ("Xenova/clip-vit-base-patch32", "onnx/vision_model_int8.onnx"),
-    "dinov2/model.onnx": ("Xenova/dinov2-small", "onnx/model_quantized.onnx"),
     "faces/det_10g.onnx": ("deepghs/insightface", "buffalo_l/det_10g.onnx"),
     "faces/w600k_r50.onnx": ("deepghs/insightface", "buffalo_l/w600k_r50.onnx"),
 }

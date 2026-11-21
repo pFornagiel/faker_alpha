@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Link } from "react-router"
 import { AlertCircle, CircleHelp, ImageOff } from "lucide-react"
 
-import type { CampaignRef, MaterialSummary, Relation, Tier } from "@/lib/api"
-import { fmtP, P_LINK, P_SIMILAR, seriesColor } from "@/lib/format"
+import type { CampaignRef, MaterialSummary, Relation } from "@/lib/api"
+import { CAMPAIGN_CUT, DUPLICATE_CUT, FAMILY_CUT, fmtP, P_LINK, P_SIMILAR, seriesColor } from "@/lib/format"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -144,27 +144,23 @@ export function CampaignBadge({ c, withName = false, link = true }: { c: Campaig
   )
 }
 
-export const TIER_META: Record<Tier, { label: string; variant: "default" | "secondary" | "outline"; hint: string }> = {
-  S: { label: "operator", variant: "default", hint: "Ślad operatora — praktycznie zawsze należy do jednej grupy (piksel reklamowy, domena, endpoint formularza, ID reklamy). Sam wystarcza, by połączyć materiały." },
-  M: { label: "kit / treść", variant: "secondary", hint: "Ten sam zestaw narzędzi strony lub ta sama treść/kreacja. Mocny, ale może być skopiowany — łączy, gdy jest bardzo silny albo gdy są co najmniej dwa niezależne." },
-  W: { label: "kontekst", variant: "outline", hint: "Zgodność kontekstu (ta sama osoba, typ oszustwa, hosting). Sam niczego nie łączy — najwyżej sugeruje podobny schemat." },
-}
-
-export function TierBadge({ tier }: { tier: Tier }) {
-  const t = TIER_META[tier]
+/** Group of a shared trace. Identifier groups force the same campaign; images and descriptive traces never do. */
+export function GroupBadge({ label, linking }: { label: string; linking: boolean }) {
   return (
-    <InfoPop label={`Siła śladu: ${t.label}`} trigger={<Badge variant={t.variant}>{t.label}</Badge>}>
-      <p className="mb-1 font-medium">Siła śladu: {t.label}</p>
-      {t.hint}
+    <InfoPop label={`Rodzaj śladu: ${label}`} trigger={<Badge variant={linking ? "default" : "outline"}>{label}</Badge>}>
+      <p className="mb-1 font-medium">{label}</p>
+      {linking
+        ? "Identyfikator: ta sama wartość w dwóch materiałach (jeśli nie jest zbyt popularna) wymusza tę samą kampanię."
+        : "Nie łączy samodzielnie — obrazy są porównywane w widoku treści „obrazy”, cechy opisowe są tylko wyświetlane."}
     </InfoPop>
   )
 }
 
 const REL_META: Record<Relation, { variant: "default" | "secondary" | "outline" | "ghost"; label: string; hint: string }> = {
-  duplicate: { variant: "secondary", label: "duplikat", hint: "Ten sam materiał zgłoszony ponownie (identyczny plik albo ta sama treść, obraz i domena)." },
-  same_campaign: { variant: "default", label: "ta sama kampania", hint: `p ≥ ${P_LINK} oraz dowód operatora, bardzo silny dowód kit/treść albo dwie niezależne rodziny dowodów.` },
-  similar: { variant: "outline", label: "podobny playbook", hint: `p ≥ ${P_SIMILAR} albo ten sam schemat (narracja, koncepcja, wizualia, osoby) — ale bez dowodu wspólnego operatora.` },
-  none: { variant: "ghost", label: "brak powiązania", hint: `p < ${P_SIMILAR} i brak wspólnego schematu.` },
+  duplicate: { variant: "secondary", label: "duplikat", hint: `Ten sam materiał zgłoszony ponownie: identyczny plik, to samo ID reklamy albo odległość treści d ≤ ${DUPLICATE_CUT}.` },
+  same_campaign: { variant: "default", label: "ta sama kampania", hint: `Wspólny identyfikator (domena, piksel, kontakt, plik kitu, ID reklamy, produkt) albo bardzo bliska treść: d ≤ ${CAMPAIGN_CUT}.` },
+  similar: { variant: "outline", label: "podobna treść", hint: `Brak wspólnego identyfikatora, ale treść podobna: d ≤ ${FAMILY_CUT}. Osobne kampanie, zwykle z tej samej rodziny.` },
+  none: { variant: "ghost", label: "brak powiązania", hint: `Brak wspólnego identyfikatora i d > ${FAMILY_CUT}.` },
 }
 
 export function RelationBadge({ relation, plain = false }: { relation: Relation; plain?: boolean }) {
@@ -178,14 +174,14 @@ export function RelationBadge({ relation, plain = false }: { relation: Relation;
   )
 }
 
-// ------------------------------------------------------------------ strength of a link
-/** p as a number + a thin meter with the two decision thresholds marked. */
+// ------------------------------------------------------------------ closeness of a link
+/** Closeness p = 1 − D as a number + a thin meter with the two relation cuts marked. */
 export function Strength({ p, className }: { p: number; className?: string }) {
   const pct = Math.max(0, Math.min(1, p)) * 100
   return (
-    <div className={cn("flex items-center gap-2", className)} title={`Siła powiązania p = ${fmtP(p)} (0–1). Progi: ${P_SIMILAR} podobny playbook, ${P_LINK} ta sama kampania.`}>
+    <div className={cn("flex items-center gap-2", className)} title={`Bliskość pary p = ${fmtP(p)}: 1 przy wspólnym identyfikatorze, inaczej 1 − d. Progi: ${P_SIMILAR} podobna treść, ${P_LINK} ta sama kampania.`}>
       <span className="w-10 shrink-0 text-right text-sm font-medium tabular">{fmtP(p)}</span>
-      <div className="relative h-1.5 w-full min-w-12 rounded-full bg-muted" role="meter" aria-label="siła powiązania" aria-valuenow={p} aria-valuemin={0} aria-valuemax={1}>
+      <div className="relative h-1.5 w-full min-w-12 rounded-full bg-muted" role="meter" aria-label="bliskość pary" aria-valuenow={p} aria-valuemin={0} aria-valuemax={1}>
         <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pct}%`, background: p >= P_LINK ? "var(--seq-500)" : p >= P_SIMILAR ? "var(--seq-300)" : "var(--seq-200)" }} />
         <span className="absolute -top-0.5 h-2.5 w-px bg-foreground/40" style={{ left: `${P_SIMILAR * 100}%` }} />
         <span className="absolute -top-0.5 h-2.5 w-px bg-foreground/70" style={{ left: `${P_LINK * 100}%` }} />
@@ -197,8 +193,8 @@ export function Strength({ p, className }: { p: number; className?: string }) {
 export function StrengthLegend() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-      <span>Siła powiązania pary p (0–1); kreski na pasku:</span>
-      <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-px bg-foreground/40" /> {P_SIMILAR} podobny playbook</span>
+      <span>Bliskość pary p = 1 przy wspólnym identyfikatorze, inaczej 1 − d; kreski:</span>
+      <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-px bg-foreground/40" /> {P_SIMILAR} podobna treść</span>
       <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-px bg-foreground/70" /> {P_LINK} ta sama kampania</span>
     </div>
   )

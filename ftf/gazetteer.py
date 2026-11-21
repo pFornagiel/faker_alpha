@@ -112,22 +112,6 @@ SCAM_LEXICON: dict[str, list[str]] = {
     "political_disinfo_ad": ["wybor", "rzad", "sejm", "partia", "ukrain", "imigrant"],
 }
 
-NARRATIVE_LEXICON: dict[str, list[str]] = {
-    "celebrity_scandal_or_attack": ["zamach", "napasc", "atak", "strzel", "kajdank", "aresztow", "skandal",
-                                    "zatrzyman", "brutaln", "pobit"],
-    "censored_interview": ["usunieto", "wywiad", "nagranie", "na zywo", "emisj", "ujawni", "sekret",
-                           "nie chca, zebys", "zakazan", "ocenzurow"],
-    "banker_scandal": ["prezes nbp", "bank", "banki", "premi", "glapinsk"],
-    "celebrity_testament_or_death": ["testament", "spadek", "dziedzictw", "zmarl", "pozegnan", "majatek"],
-    "state_project_shares": ["orlen", "baltic", "udzial", "spolk skarbu", "program rzadow", "obywatel"],
-    "doctor_vs_big_pharma": ["lekarz", "profesor", "koncern", "farmaceut", "ukrywa", "naturaln metod"],
-    "investment_event": ["summit", "konferencj", "forum", "kongres"],
-    "casino_app": ["app store", "aplikacj", "kasyno", "spin"],
-}
-
-URGENCY_CUES = ["tylko dzis", "ostatni", "pozostal", "liczba miejsc", "zostalo", "ograniczon", "wygasa",
-                "pilne", "natychmiast", "teraz", "limited time", "spiesz", "do polnocy", "ostatnia szansa"]
-
 
 def fold(text: str) -> str:
     """lowercase + strip diacritics (ł->l) + NFKC (defeats many homoglyph tricks)."""

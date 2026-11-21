@@ -2,8 +2,8 @@ import { AlertTriangle, Info } from "lucide-react"
 import { useSearchParams } from "react-router"
 
 import type { TraceDetail } from "@/lib/api"
-import { fmtP, plural, useApi } from "@/lib/format"
-import { ErrorState, KV, Loading, MaterialRow, PageHeader, Section, TierBadge } from "@/components/common"
+import { plural, useApi } from "@/lib/format"
+import { ErrorState, GroupBadge, KV, Loading, MaterialRow, PageHeader, Section } from "@/components/common"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent } from "@/components/ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
@@ -40,19 +40,23 @@ export default function TracePage() {
         description={`Wszystkie materiały, w których występuje ta wartość: ${t.df} z ${t.n}${campaigns.length ? ` (kampanie: ${campaigns.join(", ")})` : ""}.`}
       />
       {t.thumbs.length > 0 && <img src={t.thumbs[0]} alt="wspólny obraz" className="max-h-56 rounded-md ring-1 ring-border" />}
-      {t.hub && (
+      {t.linking && !t.counted && (
         <Alert>
           <AlertTriangle />
-          <AlertTitle>Wartość zbyt popularna („hub”)</AlertTitle>
-          <AlertDescription>Występuje w ponad połowie materiałów, więc jest ignorowana przy łączeniu — nie odróżnia jednego operatora od innych.</AlertDescription>
+          <AlertTitle>Wartość zbyt popularna</AlertTitle>
+          <AlertDescription>
+            Występuje w {t.df} z {t.n} materiałów — w ponad {pct(t.max_df)} bazy — więc jest pomijana przy łączeniu: nie odróżnia jednej kampanii od innych.
+          </AlertDescription>
         </Alert>
       )}
-      {t.tier === "W" && !t.hub && (
+      {!t.linking && (
         <Alert>
           <Info />
           <AlertTitle>Ten ślad sam niczego nie łączy</AlertTitle>
           <AlertDescription>
-            To ślad kontekstowy ({t.family_label}). Materiały poniżej mogą należeć do różnych kampanii — łączy się je dopiero, gdy mają też wspólne ślady operatora lub kit/treść.
+            {t.group === "images"
+              ? "Obrazy ze stron docelowych są porównywane w widoku treści „obrazy” (pHash): wspólny obraz zwiększa podobieństwo treści, ale sam nie wymusza tej samej kampanii."
+              : `To cecha opisowa (${t.group_label}) — pokazywana analitykowi, nigdy nie służy do łączenia. Materiały poniżej mogą należeć do różnych kampanii.`}
           </AlertDescription>
         </Alert>
       )}
@@ -60,19 +64,13 @@ export default function TracePage() {
         <Card size="sm">
           <CardContent>
             <dl className="divide-y">
-              <KV label="Rodzina dowodów">{t.family_label}</KV>
-              <KV label="Siła śladu"><TierBadge tier={t.tier} /></KV>
-              <KV label="Waga bazowa">
-                {t.prior !== null ? fmtP(t.prior) : "—"}
-                <span className="block text-xs text-muted-foreground">jak mocno ten typ śladu wskazuje na jednego operatora, gdy wartość jest rzadka (ustalone eksperckie)</span>
+              <KV label="Rodzaj śladu"><GroupBadge label={t.group_label} linking={t.linking} /></KV>
+              <KV label="Częstość">
+                w {t.df} z {t.n} materiałów ({pct(t.df / Math.max(1, t.n))})
+                <span className="block text-xs text-muted-foreground">identyfikator liczy się tylko, gdy występuje w co najwyżej {pct(t.max_df)} materiałów (zasada IDF)</span>
               </KV>
-              <KV label="Rzadkość">
-                {fmtP(t.rarity)}
-                <span className="block text-xs text-muted-foreground">wartość w {t.df} z {t.n} materiałów; 1 = tylko w dwóch, 0 = w ponad połowie (pomijana)</span>
-              </KV>
-              <KV label="Waga przy łączeniu">
-                <span className="font-semibold">{t.weight !== null ? fmtP(t.weight) : "—"}</span>
-                <span className="block text-xs text-muted-foreground">waga bazowa × (0.35 + 0.65 × rzadkość) — tyle ten ślad wnosi do powiązania dwóch materiałów</span>
+              <KV label="Łączy materiały">
+                {t.counted ? "tak — wspólna wartość wymusza tę samą kampanię" : t.linking ? "nie — zbyt popularna" : t.group === "images" ? "nie — wpływa na widok treści „obrazy”" : "nie — cecha opisowa"}
               </KV>
             </dl>
           </CardContent>
@@ -85,4 +83,8 @@ export default function TracePage() {
       </div>
     </>
   )
+}
+
+function pct(x: number): string {
+  return `${Math.round(x * 100)}%`
 }

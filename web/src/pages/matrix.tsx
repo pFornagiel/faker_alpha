@@ -2,14 +2,14 @@ import { useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { Link, useNavigate } from "react-router"
 
 import type { MatrixData, Relation } from "@/lib/api"
-import { fmtP, P_CLASSES, P_SIMILAR, seqColor, seqInk, useApi } from "@/lib/format"
+import { fmtP, P_CLASSES, seqColor, seqInk, useApi } from "@/lib/format"
 import { CampaignDot, ErrorState, Loading, PageHeader } from "@/components/common"
 import { Card, CardContent } from "@/components/ui/card"
 
 const REL_PL: Record<Relation, string> = {
   duplicate: "duplikat",
   same_campaign: "ta sama kampania",
-  similar: "podobny playbook",
+  similar: "podobna treść",
   none: "brak bezpośredniego powiązania",
 }
 const HATCH = "repeating-linear-gradient(45deg,#e8e7e2 0 3px,#fcfcfb 3px 6px)"
@@ -58,13 +58,15 @@ export default function MatrixPage() {
   const b = data.materials[cur.j]
   const p = data.p[cur.i][cur.j]
   const r = data.relation[cur.i][cur.j]
+  const dist = data.distance[cur.i][cur.j]
+  const t = data.thresholds
   const sameCamp = a.campaign && b.campaign && a.campaign.id === b.campaign.id
 
   return (
     <>
       <PageHeader
         title="Macierz podobieństwa"
-        description="Każda komórka to siła powiązania p jednej pary materiałów — im ciemniej, tym silniej. Wiersze i kolumny to te same materiały, ułożone według kampanii, więc kampania jest widoczna jako ciemny kwadrat na przekątnej (obrysowany na czarno). Kliknij komórkę, aby zobaczyć uzasadnienie pary."
+        description="Każda komórka to bliskość p = 1 − D jednej pary materiałów (1 przy wspólnym identyfikatorze, inaczej 1 − d, gdzie d to odległość treści) — im ciemniej, tym bliżej. Wiersze i kolumny to te same materiały, ułożone według kampanii, więc kampania jest widoczna jako ciemny kwadrat na przekątnej (obrysowany na czarno). Kliknij komórkę, aby zobaczyć uzasadnienie pary."
       />
       <div className="grid gap-4 xl:grid-cols-[auto_18rem]">
         <Card className="min-w-0">
@@ -94,7 +96,7 @@ export default function MatrixPage() {
               <div
                 ref={grid}
                 role="grid"
-                aria-label="Macierz siły powiązań par materiałów"
+                aria-label="Macierz bliskości par materiałów"
                 className="grid"
                 style={{ gridTemplateColumns: `repeat(${n}, ${cell}px)`, gridAutoRows: `${cell}px` }}
                 onMouseLeave={() => setActive(false)}
@@ -130,7 +132,7 @@ export default function MatrixPage() {
                           boxShadow: cross ? "inset 0 0 0 1px rgba(11,11,11,.22)" : isCur && active && !diag ? "inset 0 0 0 2px #0b0b0b" : undefined,
                         }}
                       >
-                        {showNums && !diag && v !== null && v >= P_SIMILAR ? fmtP(v) : ""}
+                        {showNums && !diag && v !== null && v >= data.thresholds.similar ? fmtP(v) : ""}
                       </button>
                     )
                   }),
@@ -158,6 +160,7 @@ export default function MatrixPage() {
                 <>
                   <p className="font-medium">Materiał {a.name} ↔ materiał {b.name}</p>
                   <p className="text-2xl font-semibold tabular">p = {fmtP(p)}</p>
+                  <p className="text-muted-foreground tabular">odległość treści d = {fmtP(dist)}</p>
                   <p className="text-muted-foreground">
                     {r ? REL_PL[r] : "nie porównano"}
                     {r === "none" && sameCamp ? ` — ale oba w ${a.campaign!.code} przez inne materiały` : ""}
@@ -183,8 +186,8 @@ export default function MatrixPage() {
                 <li className="flex items-center gap-2"><CampaignDot c={{ id: 0, code: "", name: "", size: 2, color: 0 }} /> kolorowa kropka — kampania wielomateriałowa; pusta — jednomateriałowa</li>
               </ul>
               <p className="text-xs text-muted-foreground">
-                p ≥ 0.55 to warunek konieczny „tej samej kampanii”; dodatkowo potrzebny jest ślad operatora lub kilka niezależnych śladów.
-                {showNums && ` Liczby pokazano tylko dla p ≥ ${P_SIMILAR}.`}
+                p = 1 — wspólny identyfikator (lub duplikat). Bez identyfikatora decyduje treść: p ≥ {t.link} (d ≤ {t.campaign_cut}) — ta sama kampania, p ≥ {t.similar} (d ≤ {t.family_cut}) — podobna treść.
+                {showNums && ` Liczby pokazano tylko dla p ≥ ${t.similar}.`}
               </p>
             </CardContent>
           </Card>

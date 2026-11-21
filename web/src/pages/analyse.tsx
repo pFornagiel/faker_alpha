@@ -4,9 +4,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Link, useSearchParams } from "react-router"
 
 import { api, type AnalysisResult, type Decision, type Job } from "@/lib/api"
-import { fmtP } from "@/lib/format"
+import { fmtP, viewsOfExplanation } from "@/lib/format"
 import { CampaignBadge, HelpTip, MaterialRow, PageHeader, RelationBadge, Section, Strength, StrengthLegend } from "@/components/common"
-import { Computation, EvidenceTable, FamilyBars } from "@/components/evidence"
+import { Computation, IdentifierList, ViewBars } from "@/components/evidence"
 import { JobProgress, useJob } from "@/components/job"
 import { FeatureTabs } from "@/pages/material"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -75,7 +75,7 @@ export default function AnalysePage() {
     <>
       <PageHeader
         title="Analizuj nowy materiał"
-        description="Nowa reklama, strona lub nagranie jest porównywane ze wszystkimi materiałami w bazie. Wynik: czy to znana kampania, wariant do weryfikacji, czy nowy wzorzec — wraz z dowodami."
+        description="Nowa reklama, strona lub nagranie jest porównywane ze wszystkimi materiałami w bazie. Wynik: duplikat, znana kampania, propozycja scalenia dwóch kampanii albo nowy wzorzec — wraz z dowodami."
       />
       <Card>
         <CardContent className="space-y-5">
@@ -140,7 +140,6 @@ export default function AnalysePage() {
 const DECISION_STYLE: Record<Decision, { color: string; icon: ReactNode }> = {
   known_campaign: { color: "var(--status-critical)", icon: <ShieldAlert className="size-5" /> },
   merge_proposal: { color: "var(--status-serious)", icon: <GitMerge className="size-5" /> },
-  candidate_review: { color: "var(--status-warning)", icon: <Search className="size-5" /> },
   new_campaign: { color: "#52514e", icon: <Sparkles className="size-5" /> },
   duplicate: { color: "#52514e", icon: <Copy className="size-5" /> },
 }
@@ -148,9 +147,8 @@ const DECISION_STYLE: Record<Decision, { color: string; icon: ReactNode }> = {
 function Result({ r }: { r: AnalysisResult }) {
   const st = DECISION_STYLE[r.decision]
   const t = r.thresholds
-  const maxScore = Math.max(0.6, ...r.scores.map((s) => s.score))
-  const shown = r.links.filter((l) => l.p >= 0.05).slice(0, 6)
-  const anyLinked = shown.some((l) => l.p >= t.similar)
+  const shown = r.links.filter((l) => l.p >= 0.05 || l.relation !== "none").slice(0, 6)
+  const anyLinked = shown.some((l) => l.relation !== "none")
   return (
     <>
       <Card className="border-l-4" style={{ borderLeftColor: st.color }}>
@@ -165,13 +163,18 @@ function Result({ r }: { r: AnalysisResult }) {
               {r.campaign && <><span>→</span><CampaignBadge c={r.campaign} withName /></>}
             </p>
             <p className="text-sm text-muted-foreground">{r.decision_hint}</p>
-            {r.decision === "new_campaign" && r.closest && (
+            {r.decision === "new_campaign" && r.nearest && (
               <p className="text-sm">
-                Najbliżej: <CampaignBadge c={r.closest} withName /> — wynik {fmtP(r.closest.score)}, a do weryfikacji potrzeba {t.candidate}, do przypisania {t.assign}.
+                Najbliższy znany materiał:{" "}
+                <Link to={`/materials/${r.nearest.material_id}`} className="font-medium underline underline-offset-4">materiał {r.nearest.material_name}</Link>{" "}
+                z <CampaignBadge c={r.nearest} withName /> — odległość treści d = {fmtP(r.nearest.distance)},
+                a do przypisania potrzeba d ≤ {t.campaign_cut}.
               </p>
             )}
-            {r.similar_playbook && (
-              <p className="text-sm">Ten sam playbook co <CampaignBadge c={r.similar_playbook} withName />, ale bez wspólnych śladów operatora, kitu ani kreacji.</p>
+            {r.similar_family && (
+              <p className="text-sm">
+                Podobna treść (ta sama rodzina) co <CampaignBadge c={r.similar_family} withName /> — d ≤ {t.family_cut}, ale bez wspólnego identyfikatora.
+              </p>
             )}
           </div>
           {r.kept && <Button asChild variant="outline"><Link to={`/materials/${r.material_id}`}>Otwórz w bazie <ArrowRight /></Link></Button>}
@@ -183,7 +186,7 @@ function Result({ r }: { r: AnalysisResult }) {
           <Info />
           <AlertTitle>Model językowy był wyłączony</AlertTitle>
           <AlertDescription>
-            Atrybuty opisowe pochodzą z reguł słownikowych, które nie rozpoznają nazw produktów i fikcyjnych platform — dopasowanie do kampanii może być słabsze niż z modelem.
+            Atrybuty opisowe pochodzą z reguł słownikowych, które nie rozpoznają nazw produktów i fikcyjnych platform — identyfikator „produkt” może nie zostać znaleziony.
           </AlertDescription>
         </Alert>
       )}
@@ -191,12 +194,12 @@ function Result({ r }: { r: AnalysisResult }) {
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_1.3fr]">
         <Section
           title="Dopasowanie do kampanii"
-          description="Wynik kampanii = średnia z dwóch najsilniejszych powiązań nowego materiału z jej materiałami (lub jedno powiązanie ≥ 0.75)."
+          description="Dla każdej kampanii: bliskość 1 − d do jej najbliższego materiału (najbliższy sąsiad). Wspólny identyfikator przypisuje do kampanii niezależnie od treści."
           aside={
             <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
-              <span>Progi kampanii:</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-px bg-foreground/50" /> {t.candidate} do weryfikacji</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-px bg-foreground" /> {t.assign} przypisanie</span>
+              <span>Progi:</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-px bg-foreground/50" /> {t.similar} ta sama rodzina (d ≤ {t.family_cut})</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-px bg-foreground" /> {t.link} przypisanie (d ≤ {t.campaign_cut})</span>
             </div>
           }
         >
@@ -206,12 +209,12 @@ function Result({ r }: { r: AnalysisResult }) {
                 <div key={s.id} className="space-y-1">
                   <div className="flex items-center justify-between gap-2 text-sm">
                     <span className="min-w-0"><CampaignBadge c={s} withName /></span>
-                    <span className="shrink-0 font-medium tabular">{fmtP(s.score)}</span>
+                    <span className="shrink-0 font-medium tabular">d = {fmtP(s.distance)}</span>
                   </div>
                   <div className="relative h-2.5 rounded-sm bg-muted" aria-hidden>
-                    <div className="absolute inset-y-0 left-0 rounded-sm" style={{ width: `${(s.score / maxScore) * 100}%`, background: s.score >= t.assign ? "var(--seq-500)" : "var(--seq-300)" }} />
-                    <span className="absolute -top-1 h-4.5 w-px bg-foreground/50" style={{ left: `${(t.candidate / maxScore) * 100}%` }} />
-                    <span className="absolute -top-1 h-4.5 w-px bg-foreground" style={{ left: `${(t.assign / maxScore) * 100}%` }} />
+                    <div className="absolute inset-y-0 left-0 rounded-sm" style={{ width: `${Math.max(1, s.score * 100)}%`, background: s.score >= t.link ? "var(--seq-500)" : "var(--seq-300)" }} />
+                    <span className="absolute -top-1 h-4.5 w-px bg-foreground/50" style={{ left: `${t.similar * 100}%` }} />
+                    <span className="absolute -top-1 h-4.5 w-px bg-foreground" style={{ left: `${t.link * 100}%` }} />
                   </div>
                 </div>
               ))}
@@ -221,10 +224,10 @@ function Result({ r }: { r: AnalysisResult }) {
           )}
         </Section>
 
-        <Section title="Najbardziej podobne materiały" description="Rozwiń, aby zobaczyć dowody i obliczenie." aside={<StrengthLegend />}>
+        <Section title="Najbardziej podobne materiały" description="Rozwiń, aby zobaczyć wspólne identyfikatory, podobieństwo w każdym widoku treści i obliczenie." aside={<StrengthLegend />}>
           {shown.length ? (
             <>
-              {!anyLinked && <p className="mb-2 text-sm text-muted-foreground">Żaden materiał nie przekracza progu {t.similar} — brak istotnych powiązań.</p>}
+              {!anyLinked && <p className="mb-2 text-sm text-muted-foreground">Żaden materiał nie jest powiązany: brak wspólnego identyfikatora i d &gt; {t.family_cut}.</p>}
               <Accordion type="single" collapsible className="w-full">
                 {shown.map((l) => (
                   <AccordionItem key={l.other.id} value={l.other.id}>
@@ -238,9 +241,15 @@ function Result({ r }: { r: AnalysisResult }) {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="space-y-4">
-                      <FamilyBars families={l.families} />
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Wspólne identyfikatory</p>
+                        <IdentifierList e={l.explain} />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Podobieństwo treści</p>
+                        <ViewBars views={viewsOfExplanation(l.explain)} />
+                      </div>
                       <Computation e={l.explain} />
-                      <EvidenceTable e={l.explain} />
                       <Button asChild variant="outline" size="sm"><Link to={`/materials/${l.other.id}`}>Otwórz materiał {l.other.name} <ArrowRight /></Link></Button>
                     </AccordionContent>
                   </AccordionItem>

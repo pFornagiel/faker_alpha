@@ -3,7 +3,7 @@
   ingest <dataset_dir> [--no-llm] [--force]   analyse every case folder and store features
   add <path|url|text>                         analyse one new material and assign it (open-set)
   campaigns                                   print campaigns with shared indicators
-  links [--min 0.3]                           print explained links
+  links [--min 0.1]                           print explained links (p = 1 - D)
   export                                      write data/exports/{graph.html,graph.cypher,campaigns.json,links.csv}
   eval <labels.csv>                           pairwise P/R/F1, ARI, B-cubed vs ground truth (id_or_name,label)
   serve [--host 127.0.0.1] [--port 8765]      web UI + API (build the UI first: cd web && npm ci && npm run build)
@@ -27,11 +27,10 @@ def _print_campaigns(eng: Engine):
     for ci, prof in enumerate(cl["profiles"]):
         names = [items[m][0]["name"] for m in prof["members"]]
         print(f"\n=== C{ci + 1} ({prof['size']}) {prof['name']}  members={names}")
-        print(f"    scam={prof['scam_types']} narr={prof['narratives']} domains={list(prof['domains'])[:6]}")
-        print(f"    persons={prof['persons']}  dates={prof['date_range']}  link_families={prof['link_families']}")
-        print(f"    variants={[[items[m][0]['name'] for m in g] for g in cl['variants'].get(ci, [])]}")
+        print(f"    scam={prof['scam_types']} products={prof['products']} domains={list(prof['domains'])[:6]}")
+        print(f"    persons={prof['persons']}  dates={prof['date_range']}  shared_groups={prof['shared_groups']}")
         for s in prof["shared_indicators"][:8]:
-            print(f"      shared {s['type']:16s} x{s['count']}  {s['value'][:90]}")
+            print(f"      shared {s['group']:12s} {s['type']:16s} x{s['count']}  {s['value'][:90]}")
     print("\nduplicates:", [[items[m][0]["name"] for m in g] for g in cl["duplicates"]])
     print("families:", [[items[m][0]["name"] for m in f] for f in cl["families"]])
     print("hdbscan baseline:", {items[m][0]["name"]: l for m, l in cl["hdbscan"].items()})
@@ -43,7 +42,7 @@ def _print_links(eng: Engine, min_p: float):
     for l in sorted(cl["links"], key=lambda l: -l.p):
         if l.p < min_p:
             continue
-        print(f"{items[l.a][0]['name']:>6} — {items[l.b][0]['name']:<6} p={l.p:.2f} {l.relation:13s} {l.explain(5)}")
+        print(f"{items[l.a][0]['name']:>6} — {items[l.b][0]['name']:<6} p={l.p:.2f} d={l.distance:.2f} {l.relation:13s} {l.explain(5)}")
 
 
 def evaluate(eng: Engine, labels_csv: str) -> dict:
@@ -98,7 +97,7 @@ def main(argv=None):
     s = sub.add_parser("ingest"); s.add_argument("root"); s.add_argument("--no-llm", action="store_true"); s.add_argument("--force", action="store_true")
     s = sub.add_parser("add"); s.add_argument("target"); s.add_argument("--no-llm", action="store_true"); s.add_argument("--dry", action="store_true")
     sub.add_parser("campaigns")
-    s = sub.add_parser("links"); s.add_argument("--min", type=float, default=0.3)
+    s = sub.add_parser("links"); s.add_argument("--min", type=float, default=0.1)
     sub.add_parser("export")
     s = sub.add_parser("eval"); s.add_argument("labels")
     s = sub.add_parser("serve"); s.add_argument("--host", default="127.0.0.1"); s.add_argument("--port", type=int, default=8765)
@@ -129,10 +128,11 @@ def main(argv=None):
             m = ingest.from_text(t)
         r = eng.analyse_new(m, use_llm=not a.no_llm, keep=not a.dry, progress=lambda s: print(" ", s, flush=True))
         items = eng.store.all()
-        print("decision:", r["decision"], "campaign:", r["campaign"], "scores:", r["campaign_scores"])
+        print("decision:", r["decision"], "campaign:", r["campaign"], "nearest:", r["nearest"],
+              "similar_family:", r["similar_family"], "scores:", r["campaign_scores"])
         for l in r["links"][:8]:
             nm = items[l.b][0]["name"] if l.b in items else l.b
-            print(f"  vs {nm:>8}: p={l.p:.2f} {l.relation:13s} {l.explain(4)}")
+            print(f"  vs {nm:>8}: p={l.p:.2f} d={l.distance:.2f} {l.relation:13s} {l.explain(4)}")
     elif a.cmd == "campaigns":
         _print_campaigns(eng)
     elif a.cmd == "links":
@@ -147,11 +147,11 @@ def main(argv=None):
                                   ensure_ascii=False, indent=1, default=str))
         with open(config.EXPORTS / "links.csv", "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
-            w.writerow(["a", "b", "p", "relation", "families", "explanation"])
-            for l in sorted(cl["links"], key=lambda l: -l.p):
-                if l.p >= 0.1:
-                    w.writerow([items[l.a][0]["name"], items[l.b][0]["name"], round(l.p, 3), l.relation,
-                                json.dumps({k: round(v, 2) for k, v in l.families.items()}), l.explain(8)])
+            w.writerow(["a", "b", "p", "distance", "relation", "views", "explanation"])
+            for l in sorted(cl["links"], key=lambda l: (-l.p, l.distance)):
+                if l.relation != "none":
+                    w.writerow([items[l.a][0]["name"], items[l.b][0]["name"], round(l.p, 3), round(l.distance, 3), l.relation,
+                                json.dumps({k: round(v, 3) for k, v in l.views.items()}), l.explain(8)])
         print(out)
     elif a.cmd == "eval":
         print(json.dumps(evaluate(eng, a.labels), indent=1))

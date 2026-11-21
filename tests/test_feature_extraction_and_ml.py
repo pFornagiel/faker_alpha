@@ -1,5 +1,5 @@
 """Offline unit tests for gazetteer, LLM normalization/rules, vision, faces, text,
-and similarity/clustering ML invariants."""
+and the linking method (identifier must-links, df filter, Gower distance, average-linkage cuts, open-set assign)."""
 from __future__ import annotations
 
 import math
@@ -9,7 +9,7 @@ from unittest import mock
 import numpy as np
 from PIL import Image
 
-from ftf import cluster, config, faces, gazetteer, llm, pipeline, similarity, text, vision, web
+from ftf import cluster, faces, gazetteer, llm, pipeline, similarity, text, vision, web
 
 
 def _make_material_entry(
@@ -20,6 +20,8 @@ def _make_material_entry(
     llm_attrs: dict | None = None,
     text_summary: dict | None = None,
     vectors: dict | None = None,
+    images: list[dict] | None = None,
+    file_shas: list[str] | None = None,
 ) -> tuple[dict, dict]:
     feats = {
         "material_id": mid,
@@ -27,11 +29,11 @@ def _make_material_entry(
         "indicators": indicators or {},
         "persons_visual": persons_visual or [],
         "persons_named": persons_named or [],
-        "llm": llm_attrs or {"scam_type": "other", "narrative_template": "other", "creative_format": "other"},
+        "llm": llm_attrs or {"scam_type": "other"},
         "text": text_summary or {},
-        "images": [],
+        "images": images or [],
         "faces": [],
-        "file_shas": [],
+        "file_shas": file_shas or [],
         "web": {"landing_domains": list((indicators or {}).get("landing_domain", []))},
         "dates": [],
     }
@@ -63,20 +65,21 @@ class TestGazetteer(unittest.TestCase):
 
 
 class TestLLMNormalizationAndRules(unittest.TestCase):
-    def test_normalise_rejects_cross_enum_leakage(self):
+    def test_normalise_rejects_unknown_enum_and_drops_removed_fields(self):
         raw = {
             "scam_type": "fake_news_article",
-            "creative_format": "crypto_investment",
-            "narrative_template": "investment_fake_platform",
+            "narrative_template": "investment_fake_platform",      # field no longer in the schema
+            "distinctive_phrases": ["kup teraz"],                  # field no longer in the schema
             "impersonated_persons": ["Rafała Brzoski"],
             "impersonated_brands": ["Orlen S.A."],
         }
         norm = llm.normalise(dict(raw))
         self.assertEqual(norm["scam_type"], "other")
-        self.assertEqual(norm["creative_format"], "other")
-        self.assertEqual(norm["narrative_template"], "other")
+        self.assertNotIn("narrative_template", norm)
+        self.assertNotIn("distinctive_phrases", norm)
         self.assertIn("Rafał Brzoska", norm["impersonated_persons"])
         self.assertIn("Orlen", norm["impersonated_brands"])
+        self.assertLessEqual(set(llm.rules("Platforma Orzeł Fundaris pozwala zarabiać")), set(llm.SCHEMA["properties"]) | {"_backend"})
 
     def test_rules_rejects_cta_verbs_as_product_name(self):
         res = llm.rules("Pobierz aplikację Pobierz teraz i odbierz bonus")
@@ -136,37 +139,19 @@ class TestFaces(unittest.TestCase):
         max_err = float(np.max(np.abs(pred - dst)))
         self.assertLess(max_err, 1e-3)
 
-    def test_identify_rejects_low_quality_and_small_margin(self):
+    def test_identify_uses_top1_cosine_threshold_only(self):
         v1 = np.zeros(512, dtype=np.float32)
         v1[0] = 1.0
         g_far = np.zeros(512, dtype=np.float32)
         g_far[3] = 1.0
-
-        # Low quality rejected immediately
         with mock.patch("ftf.faces.gallery", return_value=(["Osoba A", "Osoba B"], np.stack([v1, g_far]), {})):
-            ident_q, sim_q = faces.identify(v1, quality=0.10)
-            self.assertIsNone(ident_q)
-            self.assertEqual(sim_q, 0.0)
-
-        # Ambiguous small margin rejected (best=0.70 vs second=0.68 -> diff 0.02 < FACE_MARGIN_MIN)
-        q_amb = np.zeros(512, dtype=np.float32)
-        q_amb[0] = 1.0
-        g1 = np.zeros(512, dtype=np.float32)
-        g1[0] = 0.70
-        g1[1] = math.sqrt(1 - 0.70 ** 2)
-        g2 = np.zeros(512, dtype=np.float32)
-        g2[0] = 0.68
-        g2[2] = math.sqrt(1 - 0.68 ** 2)
-        with mock.patch("ftf.faces.gallery", return_value=(["Osoba A", "Osoba B"], np.stack([g1, g2]), {})):
-            ident_amb, best_sim = faces.identify(q_amb, quality=0.80)
-            self.assertIsNone(ident_amb)
-            self.assertAlmostEqual(best_sim, 0.70, places=3)
-
-        # Clear match with sufficient quality & margin succeeds
+            self.assertEqual(faces.identify(v1), ("Osoba A", 1.0))
+        q = np.zeros(512, dtype=np.float32)
+        q[0], q[5] = 0.3, math.sqrt(1 - 0.09)                  # cosine 0.30 < FACE_MATCH_THRESHOLD
         with mock.patch("ftf.faces.gallery", return_value=(["Osoba A", "Osoba B"], np.stack([v1, g_far]), {})):
-            ident_ok, sim_ok = faces.identify(v1, quality=0.80)
-            self.assertEqual(ident_ok, "Osoba A")
-            self.assertAlmostEqual(sim_ok, 1.0, places=3)
+            ident, sim = faces.identify(q)
+            self.assertIsNone(ident)
+            self.assertAlmostEqual(sim, 0.30, places=3)
 
 
 class TestTextFeatures(unittest.TestCase):
@@ -187,103 +172,125 @@ class TestTextFeatures(unittest.TestCase):
         jac = text.jaccard_sig(s1, s2)
         self.assertGreaterEqual(jac, 0.70)
 
-    def test_title_template_normalizes_persons_and_amounts(self):
-        tt1 = text.title_template("Zamach na Rafała Brzoskę — stracił 5000 zł")
-        tt2 = text.title_template("Zamach na Monikę Olejnik — stracił 9000 zł")
-        self.assertEqual(tt1, tt2)
-        self.assertIn("<per>", tt1)
-        self.assertIn("<n>", tt1)
+
+def _sig(shared: int, seed: int) -> list[int]:
+    """MinHash-like signature: the first `shared` of 128 slots equal across seeds -> Jaccard = shared / 128."""
+    return [i for i in range(shared)] + [seed * 1000 + i for i in range(128 - shared)]
 
 
-class TestSimilarityAndClusteringInvariants(unittest.TestCase):
-    def test_small_n_hub_drop_regression(self):
+def _unrelated(i: int) -> tuple[dict, dict]:
+    return _make_material_entry(f"u{i}", indicators={"landing_domain": [f"unrelated-{i}.shop"]})
+
+
+class TestSimilarityAndClustering(unittest.TestCase):
+    def test_gower_distance_is_mean_of_available_views(self):
         items = {
-            f"m{i}": _make_material_entry(
-                f"m{i}",
-                indicators={
-                    "fb_pixel": ["999999999999"],
-                    "api_template": ["POST /api/v1/lead/{id}"],
-                    "landing_domain": [f"dom{i}.click"],
-                },
-            )
-            for i in range(4)
+            "a": _make_material_entry("a", text_summary={"minhash_masked": _sig(128, 1)},
+                                      images=[{"phash": "ffffffff00000000", "kind": "screenshot"}]),
+            "b": _make_material_entry("b", text_summary={"minhash_masked": _sig(128, 2)},
+                                      images=[{"phash": "00000000ffffffff", "kind": "screenshot"}]),
+        }
+        lnk = similarity.pair("a", *items["a"], "b", *items["b"], similarity.Corpus(items))
+        self.assertEqual(set(lnk.views), {"text", "images"})
+        self.assertAlmostEqual(lnk.views["text"], 1.0)
+        self.assertAlmostEqual(lnk.views["images"], 0.0)
+        self.assertAlmostEqual(lnk.distance, 0.5)
+        self.assertAlmostEqual(lnk.p, 0.5)
+        self.assertTrue(lnk.comparable)
+
+    def test_gower_skips_views_missing_on_either_side(self):
+        dom = np.array([list(range(128))])
+        items = {
+            "a": _make_material_entry("a", text_summary={"minhash_masked": _sig(96, 1)}, vectors={"dom": dom}),
+            "b": _make_material_entry("b", text_summary={"minhash_masked": _sig(96, 2)}),           # no HTML
+            "c": _make_material_entry("c", images=[{"phash": "ffffffff00000000", "kind": "screenshot"}]),
         }
         corpus = similarity.Corpus(items)
-        self.assertFalse(corpus.is_hub(("fb_pixel", "999999999999")))
-        self.assertGreater(corpus.rarity(("fb_pixel", "999999999999")), 0.0)
-        self.assertFalse(corpus.is_hub(("api_template", "POST /api/v1/lead/{id}")))
-        self.assertGreater(corpus.rarity(("api_template", "POST /api/v1/lead/{id}")), 0.0)
+        ab = similarity.pair("a", *items["a"], "b", *items["b"], corpus)
+        self.assertEqual(set(ab.views), {"text"})
+        self.assertAlmostEqual(ab.distance, 0.25)                   # 1 - 96/128, html not counted as 0
+        ac = similarity.pair("a", *items["a"], "c", *items["c"], corpus)
+        self.assertEqual(ac.views, {})
+        self.assertEqual(ac.distance, 1.0)
+        self.assertFalse(ac.comparable)
+        self.assertEqual(ac.relation, "none")
 
-        cl = cluster.build(items)
-        self.assertEqual(len(cl["campaigns"]), 1)
-        self.assertEqual(len(cl["campaigns"][0]), 4)
+    def test_ui_screenshots_excluded_from_images_view(self):
+        ui = [{"phash": "ffffffff00000000", "kind": "ui_screenshot"}]
+        items = {"a": _make_material_entry("a", images=ui), "b": _make_material_entry("b", images=ui)}
+        lnk = similarity.pair("a", *items["a"], "b", *items["b"], similarity.Corpus(items))
+        self.assertNotIn("images", lnk.views)
 
-    def test_60_percent_dominant_campaign_not_dropped_as_hub(self):
-        items = {}
-        for i in range(6):
-            items[f"camp_{i}"] = _make_material_entry(
-                f"camp_{i}",
-                indicators={
-                    "fb_pixel": ["2012165449475163"],
-                    "api_template": ["POST /api/v1/trigger/field/{id}/"],
-                    "param_signature": ["acc=A12&pxl=D16"],
-                    "landing_domain": [f"camp{i}.pro"],
-                },
-            )
-        for j in range(4):
-            items[f"single_{j}"] = _make_material_entry(
-                f"single_{j}",
-                indicators={
-                    "landing_domain": [f"unrelated{j}.shop"],
-                    "fb_pixel": [f"700000000000000{j}"],
-                },
-            )
+    def test_df_filter_ignores_too_common_values(self):
+        items = {f"m{i}": _make_material_entry(f"m{i}", indicators={
+            "fb_pixel": ["111111111111111"] if i < 4 else [f"20000000000000{i}"],     # 4 / 6 > MAX_DF
+            "gtm": ["GTM-ABCD"] if i < 3 else [f"GTM-X{i}"],                         # 3 / 6 <= MAX_DF
+            "landing_domain": [f"op-{i}.click"]}) for i in range(6)}
         corpus = similarity.Corpus(items)
-        self.assertFalse(corpus.is_hub(("fb_pixel", "2012165449475163")))
-        self.assertFalse(corpus.is_hub(("api_template", "POST /api/v1/trigger/field/{id}/")))
-        self.assertFalse(corpus.is_hub(("param_signature", "acc=A12&pxl=D16")))
+        lnk = similarity.pair("m0", *items["m0"], "m1", *items["m1"], corpus)
+        by_type = {s.type: s for s in lnk.shared_ids}
+        self.assertTrue(by_type["fb_pixel"].ignored)
+        self.assertEqual(by_type["fb_pixel"].df, 4)
+        self.assertFalse(by_type["gtm"].ignored)
+        self.assertTrue(lnk.must_link)
+        lnk03 = similarity.pair("m0", *items["m0"], "m3", *items["m3"], corpus)
+        self.assertFalse(lnk03.must_link)                          # only the ignored pixel is shared
+        self.assertEqual(lnk03.relation, "none")
+        self.assertTrue(lnk03.shared_ids[0].ignored)
+        # a value held by just the compared pair always counts (even when N = 2)
+        two = {k: items[k] for k in ("m0", "m1")}
+        self.assertTrue(similarity.pair("m0", *two["m0"], "m1", *two["m1"], similarity.Corpus(two)).must_link)
 
-        cl = cluster.build(items)
-        camp_sets = [set(c) for c in cl["campaigns"]]
-        expected_dominant = {f"camp_{i}" for i in range(6)}
-        self.assertIn(expected_dominant, camp_sets)
+    def test_domains_compared_as_registrable_and_ocr_decoys_dropped(self):
+        items = {
+            "a": _make_material_entry("a", indicators={"page_host": ["promo.op-one.click"], "ocr_domain": ["interia.pl"]}),
+            "b": _make_material_entry("b", indicators={"landing_domain": ["op-one.click"]}),
+            "c": _make_material_entry("c", indicators={"landing_domain": ["interia.pl"]}),
+            **{f"u{i}": _unrelated(i) for i in range(3)},
+        }
+        corpus = similarity.Corpus(items)
+        ab = similarity.pair("a", *items["a"], "b", *items["b"], corpus)
+        self.assertEqual([(s.group, s.value) for s in ab.shared_ids], [("domains", "op-one.click")])
+        self.assertEqual(ab.p, 1.0)
+        self.assertEqual(ab.relation, "same_campaign")
+        ac = similarity.pair("a", *items["a"], "c", *items["c"], corpus)
+        self.assertEqual(ac.shared_ids, [])
+
+    def test_must_link_is_transitive(self):
+        items = {
+            "a": _make_material_entry("a", indicators={"fb_pixel": ["1071875908635809"], "landing_domain": ["a-op.click"]}),
+            "b": _make_material_entry("b", indicators={"fb_pixel": ["1071875908635809"], "landing_domain": ["b-op.click"],
+                                                       "telegram": ["opchannel"]}),
+            "c": _make_material_entry("c", indicators={"telegram": ["opchannel"], "landing_domain": ["c-op.click"]}),
+            **{f"u{i}": _unrelated(i) for i in range(4)},
+        }
+        links = similarity.all_links(items)
+        ac = next(l for l in links if {l.a, l.b} == {"a", "c"})
+        self.assertFalse(ac.must_link)
+        cl = cluster.build(items, links)
+        self.assertEqual(cl["campaign_of"]["a"], cl["campaign_of"]["c"])
+        self.assertEqual(set(cl["campaigns"][0]), {"a", "b", "c"})
         self.assertEqual(len(cl["campaigns"]), 5)
 
-    def test_weak_only_guard_caps_probability(self):
+    def test_campaign_and_family_cuts(self):
+        # x~y: d = 0.25 (same campaign by content); x~z, y~z: d = 0.75 (same family only); w unrelated
         items = {
-            "a": _make_material_entry(
-                "a",
-                persons_visual=["Rafał Brzoska"],
-                llm_attrs={"scam_type": "crypto_investment", "narrative_template": "fake_news_article", "creative_format": "other"},
-            ),
-            "b": _make_material_entry(
-                "b",
-                persons_visual=["Rafał Brzoska"],
-                llm_attrs={"scam_type": "crypto_investment", "narrative_template": "fake_news_article", "creative_format": "other"},
-            ),
+            "x": _make_material_entry("x", text_summary={"minhash_masked": _sig(128, 1)}),
+            "y": _make_material_entry("y", text_summary={"minhash_masked": _sig(96, 2)}),
+            "z": _make_material_entry("z", text_summary={"minhash_masked": _sig(32, 3)}),
+            "w": _make_material_entry("w", text_summary={"minhash_masked": _sig(0, 4)}),
         }
-        corpus = similarity.Corpus(items)
-        lnk = similarity.pair("a", *items["a"], "b", *items["b"], corpus)
-        self.assertLessEqual(lnk.p, config.WEAK_ONLY_CAP)
-        self.assertNotEqual(lnk.relation, "same_campaign")
+        cl = cluster.build(items)
+        self.assertEqual(cl["campaign_of"]["x"], cl["campaign_of"]["y"])
+        self.assertNotEqual(cl["campaign_of"]["x"], cl["campaign_of"]["z"])
+        self.assertEqual(cl["family_of"]["x"], cl["family_of"]["z"])
+        self.assertNotEqual(cl["family_of"]["x"], cl["family_of"]["w"])
+        rel = {frozenset((l.a, l.b)): l.relation for l in cl["links"]}
+        self.assertEqual(rel[frozenset("xy")], "same_campaign")
+        self.assertEqual(rel[frozenset("xz")], "similar")
+        self.assertEqual(rel[frozenset("xw")], "none")
 
-    def test_contradiction_guard_penalizes_opposing_scam_types(self):
-        base_ind = {"script_name": ["custom_lander.js"], "css_name": ["custom_lander_kit.css"]}
-        neutral_items = {
-            "a": _make_material_entry("a", indicators=base_ind, llm_attrs={"scam_type": "other"}),
-            "b": _make_material_entry("b", indicators=base_ind, llm_attrs={"scam_type": "other"}),
-        }
-        conflict_items = {
-            "a": _make_material_entry("a", indicators=base_ind, llm_attrs={"scam_type": "crypto_investment"}),
-            "b": _make_material_entry("b", indicators=base_ind, llm_attrs={"scam_type": "health_miracle_product"}),
-        }
-        lnk_neutral = similarity.pair("a", *neutral_items["a"], "b", *neutral_items["b"], similarity.Corpus(neutral_items))
-        lnk_conflict = similarity.pair("a", *conflict_items["a"], "b", *conflict_items["b"], similarity.Corpus(conflict_items))
-        self.assertGreater(lnk_neutral.p, 0.0)
-        self.assertAlmostEqual(lnk_conflict.p, lnk_neutral.p * config.CONFLICT_FACTOR, places=6)
-        self.assertTrue(any(e.signal == "conflict" for e in lnk_conflict.evidence))
-
-    def test_adversarial_negative_suite_zero_false_same_campaign_links(self):
+    def test_shared_persons_and_scam_type_never_link(self):
         items = {}
         for i in range(6):
             ind: dict[str, set[str]] = {"landing_domain": {f"distinct-op-{i}.click"}}
@@ -291,59 +298,108 @@ class TestSimilarityAndClusteringInvariants(unittest.TestCase):
             pipeline._extract_ocr_ad_facts(img_feats, ind, [])
             self.assertNotIn("ocr_domain", ind)
             items[f"adv_{i}"] = _make_material_entry(
-                f"adv_{i}",
-                indicators={k: sorted(v) for k, v in ind.items()},
-                persons_visual=["Rafał Brzoska"],
-                persons_named=["Rafał Brzoska"],
-                llm_attrs={
-                    "scam_type": "investment_fake_platform",
-                    "narrative_template": "celebrity_scandal_or_attack",
-                    "creative_format": "fake_news_article",
-                },
-            )
+                f"adv_{i}", indicators={k: sorted(v) for k, v in ind.items()},
+                persons_visual=["Rafał Brzoska"], persons_named=["Rafał Brzoska"],
+                llm_attrs={"scam_type": "investment_fake_platform", "spoofed_media_outlet": "Gazeta.pl"})
         links = similarity.all_links(items)
-        false_positives = [l for l in links if l.relation in ("same_campaign", "duplicate")]
-        self.assertEqual(false_positives, [])
-        cl = cluster.build(items, links)
-        self.assertEqual(len(cl["campaigns"]), 6)
+        self.assertEqual([l for l in links if l.relation != "none"], [])
+        self.assertEqual(len(cluster.build(items, links)["campaigns"]), 6)
 
-    def test_synthetic_positive_campaign_and_open_set_assign(self):
-        html_ind_1 = web.extract_html("<html><script>fbq('init', '1071875908635809');</script></html>")["indicators"]
-        html_ind_2 = web.extract_html("<html><script>fbq('init', '1071875908635809');</script></html>")["indicators"]
+    def _base(self):
         items = {
-            "k1": _make_material_entry("k1", indicators={"fb_pixel": sorted(html_ind_1["fb_pixel"]), "landing_domain": ["op-one.click"]}),
-            "k2": _make_material_entry("k2", indicators={"fb_pixel": sorted(html_ind_2["fb_pixel"]), "landing_domain": ["op-two.click"]}),
-            **{
-                f"s{i}": _make_material_entry(
-                    f"s{i}",
-                    indicators={"fb_pixel": [f"300000000000000{i}"], "landing_domain": [f"other-{i}.shop"]},
-                )
-                for i in range(6)
-            },
+            "k1": _make_material_entry("k1", indicators={"fb_pixel": ["1071875908635809"], "landing_domain": ["op-one.click"]},
+                                       text_summary={"minhash_masked": _sig(128, 1)}, file_shas=["sha-k1"]),
+            "k2": _make_material_entry("k2", indicators={"fb_pixel": ["1071875908635809"], "landing_domain": ["op-two.click"]},
+                                       text_summary={"minhash_masked": _sig(100, 2)}),
+            "j1": _make_material_entry("j1", indicators={"gtm": ["GTM-JJJJ"], "landing_domain": ["jj-one.top"]},
+                                       text_summary={"minhash_masked": _sig(0, 3)}),
+            "j2": _make_material_entry("j2", indicators={"gtm": ["GTM-JJJJ"], "landing_domain": ["jj-two.top"]}),
+            **{f"s{i}": _make_material_entry(f"s{i}", indicators={"landing_domain": [f"other-{i}.shop"]}) for i in range(4)},
+        }
+        return items, cluster.build(items)
+
+    def test_assign_known_campaign_by_identifier(self):
+        items, cl = self._base()
+        url_ind = web.url_indicators("https://brand-new-lander.top/offer?pxl=1071875908635809")
+        f, v = _make_material_entry("new", indicators={k: sorted(x) for k, x in url_ind.items()})
+        res = cluster.assign("new", f, v, items, cl)
+        self.assertEqual(res["decision"], "known_campaign")
+        self.assertEqual(res["campaign"], cl["campaign_of"]["k1"])
+
+    def test_assign_merge_proposal_when_ids_hit_two_campaigns(self):
+        items, cl = self._base()
+        self.assertNotEqual(cl["campaign_of"]["k1"], cl["campaign_of"]["j1"])
+        f, v = _make_material_entry("new", indicators={"fb_pixel": ["1071875908635809"], "gtm": ["GTM-JJJJ"]})
+        res = cluster.assign("new", f, v, items, cl)
+        self.assertEqual(res["decision"], "merge_proposal")
+        self.assertIn(res["campaign"], (cl["campaign_of"]["k1"], cl["campaign_of"]["j1"]))
+
+    def test_assign_duplicate_by_identical_file(self):
+        items, cl = self._base()
+        f, v = _make_material_entry("new", file_shas=["sha-k1"])
+        res = cluster.assign("new", f, v, items, cl)
+        self.assertEqual(res["decision"], "duplicate")
+        self.assertEqual(res["duplicates"], ["k1"])
+        self.assertEqual(res["campaign"], cl["campaign_of"]["k1"])
+
+    def test_assign_by_content_known_then_new_with_similar_family(self):
+        items, cl = self._base()
+        # mean d to {k1, k2}: text view only -> (1 - 120/128 + 1 - 100/128) / 2 ~ 0.14 <= CAMPAIGN_CUT
+        f, v = _make_material_entry("near", text_summary={"minhash_masked": _sig(120, 9)})
+        res = cluster.assign("near", f, v, items, cl)
+        self.assertEqual(res["decision"], "known_campaign")
+        self.assertEqual(res["campaign"], cl["campaign_of"]["k1"])
+        # mean d ~ 0.80 to {k1, k2} (only text comparable): new campaign, but same family
+        f, v = _make_material_entry("far", text_summary={"minhash_masked": _sig(26, 9)})
+        res = cluster.assign("far", f, v, items, cl)
+        self.assertEqual(res["decision"], "new_campaign")
+        self.assertIsNone(res["campaign"])
+        self.assertEqual(res["nearest"]["campaign"], cl["campaign_of"]["k1"])
+        self.assertEqual(res["similar_family"], cl["campaign_of"]["k1"])
+        # nothing in common at all
+        f, v = _make_material_entry("novel", indicators={"landing_domain": ["totally-fresh.xyz"]})
+        res = cluster.assign("novel", f, v, items, cl)
+        self.assertEqual(res["decision"], "new_campaign")
+        self.assertIsNone(res["similar_family"])
+
+    def test_assign_uses_nearest_neighbour_not_campaign_mean(self):
+        # k1..k3 are one campaign only through a shared pixel; their texts differ. A near copy of k3 must join it
+        # although its mean distance to the campaign is large (1-NN, Cover & Hart 1967).
+        px = {"fb_pixel": ["1071875908635809"]}
+        items = {
+            "k1": _make_material_entry("k1", indicators=px, text_summary={"minhash_masked": _sig(0, 1)}),
+            "k2": _make_material_entry("k2", indicators=px, text_summary={"minhash_masked": _sig(0, 2)}),
+            "k3": _make_material_entry("k3", indicators=px, text_summary={"minhash_masked": _sig(128, 3)}),
+            **{f"s{i}": _make_material_entry(f"s{i}", indicators={"landing_domain": [f"other-{i}.shop"]}) for i in range(4)},
         }
         cl = cluster.build(items)
-        known_camp = cl["campaign_of"]["k1"]
-        self.assertEqual(known_camp, cl["campaign_of"]["k2"])
+        f, v = _make_material_entry("copy", text_summary={"minhash_masked": _sig(115, 9)})
+        res = cluster.assign("copy", f, v, items, cl)
+        self.assertEqual(res["decision"], "known_campaign")
+        self.assertEqual(res["campaign"], cl["campaign_of"]["k3"])
+        self.assertEqual(res["nearest"]["material"], "k3")
+        self.assertAlmostEqual(res["nearest"]["distance"], round(1 - 115 / 128, 3))
 
-        # New variant sharing bare fb_pixel via URL ?pxl= parameter
-        url_ind = web.url_indicators("https://brand-new-lander.top/offer?pxl=1071875908635809")
-        var_f, var_v = _make_material_entry(
-            "variant_new",
-            indicators={k: sorted(v) for k, v in url_ind.items()},
-        )
-        res_known = cluster.assign("variant_new", var_f, var_v, items, cl)
-        self.assertEqual(res_known["decision"], "known_campaign")
-        self.assertEqual(res_known["campaign"], known_camp)
+    def test_ocr_view_compares_creative_text_and_falls_back_to_stored_ocr_text(self):
+        ad = ("PILNE skandal w studiu telewizyjnym gość ujawnił sekretny sposób na dochód pasywny "
+              "rejestracja na oficjalnej platformie z minimalną wpłatą dwieście pięćdziesiąt złotych dziś")
+        page = _sig(128, 1)
+        items = {
+            "full": _make_material_entry("full", text_summary={"minhash_masked": page, "ocr_text": ad}),   # legacy record
+            "creative": _make_material_entry("creative", text_summary={"minhash_ocr_masked": text.minhash_sig(ad, masked=True)}),
+        }
+        lnk = similarity.pair("full", *items["full"], "creative", *items["creative"], similarity.Corpus(items))
+        self.assertEqual(set(lnk.views), {"ocr"})
+        self.assertAlmostEqual(lnk.views["ocr"], 1.0)
+        self.assertAlmostEqual(lnk.distance, 0.0)
 
-        # Completely novel material -> new_campaign
-        novel_f, novel_v = _make_material_entry(
-            "novel_1",
-            indicators={"fb_pixel": ["8888888888888888"], "landing_domain": ["totally-fresh.xyz"]},
-            llm_attrs={"scam_type": "health_miracle_product", "narrative_template": "miracle_cure_testimonial", "creative_format": "product_packshot"},
-        )
-        res_novel = cluster.assign("novel_1", novel_f, novel_v, items, cl)
-        self.assertEqual(res_novel["decision"], "new_campaign")
-        self.assertIsNone(res_novel["campaign"])
+    def test_link_explain_is_polish_and_lists_reasons(self):
+        items, cl = self._base()
+        l = next(l for l in cl["links"] if {l.a, l.b} == {"k1", "k2"})
+        txt = l.explain()
+        self.assertIn("Facebook Pixel", txt)
+        self.assertIn("tekst strony", txt)
+        self.assertIn("odległość treści", txt)
 
 
 if __name__ == "__main__":

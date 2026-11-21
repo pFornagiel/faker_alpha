@@ -20,7 +20,7 @@ COPY tools ./tools
 COPY README.md ./
 COPY docs ./docs
 COPY research ./research
-# models (~460 MB) baked into the image so the demo works offline
+# models (~310 MB: e5 + SCRFD/ArcFace) baked into the image so the demo works offline
 RUN python tools/download_models.py
 # optional: headless browser for live URL capture
 ARG WITH_PLAYWRIGHT=1

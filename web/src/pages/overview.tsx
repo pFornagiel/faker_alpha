@@ -4,7 +4,7 @@ import { Link } from "react-router"
 import type { CampaignCard, CampaignRef, Example, Overview } from "@/lib/api"
 import { plural, useApi } from "@/lib/format"
 import {
-  CampaignBadge, CampaignDot, Chips, ErrorState, HelpTip, Loading, PageHeader, Stat, Thumb, TierBadge, traceHref,
+  CampaignBadge, CampaignDot, Chips, ErrorState, GroupBadge, HelpTip, Loading, PageHeader, Stat, Thumb, traceHref,
 } from "@/components/common"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,7 +13,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export default function OverviewPage() {
-  const { data, error, isLoading } = useApi<Overview & { examples: Example[] }>("/api/overview")
+  const { data, error, isLoading } = useApi<Overview>("/api/overview")
   if (isLoading) return <Loading />
   if (error || !data) return <ErrorState error={error} />
   if (!data.n_materials)
@@ -39,14 +39,14 @@ export default function OverviewPage() {
     <>
       <PageHeader
         title="Przegląd kampanii"
-        description="Każdy materiał (reklama, strona docelowa, nagranie) jest porównywany z każdym innym. Materiały, które łączą wspólne ślady operatora — ten sam piksel reklamowy, domena, backend strony, obraz — tworzą kampanię. Każde powiązanie ma uzasadnienie."
+        description="Każdy materiał (reklama, strona docelowa, nagranie) jest porównywany z każdym innym. Materiały ze wspólnym identyfikatorem — ten sam piksel reklamowy, domena, kontakt, plik kitu strony, ID reklamy — albo z bardzo bliską treścią tworzą kampanię. Każde powiązanie ma uzasadnienie."
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Materiały w bazie" value={data.n_materials} hint="zgłoszenia i przechwycenia →" to="/materials" />
         <Stat label="Kampanie" value={data.n_campaigns} hint={`${data.n_multi} wielomateriałowe · ${data.n_singletons} jednomateriałowe →`} to="#kampanie" />
-        <Stat label="Pary „ta sama kampania”" value={data.links.same_campaign} hint="powiązania z dowodem →" to="/links?rel=same_campaign,duplicate" />
-        <Stat label="Pary „podobny playbook”" value={data.links.similar} hint="ten sam schemat, inny operator →" to="/links?rel=similar" />
+        <Stat label="Pary „ta sama kampania”" value={data.links.same_campaign} hint="wspólny identyfikator lub bliska treść →" to="/links?rel=same_campaign,duplicate" />
+        <Stat label="Pary „podobna treść”" value={data.links.similar} hint="podobna treść, bez wspólnego identyfikatora →" to="/links?rel=similar" />
       </div>
 
       {data.examples.length > 0 && <Examples examples={data.examples} />}
@@ -54,7 +54,7 @@ export default function OverviewPage() {
       <section id="kampanie" className="scroll-mt-20 space-y-3">
         <div>
           <h2 className="text-lg font-semibold">Kampanie wielomateriałowe</h2>
-          <p className="text-sm text-muted-foreground">Materiały połączone śladami operatora. Posortowane według liczby materiałów.</p>
+          <p className="text-sm text-muted-foreground">Materiały połączone wspólnymi identyfikatorami lub bliską treścią. Posortowane według liczby materiałów.</p>
         </div>
         {multi.length ? (
           <div className={multi.length > 1 ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
@@ -70,8 +70,8 @@ export default function OverviewPage() {
           <div>
             <h2 className="text-lg font-semibold">Kampanie jednomateriałowe</h2>
             <p className="text-sm text-muted-foreground">
-              Materiały bez wspólnych śladów operatora z resztą bazy — każdy to osobna kampania (nowy wzorzec). Kolumna „Podobny playbook” wskazuje kampanie o tym
-              samym schemacie oszustwa, ale bez dowodu wspólnej infrastruktury.
+              Materiały bez wspólnego identyfikatora i bez bliskiej treści z resztą bazy — każdy to osobna kampania (nowy wzorzec). Kolumna „Ta sama rodzina” wskazuje
+              kampanie o podobnej treści, ale bez wspólnego identyfikatora.
             </p>
           </div>
           {/* desktop: table */}
@@ -84,7 +84,7 @@ export default function OverviewPage() {
                   <TableHead>Typ oszustwa</TableHead>
                   <TableHead>Osoby</TableHead>
                   <TableHead>
-                    <span className="inline-flex items-center gap-1">Podobny playbook <HelpTip label="Co to jest podobny playbook">Kampanie z tą samą narracją, koncepcją, wizualiami lub osobami, ale bez wspólnych śladów operatora. Ten sam „przepis na oszustwo”, możliwie inny wykonawca.</HelpTip></span>
+                    <span className="inline-flex items-center gap-1">Ta sama rodzina <HelpTip label="Co to jest rodzina">Rodzina = kampanie, które łączą się na wyższym cięciu tego samego dendrogramu: podobna treść, ale bez wspólnego identyfikatora. Osobne kampanie, możliwie podobny schemat.</HelpTip></span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -128,7 +128,7 @@ export default function OverviewPage() {
                     </Link>
                     <p className="text-sm">{m.scam_type_label ?? "—"}{m.persons.length > 0 && <span className="text-muted-foreground"> · {m.persons.slice(0, 2).join(", ")}</span>}</p>
                     {(familyOf.get(c.id) ?? []).length > 0 && (
-                      <p className="flex flex-wrap items-center gap-2 text-sm"><span className="text-muted-foreground">Podobny playbook:</span> <Siblings refs={familyOf.get(c.id) ?? []} /></p>
+                      <p className="flex flex-wrap items-center gap-2 text-sm"><span className="text-muted-foreground">Ta sama rodzina:</span> <Siblings refs={familyOf.get(c.id) ?? []} /></p>
                     )}
                   </CardContent>
                 </Card>
@@ -203,12 +203,12 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
         </div>
         <div>
           <p className="mb-2 text-sm font-medium">
-            Dlaczego razem <span className="font-normal text-muted-foreground">— najmocniejsze wspólne ślady ({c.n_shared} wspólnych wartości łącznie)</span>
+            Dlaczego razem <span className="font-normal text-muted-foreground">— wspólne ślady ({c.n_shared} wspólnych wartości łącznie)</span>
           </p>
           <ul className="space-y-1.5">
             {c.top_shared.map((s) => (
               <li key={`${s.type}:${s.value}`} className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5 text-sm sm:grid-cols-[auto_1fr_auto]">
-                <TierBadge tier={s.tier} />
+                <GroupBadge label={s.group_label} linking={s.group !== "images" && s.group !== "descriptive"} />
                 <Link to={traceHref(s.type, s.value)} className="min-w-0 truncate underline-offset-4 hover:underline" title={s.display}>
                   <span className="text-muted-foreground">{s.type_label}:</span>{" "}
                   {s.type === "asset_phash" ? <span>{s.n_values} {s.n_values === 1 ? "obraz" : "obrazów"}</span> : <span className="font-mono text-xs">{s.display}</span>}

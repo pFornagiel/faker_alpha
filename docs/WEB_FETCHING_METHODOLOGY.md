@@ -80,13 +80,12 @@ Investigating online scam-ad ecosystems in Poland (and the EU) imposes five hard
   - Selects the primary landing document via `_pick_landing_url()`: prioritizes non-generic `GET` requests returning `2xx`/`3xx` HTML (preventing telemetry `POST 404` requests from being chosen as the landing URL).
   - Identifies per-visit session UUIDs (from `SESSION_PARAM_HINTS` query keys or `/trigger/` / `session` POST paths) and subtracts them from `tenant_uuid` so per-visit UUIDv7 tokens never create noise.
   - Strips per-visit IDs from POST endpoints via `template_path()` (`/api/v1/trigger/field/01a11f55-.../` -> `/api/v1/trigger/field/{id}/`) to produce both host-qualified `form_endpoint` and host-agnostic `api_template`.
-  - Computes Shodan-compatible `mmh3` favicon hashes (filtering `GENERIC_FAVICON_HASHES = {"0", "-1", "116323821"}`) and SHA-1 hashes of non-generic first-party JS (`script_hash`, `> 500` bytes).
+  - Computes SHA-1 hashes of non-generic first-party JS (`script_hash`, `> 500` bytes).
 - **URL Fingerprinting (`url_indicators`)**:
-  - Strips `VOLATILE_PARAMS` (`fbclid`, `gclid`, `clickid`, `utm_visit`, `access_token`, `_trk`, `key`, etc.) and sorts remaining query keys with abstract value shapes (`U` = UUID, `D<n>` = digits, `A<n>` = alnum, `S` = string) to form a canonical TDS `param_signature`.
   - Canonicalizes `fb_pixel` (14–17 digits) and `ad_id` to bare IDs across query params, HTML, OCR, and ad-library metadata.
 - **HTML & Script Extraction (`extract_html`, `extract_script_indicators`)**:
-  - Extracts trackers (`TRACKER_RX`: FB Pixel, TikTok Pixel, GA/GA4, GTM, Google Ads `AW-`, AdSense, Yandex Metrika, Clarity, Hotjar, Sentry key, reCAPTCHA, Next/Nuxt `build_id`) and contacts (`CONTACT_RX`: Telegram, WhatsApp, email, Polish/international phone, BTC/ETH/TRON crypto wallets).
-  - Cleans Polish Chrome asset filenames (`_clean_asset_filename` strips `.pobrane`/`.pobierz` and duplicate `(1)` suffixes) and filters common libraries (`GENERIC_SCRIPT_NAMES`, `GENERIC_CSS_NAMES`).
+  - Extracts trackers (`TRACKER_RX`: FB Pixel, TikTok Pixel, GA/GA4, GTM, Google Ads `AW-`) and contacts (`CONTACT_RX`: Telegram, WhatsApp, email, Polish/international phone, BTC/ETH/TRON crypto wallets).
+  - Cleans Polish Chrome asset filenames (`_clean_asset_filename` strips `.pobrane`/`.pobierz` and duplicate `(1)` suffixes) and filters common libraries (`GENERIC_SCRIPT_NAMES`) so only first-party scripts are hashed.
   - Produces 5-gram DOM tag shingles (`tag_shingles`) for structural template MinHash.
 
 ---
@@ -135,13 +134,10 @@ When `FTF_ENRICH != "0"` (evaluated dynamically via `is_enabled()`), `enrich_dom
 3. **Certificate Transparency (`crtsh`)**: Queries `https://crt.sh/?q=<dom>&output=json` (`(5s, 12s)` timeout), explicitly distinguishing HTTP/network errors (`{"error": ...}`) from genuine zero-certificate results (`{"n_certs": 0}`). Records `n_certs`, earliest `first_cert`, `issuer`, and up to 30 `san_names`.
 4. **CERT Polska Warning List (`_cert_pl`, `is_cert_pl_listed`)**: Downloads `https://hole.cert.pl/domains/v2/domains.txt` (6-hour mtime cache, atomic temp-file + `os.replace`, stale-cache fallback on network failure). Matches both exact domains and any parent domain (`sub.bad.pl` -> `bad.pl`).
 
-### Dual-TTL Smart Caching & Linking Indicators
+### Dual-TTL Smart Caching & Display Metadata
 
 - **Dual TTL**: Complete responses are cached in `data/cache/enrich/<domain>.json` for `FULL_TTL_S = 7 days`. Any response with transient/partial errors (`_partial = True`, e.g., `crt.sh` HTTP `503`, RDAP `429`, DNS timeout) uses a short negative TTL of `PARTIAL_TTL_S = 900s` (15 minutes) so transient outages are never frozen for a week.
-- **Linking indicators (`enrich.indicators`)**:
-  - `ns_pair`: Sorted top-2 nameservers joined by `+` (e.g., `braelyn.ns.cloudflare.com+kurt.ns.cloudflare.com`). Cloudflare assigns unique two-word NS pairs per customer account, making them a strong operator signal (weight `0.35`).
-  - `reg_burst`: `f"{registrar_norm[:40]}|{ns_pair}|{YYYY-MM-DD}"` (weight `0.75`). Captures bulk domain registrations on the same day under the same registrar and NS account (e.g., `civicdaybook.live` and `healthlinkq.pro` registered together on `2026-10-08`).
-  - **Generic-NS suppression**: If all top-2 nameservers match `GENERIC_NS_RX` (`dyna-ns.net`, `registrar-servers.com`, `domaincontrol.com`, `dns-parking.com`, `ovh.net`, `awsdns`, `home.pl`, `nazwa.pl`, `cyberfolks`, `porkbun`, `nicenic`, etc.), **neither `ns_pair` nor `reg_burst` is emitted** — eliminating false links between unrelated domains parked on default registrar DNS.
+- **Display metadata, not linking signals**: registrar, creation date, nameservers (lower-cased, trailing dots stripped), IPs and CERT Polska listing are shown to the analyst (e.g., `civicdaybook.live` and `healthlinkq.pro` both created on `2026-10-08`). They do not link materials, because registrars and nameservers are shared across different campaigns — see [`FEATURES_AND_ML_METHODOLOGY.md`](FEATURES_AND_ML_METHODOLOGY.md) § 1.3.
 
 ---
 
@@ -160,6 +156,24 @@ External feeds are inherently volatile. `ftf/sources.py` tracks every call in `L
 | **Google Ads Transparency Center** (`google_atc_*`) | Internal RPC `adstransparency.google.com/anji/_/rpc/SearchService/*` (`PL=2616`) | None | **Fragile — currently rate-limited (`429 /sorry/index`)** | Designed for advertiser/domain -> creative pivots, but Google aggressively challenges automated/datacenter traffic with HTTP `429` / CAPTCHA redirects. Recorded as `rate_limited` in `LAST_STATUS`. |
 | **LinkedIn Ad Library** (`linkedin_search`) | `https://www.linkedin.com/ad-library/search` | None | **Blocked (`403` / `999`)** | Anti-bot protection routinely returns HTTP `403`/`999` to plain `requests`. Raises `HTTPError` and records `blocked` in `LAST_STATUS`. |
 
+### 5.1 Campaign Watch — pivot search on a known campaign's identifiers (`scheduler.watch_campaigns`)
+
+The keyword scan (`scheduler.run_once`) only finds *suspicious* ads. The campaign watch looks for *new materials of campaigns already detected*, by searching the public sources with each campaign's own identifiers, the same pivoting on shared identifiers that Starov et al. (2018) use to expand campaigns from analytics IDs.
+
+- **Seeds** (`scheduler.campaign_seeds`): the identifier values held by the campaign's members that similarity already treats as linking. They must be *counted* (`similarity.counted`: df/N ≤ `config.MAX_DF`). They come from three groups: `domains` (registrable domain; generic/CDN and decoy media domains dropped with `web.is_decoy_or_generic_domain`), `ad_library` (only `advertiser_id`, since an ad ID names a single ad) and `product` (real brand/media names recognised by the gazetteer are dropped, because they return legitimate ads). Caps: the `WATCH_MAX_CAMPAIGNS = 8` largest campaigns per run (multi-material first), or one campaign on request; at most `WATCH_MAX_SEEDS = 4` seeds per campaign. Values held by more members come first, and the groups are taken in turn. Requests are paced by the same `REQUEST_PAUSE = 0.5 s`.
+- **Sources per seed**:
+
+  | Seed group | Queried in |
+  |---|---|
+  | domain | `google_atc_creatives(domain=…)`, `ms_adlib_search(domain)`, new CERT Polska entries whose domain contains the domain's second-level label (≥ 5 characters, `_match_domain_stems`) |
+  | advertiser ID | `google_atc_creatives(advertiser_id=…)`, only for Google IDs (`AR…`); other formats (e.g. Meta page IDs) are skipped and the reason is shown |
+  | product | `ms_adlib_search(product)`, `meta_api_search(product)` (only with `META_ACCESS_TOKEN`), CERT Polska stem = folded product name without spaces/hyphens (≥ 5 characters) |
+
+  CERT Polska is read once per run (`sources.cert_pl_watch`). It keeps its own watermark (`cert_pl_watch_last_id`), so the keyword scan and the watch each see every new entry once.
+- **Provenance**: every hit carries `seed = {campaign, campaign_label, group, type, value, source}`, so the UI can say e.g. "found via the domain healthlinkq.pro of campaign C1 · Microsoft Ad Library". Hits are ordered by campaign, then source. They are deduplicated with `_dedup_key` against the stored `scheduler_found` list. An item already found by the keyword scan is kept once and only gains its `seed`.
+- **A hit is a lead, not a link.** Nothing is linked to the campaign because of the seed. With `analyse=True` (at most 5 new hits) each hit goes through the normal capture → `engine.analyse_new` → `cluster.assign` path. That decision (`known_campaign` / `new_campaign` / `merge_proposal` / `duplicate`) is stored as `outcome`. `confirmed` is true only when the assigned campaign contains the seed campaign's members. The UI shows "potwierdzone: C1" or "nie potwierdzono (…)". No new score or weight is introduced: the triage score is the unchanged `suspicion()`.
+- **Integration**: `POST /api/scanner/watch {campaign?: int, analyse: bool}` (background job), `GET /api/scanner/seeds?campaign=` (preview), `GET /api/scanner` (`watch_found`, `watch_last`). `run_once(watch=True)` and `start_background(watch=True)` add the watch to the one-off and periodic scan, and `python -m ftf.scheduler --once --watch` does the same from the CLI. Events are logged as `watch_scan` / `watch_run`. UI: the "Szukaj materiałów znanych kampanii" section on the scanner page and the "Szukaj nowych materiałów tej kampanii" button on each campaign page.
+
 ---
 
 ## 6. Testing & Verification
@@ -168,7 +182,7 @@ Web-fetching safety, cloaking logic, ingestion edge cases, enrichment caching, a
 
 ```bash
 # Offline unit & security regression tests (no internet required, fast)
-.venv/bin/pytest tests/test_web_fetching.py
+.venv/bin/python -m unittest tests.test_web_fetching tests.test_campaign_watch
 
 # Opt-in live network smoke tests (real CERT PL, RDAP, DNS, capture against benign sites)
 FTF_LIVE_TESTS=1 .venv/bin/pytest tests/test_live_smoke.py
@@ -180,7 +194,7 @@ Key behaviors verified:
 - ZIP-slip, symlink, and zip-bomb rejection in `ingest._extract_zip_safely`.
 - Magic-byte asset classification for `.pobrane`/`.pobierz` files and sibling MHTML URL recovery.
 - HAR dotfile loading, `POST 404` skipping, untruncated redirect chasing, and session UUID filtering.
-- RDAP bootstrap loading, dual-TTL partial error caching, generic-NS suppression of `ns_pair`/`reg_burst`, and CERT Polska parent-domain matching.
+- RDAP bootstrap loading, dual-TTL partial error caching, and CERT Polska parent-domain matching.
 
 ---
 

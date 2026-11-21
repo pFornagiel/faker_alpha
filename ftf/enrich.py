@@ -4,8 +4,9 @@
   Step 3. Certificate Transparency via crt.sh (errors distinguished from 0 certs)
   Step 4. CERT Polska warning-list membership (atomic cache, stale fallback, parent-domain match)
   Step 5. Smart caching (7d for valid results, 15m negative TTL for transient/partial errors)
-  Step 6. Linking indicators (`ns_pair`, `reg_burst` — only for non-generic NS pairs)
-  Step 7. Concurrent batch enrichment (`enrich_domains`)
+  Step 6. Concurrent batch enrichment (`enrich_domains`)
+Results are descriptive metadata only (registrar, creation date, nameservers, certificates, CERT Polska listing);
+they are displayed to the analyst and never used for linking.
 
 Disable dynamically at any time via `FTF_ENRICH=0`.
 """
@@ -46,18 +47,6 @@ RDAP_HEADERS = {
     **UA_HEADERS,
     "Accept": "application/rdap+json, application/json;q=0.9",
 }
-
-GENERIC_NS_RX = re.compile(
-    r"(?:"
-    r"dyna-ns\.net|registrar-servers\.com|domaincontrol\.com|dns-parking\.com|hostinger|"
-    r"registrar\.eu|ovh\.net|wixdns\.net|vercel-dns\.com|azure-dns|digitalocean\.com|"
-    r"hetzner|sedoparking|bodis|parkingcrew|namecheaphosting|awsdns|googledomains|"
-    r"linode|vultr|nsone\.net|dnsmadeeasy|"
-    r"porkbun|name\.com|nicenic|dnsowl|namebrightdns|share-dns|dns\.(?:com|net)|"
-    r"cyberfolks|home\.pl|nazwa\.pl"
-    r")",
-    re.I,
-)
 
 _BOOTSTRAP_LOCK = threading.Lock()
 _BOOTSTRAP_CACHE: tuple[float, dict[str, str]] | None = None
@@ -372,34 +361,7 @@ def enrich_domain(domain: str, force: bool = False) -> dict:
     return info
 
 
-# ------------------------------------------------------------------ Step 6: Linking indicators
-def indicators(info: dict) -> dict[str, set]:
-    """Derive domain-infrastructure linking indicators (`ns_pair`, `reg_burst`).
-
-    Only emits `ns_pair` and `reg_burst` when the nameserver pair is non-generic (e.g., an
-    account-scoped Cloudflare pair), preventing false links across unrelated domains parked at
-    generic registrar/hosting nameservers.
-    """
-    out: dict[str, set] = {}
-    if not info:
-        return out
-    r = info.get("rdap") or {}
-    raw_ns = r.get("nameservers") or (info.get("dns") or {}).get("NS") or []
-    ns = sorted({str(n).rstrip(".").lower() for n in raw_ns if n})
-    if ns:
-        top2 = ns[:2]
-        pair = "+".join(top2)
-        generic = all(bool(GENERIC_NS_RX.search(n)) for n in top2)
-        if not generic:
-            out["ns_pair"] = {pair}
-            reg_norm = r.get("registrar_norm") or _normalize_registrar(r.get("registrar"))
-            created = str(r.get("created") or "")[:10]
-            if reg_norm and created:
-                out["reg_burst"] = {f"{reg_norm[:40]}|{pair}|{created}"}
-    return out
-
-
-# ------------------------------------------------------------------ Step 7: Concurrent enrichment
+# ------------------------------------------------------------------ Step 6: Concurrent enrichment
 def enrich_domains(domains: list[str], max_workers: int = 4, force: bool = False) -> dict[str, dict]:
     """Enrich multiple domains concurrently with a bounded thread pool."""
     if not is_enabled():

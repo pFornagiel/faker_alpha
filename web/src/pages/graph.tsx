@@ -5,8 +5,9 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router"
 
 import type { GraphData, GraphEdge, GraphNode, Relation } from "@/lib/api"
-import { fmtP, useApi } from "@/lib/format"
-import { CampaignBadge, ErrorState, Loading, PageHeader, RelationBadge, Strength, StrengthLegend, TierBadge, traceHref } from "@/components/common"
+import { CAMPAIGN_CUT, FAMILY_CUT, fmtP, useApi } from "@/lib/format"
+import { CampaignBadge, ErrorState, GroupBadge, Loading, PageHeader, RelationBadge, Strength, StrengthLegend, traceHref } from "@/components/common"
+import { EvidenceBrief } from "@/components/evidence"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -27,6 +28,8 @@ function seeded(id: string): { x: number; y: number } {
   const b = ((h >>> 12) % 1000) / 1000
   return { x: Math.cos(a * 2 * Math.PI) * (200 + 300 * b), y: Math.sin(a * 2 * Math.PI) * (200 + 300 * b) }
 }
+
+const isLinkingGroup = (g: string | undefined) => !!g && g !== "images" && g !== "descriptive"
 
 type Sel = { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge } | null
 const ALL_RELS: Relation[] = ["same_campaign", "duplicate", "similar"]
@@ -67,7 +70,7 @@ export default function GraphPage() {
         })
       } else {
         const label = `${n.type_label}: ${n.label}`
-        out.push({ data: { id: n.id, kind: "trace", label, tier: n.tier, w: Math.min(170, 16 + label.length * 5.4) }, position: seeded(n.id) })
+        out.push({ data: { id: n.id, kind: "trace", label, linking: isLinkingGroup(n.group), w: Math.min(170, 16 + label.length * 5.4) }, position: seeded(n.id) })
       }
     }
     const ids = new Set(out.map((e) => e.data.id))
@@ -119,9 +122,9 @@ export default function GraphPage() {
             "border-width": 1, "border-color": "#c3c2b7",
           },
         },
-        { selector: "node[kind='trace'][tier='S']", style: { "border-color": "#0b0b0b", color: "#0b0b0b", "border-width": 1.5 } },
+        { selector: "node[kind='trace'][?linking]", style: { "border-color": "#0b0b0b", color: "#0b0b0b", "border-width": 1.5 } },
         { selector: "edge", style: { "curve-style": "bezier", "line-color": ink, width: 1.5, opacity: 0.9 } },
-        { selector: "edge[relation='same_campaign']", style: { width: "mapData(p, 0.5, 1, 2, 6)" } },
+        { selector: "edge[relation='same_campaign']", style: { width: "mapData(p, 0.4, 1, 2, 6)" } },
         { selector: "edge[relation='duplicate']", style: { width: 7, "line-color": "#0b0b0b", label: "duplikat", "font-size": 10, "text-background-color": "#fff", "text-background-opacity": 1, "text-background-padding": "2px" } },
         { selector: "edge[relation='similar']", style: { "line-style": "dashed", "line-color": "#8a8984", width: 1.5, "line-dash-pattern": [6, 4] } },
         { selector: "edge[kind='trace']", style: { "line-color": "#d6d5ce", width: 1, opacity: 1 } },
@@ -192,7 +195,7 @@ export default function GraphPage() {
     <>
       <PageHeader
         title="Graf powiązań"
-        description="Każde kółko to materiał (z miniaturą kreacji). Ramka z nazwą = kampania wielomateriałowa. Linia = powiązanie pary; grubsza = silniejsza. Kliknij materiał lub linię, aby zobaczyć uzasadnienie."
+        description="Każde kółko to materiał (z miniaturą kreacji). Ramka z nazwą = kampania wielomateriałowa. Linia = powiązanie pary; grubsza = bliższa. Kliknij materiał lub linię, aby zobaczyć uzasadnienie."
       />
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -200,7 +203,7 @@ export default function GraphPage() {
           <ToggleGroup type="multiple" variant="outline" size="sm" className="flex-wrap" value={rels} onValueChange={(v) => setParam("rel", v.length === ALL_RELS.length ? null : v.join(","))}>
             <ToggleGroupItem value="same_campaign" className="px-3">Ta sama kampania <span className="opacity-70">{counts.same_campaign ?? 0}</span></ToggleGroupItem>
             <ToggleGroupItem value="duplicate" className="px-3">Duplikaty <span className="opacity-70">{counts.duplicate ?? 0}</span></ToggleGroupItem>
-            <ToggleGroupItem value="similar" className="px-3">Podobny playbook <span className="opacity-70">{counts.similar ?? 0}</span></ToggleGroupItem>
+            <ToggleGroupItem value="similar" className="px-3">Podobna treść <span className="opacity-70">{counts.similar ?? 0}</span></ToggleGroupItem>
           </ToggleGroup>
         </div>
         <div className="flex items-center gap-2">
@@ -248,20 +251,20 @@ function Legend({ traces }: { traces: boolean }) {
           Szara obwódka = kampania jednomateriałowa (jej kod obok numeru, np. „mat. 10 · C6”).
         </LegendRow>
         <LegendRow sample={<svg width="44" height="20"><rect x="2" y="2" width="40" height="16" rx="4" fill="var(--series-1)" fillOpacity="0.08" stroke="var(--series-1)" strokeWidth="1.5" /></svg>}>
-          Ramka = kampania (materiały jednego operatora).
+          Ramka = kampania (materiały połączone wspólnym identyfikatorem lub bliską treścią).
         </LegendRow>
         <LegendRow sample={<svg width="44" height="20"><line x1="2" y1="10" x2="42" y2="10" stroke="#3a3a38" strokeWidth="4" /></svg>}>
-          Ta sama kampania (p ≥ 0.55 + ślad operatora); im grubsza, tym silniejsza.
+          Ta sama kampania — wspólny identyfikator albo odległość treści d ≤ {CAMPAIGN_CUT}; im grubsza, tym bliższa.
         </LegendRow>
         <LegendRow sample={<svg width="44" height="20"><line x1="2" y1="10" x2="42" y2="10" stroke="#0b0b0b" strokeWidth="7" /></svg>}>
           Duplikat — ten sam materiał zgłoszony ponownie (podpisany „duplikat”).
         </LegendRow>
         <LegendRow sample={<svg width="44" height="20"><line x1="2" y1="10" x2="42" y2="10" stroke="#8a8984" strokeWidth="1.5" strokeDasharray="6 4" /></svg>}>
-          Podobny playbook między kampaniami — ta sama narracja lub koncepcja, bez wspólnej infrastruktury.
+          Podobna treść między kampaniami (d ≤ {FAMILY_CUT}), bez wspólnego identyfikatora.
         </LegendRow>
         {traces && (
           <LegendRow sample={<svg width="44" height="20"><rect x="2" y="3" width="19" height="14" rx="3" fill="#fff" stroke="#0b0b0b" strokeWidth="1.5" /><rect x="24" y="3" width="18" height="14" rx="3" fill="#fff" stroke="#c3c2b7" strokeWidth="1" /></svg>}>
-            Wspólny ślad dzielony przez połączone materiały. Czarna ramka = ślad operatora, szara = kit/treść.
+            Wspólny ślad dzielony przez materiały. Czarna ramka = identyfikator (łączy), szara = obraz ze strony (widok treści).
           </LegendRow>
         )}
         <p className="text-xs text-muted-foreground">
@@ -296,12 +299,13 @@ function SelectionPanel({ sel, data, onClose }: { sel: NonNullable<Sel>; data: G
           <>
             <Strength p={sel.edge.p ?? 0} />
             <StrengthLegend />
-            <RelationBadge relation={sel.edge.relation as Relation} />
+            <p className="flex flex-wrap items-center gap-2">
+              <RelationBadge relation={sel.edge.relation as Relation} />
+              <span className="text-xs text-muted-foreground tabular">odległość treści d = {fmtP(sel.edge.distance)}</span>
+            </p>
             <div>
-              <p className="mb-1 font-medium">Najmocniejsze dowody</p>
-              <ul className="space-y-1 text-muted-foreground">
-                {(sel.edge.reasons ?? []).map((r, i) => <li key={i} className="break-words">• {r.detail}</li>)}
-              </ul>
+              <p className="mb-2 font-medium">Najważniejsze dowody</p>
+              <EvidenceBrief evidence={sel.edge.evidence ?? []} />
             </div>
             <Button asChild size="sm" className="w-full"><Link to={`/pair/${sel.edge.source}/${sel.edge.target}`}>Pełne uzasadnienie <ArrowRight /></Link></Button>
           </>
@@ -317,7 +321,7 @@ function SelectionPanel({ sel, data, onClose }: { sel: NonNullable<Sel>; data: G
         )}
         {sel.kind === "node" && sel.node.kind === "trace" && (
           <>
-            <p className="flex flex-wrap items-center gap-2 text-muted-foreground">{sel.node.type_label} {sel.node.tier && <TierBadge tier={sel.node.tier} />}</p>
+            <p className="flex flex-wrap items-center gap-2 text-muted-foreground">{sel.node.type_label} {sel.node.group_label && <GroupBadge label={sel.node.group_label} linking={isLinkingGroup(sel.node.group)} />}</p>
             <p className="font-mono text-xs break-all">
               {sel.node.full_display}
               {(sel.node.n_values ?? 1) > 1 && <span className="font-sans text-muted-foreground"> (+{(sel.node.n_values ?? 1) - 1} innych wartości)</span>}

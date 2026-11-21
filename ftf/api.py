@@ -4,7 +4,8 @@ Run:   python -m ftf.cli serve                    (UI at http://localhost:8765 a
 Dev:   uvicorn ftf.api:app --reload --port 8765   +  `npm run dev` in web/ (Vite proxies /api)
 
 The engine (feature extraction, similarity, clustering) is untouched; this layer only reshapes its output
-into what an analyst needs to read: who is linked to whom, *why*, and how strong each reason is.
+into what an analyst needs to read: who is linked to whom and *why* — which identifiers the two materials share
+(must-link) and how similar their content is in each view (text, semantic, HTML, images).
 All user-facing strings are Polish; enum ids, folded values and raw hashes never reach the UI unexplained.
 """
 from __future__ import annotations
@@ -21,6 +22,7 @@ import time
 import uuid
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
@@ -33,10 +35,9 @@ from pydantic import BaseModel
 from . import config, ingest
 from .engine import Engine
 from .gazetteer import fold
-from .labels import (DECISION_PL, ENUM_PL, FAMILY_HINT, FAMILY_ORDER, LLM_FIELDS_PL, RELATION_HINT, RELATION_PL, SOURCE_PL, TIER_HINT,
-                     TIER_PL, enum_label, family_label, signal_label)
-from .similarity import Corpus, Link, _generic_phrase, noisy_or, pair
-from .text import normalize as text_normalize
+from .labels import (DECISION_PL, GROUP_HINT, GROUP_ORDER, LLM_FIELDS_PL, RELATION_HINT, RELATION_PL, SOURCE_PL, VIEW_HINT,
+                     enum_label, group_label, signal_label, view_label)
+from .similarity import VIEWS, Corpus, Link, SharedId, counted, pair
 
 log = logging.getLogger(__name__)
 
@@ -56,14 +57,6 @@ app = FastAPI(title="FakeTrace API", version="1.0", lifespan=_lifespan)
 
 _ENGINE: Engine | None = None
 _ENGINE_LOCK = threading.Lock()
-
-# engine constants imported from config.py (single source of truth)
-CORE_S_MIN = config.CORE_S_MIN
-STRONG_MERGE = config.STRONG_MERGE
-SINGLE_ASSIGN = config.SINGLE_ASSIGN
-CONFLICT_FACTOR = config.CONFLICT_FACTOR
-PLAYBOOK_MIN = config.PLAYBOOK_MIN
-FAMILY_MERGE = config.FAMILY_MERGE
 
 BACKEND_PL = {"claude_cli": "Claude (Claude Code CLI)", "gemini": "Gemini", "rules": "reguły słownikowe (bez modelu językowego)",
               "none": "wyłączone", "auto": "automatycznie: Claude CLI → Gemini → reguły słownikowe"}
@@ -86,11 +79,6 @@ def plural(n: int, one: str, few: str, many: str) -> str:
     if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
         return f"{n} {few}"
     return f"{n} {many}"
-
-
-def fp(x: float) -> str:
-    """Score for prose: noisy-OR never reaches 1, so never print certainty (matches the UI)."""
-    return "0.99+" if x >= 0.995 else f"{x:.2f}"
 
 
 def cap(s: str) -> str:
@@ -164,7 +152,8 @@ def thumbs_for(hashes: list[str], feats: list[dict], limit: int = 12) -> list[st
     urls: list[str] = []
     for h in hashes:
         for mp in maps:
-            hit = mp.get(h) or next((p for hh, p in mp.items() if bin(int(hh, 16) ^ int(h, 16)).count("1") <= 4), None)
+            hit = mp.get(h) or next((p for hh, p in mp.items()
+                                     if bin(int(hh, 16) ^ int(h, 16)).count("1") <= config.PHASH_HAMMING), None)
             if hit:
                 urls.append(file_url(hit))
                 break
@@ -178,63 +167,64 @@ def _display_index(items: dict) -> dict:
     """(type, normalised value) -> original text (with diacritics/case) for LLM-derived indicators."""
     idx = {}
     for f, _ in items.values():
-        llm = f.get("llm") or {}
-        prod = llm.get("product_or_platform_name")
+        prod = (f.get("llm") or {}).get("product_or_platform_name")
         if prod:
             idx.setdefault(("product", fold(prod).strip()), prod)
-        for ph in llm.get("distinctive_phrases") or []:
-            idx.setdefault(("phrase", text_normalize(ph)), ph)
     return idx
 
 
 def display_value(t: str, v: str, cl: dict | None = None) -> str:
-    if t in ("product", "phrase"):
+    if t == "product":
         cl = cl or _cl()
         if "_display" not in cl:
             cl["_display"] = _display_index(_items())
         return cl["_display"].get((t, v), v)
-    if t == "reg_burst":
-        parts = v.split("|")
-        if len(parts) == 3:
-            return f"{parts[0]} · NS {parts[1].replace('+', ' + ')} · utworzone {parts[2]}"
-    if t == "ns_pair":
-        return v.replace("+", " + ")
     return v
 
 
-_CONCEPT_PL = {"scam_type": "ten sam typ oszustwa", "narrative_template": "ten sam szablon narracji",
-               "creative_format": "ten sam format kreacji"}
-_SHARED_RX = re.compile(r"^wspólny .+?: „.*” \((\d+)/(\d+)\)$", re.S)
-_HUB_RX = re.compile(r"^pominięto hub: .+ \((\d+)/(\d+) materiałów\)$", re.S)
+def _type0(s: SharedId) -> str:
+    return s.type.split("+")[0]
 
 
-def detail_pl(e, short: bool = False) -> str:
-    """Evidence sentence in correct Polish: labels instead of enum ids, original text instead of folded values,
-    'w 2 z 10 materiałów' instead of '(2/10)'."""
-    if e.family == "concept" and e.signal in _CONCEPT_PL:
-        return cap(f"{_CONCEPT_PL[e.signal]}: {enum_label(e.value)}")
-    if e.signal == "conflict":
-        d = e.detail
-        for k in sorted(ENUM_PL, key=len, reverse=True):
-            d = d.replace(k, enum_label(k))
-        return cap(d)
-    m = _SHARED_RX.match(e.detail) or _HUB_RX.match(e.detail)
-    if m and e.value:
-        df, n = m.groups()
-        if e.signal == "asset_phash":          # a hash means nothing to a reader; the thumbnail shows the image
-            s = "Ten sam obraz na stronach docelowych"
-        else:
-            s = f"{cap(signal_label(e.signal))}: „{display_value(e.signal, e.value)}”"
-        if e.ignored:
-            return f"{s} — w {df} z {n} materiałów, zbyt popularne, by coś znaczyć"
-        return s if short else f"{s} — w {df} z {n} materiałów"
-    return cap(e.detail)
+def sid_detail(s: SharedId, n: int, short: bool = False) -> str:
+    """'Facebook Pixel: „2012…” — w 2 z 10 materiałów' (+ 'zbyt popularne' when the df filter dropped it)."""
+    txt = f"{cap(signal_label(_type0(s)))}: „{display_value(_type0(s), s.value)}”"
+    if s.ignored:
+        return f"{txt} — w {s.df} z {n} materiałów, zbyt popularne, by coś znaczyć"
+    return txt if short else f"{txt} — w {s.df} z {n} materiałów"
 
 
-def fam_list(families: dict) -> list[dict]:
-    out = [{"family": k, "label": family_label(k), "tier": config.FAMILY_TIER.get(k, "W"), "score": round(v, 3)}
-           for k, v in families.items() if v > 0]
-    return sorted(out, key=lambda d: -d["score"])
+def view_detail(v: str, score: float) -> str:
+    return f"{cap(view_label(v))}: podobieństwo {score:.2f}"
+
+
+def evidence_list(l: Link) -> list[dict]:
+    """Everything a link rests on: counted identifiers, content views (high to low), then ignored identifiers."""
+    ids = [{"kind": "identifier", "key": s.group, "label": f"wspólny identyfikator: {group_label(s.group)}",
+            "type": _type0(s), "type_label": signal_label(_type0(s)), "value": display_value(_type0(s), s.value),
+            "df": s.df, "ignored": s.ignored} for s in l.shared_ids]
+    if l.same_file:
+        ids.insert(0, {"kind": "identifier", "key": "file_sha", "label": "identyczny plik (sha256)", "type": "file_sha",
+                       "type_label": "plik", "value": "", "df": 2, "ignored": False})
+    k = max(1, len(l.views))
+    views = [{"kind": "view", "key": v, "label": view_label(v), "score": round(s, 3), "contribution": round(s / k, 3)}
+             for v, s in sorted(l.views.items(), key=lambda kv: -kv[1])]
+    return [e for e in ids if not e["ignored"]] + views + [e for e in ids if e["ignored"]]
+
+
+def reasons_of(l: Link, n_corpus: int, top: int = 3) -> list[dict]:
+    """Up to `top` reasons: identifiers first (one per type), then the most similar content views."""
+    out, seen = [], set()
+    if l.same_file:
+        out.append({"detail": "Identyczny plik (sha256)", "weight": 1.0, "kind": "identifier", "key": "file_sha"})
+    for s in l.shared_ids:
+        if not s.ignored and _type0(s) not in seen:
+            seen.add(_type0(s))
+            out.append({"detail": sid_detail(s, n_corpus), "weight": 1.0, "kind": "identifier", "key": s.group})
+    for v, sc in sorted(l.views.items(), key=lambda kv: -kv[1]):
+        if sc > 0:
+            out.append({"detail": view_detail(v, sc), "weight": round(sc, 3), "kind": "view", "key": v})
+    return out[:top]
 
 
 # ------------------------------------------------------------------ campaigns
@@ -249,8 +239,8 @@ def campaign_name(p: dict, items: dict | None = None) -> str:
     vis = Counter(x for f in feats for x in set(f.get("persons_visual", [])))
     pool = imp or vis or Counter(p.get("persons") or {})
     who = min(pool, key=lambda x: (-pool[x], -vis.get(x, 0), x)) if pool else None
-    prod, narr = first_max(p.get("products")), first_max(p.get("narratives"))
-    main = prod or (enum_label(narr) if narr else None) or "bez nazwy"
+    prod, stype = first_max(p.get("products")), first_max(p.get("scam_types"))
+    main = prod or (enum_label(stype) if stype else None) or "bez nazwy"
     return " · ".join(x for x in [str(main), who] if x)
 
 
@@ -300,17 +290,9 @@ def _name(items: dict, mid: str) -> str:
 
 
 def link_brief(l: Link, items: dict, cl: dict, me: str | None = None) -> dict:
-    top = sorted([e for e in l.evidence if not e.ignored and e.weight > 0], key=lambda e: -e.weight)
-    seen, reasons = set(), []
-    for e in top:                                   # one reason per signal type, max 3
-        if e.signal in seen:
-            continue
-        seen.add(e.signal)
-        reasons.append({"detail": detail_pl(e), "weight": round(e.weight, 3), "family": e.family})
-        if len(reasons) == 3:
-            break
-    d = {"a": l.a, "b": l.b, "p": round(l.p, 3), "relation": l.relation, "relation_label": RELATION_PL[l.relation],
-         "families": fam_list(l.families), "reasons": reasons, "comparable": l.comparable}
+    d = {"a": l.a, "b": l.b, "p": round(l.p, 3), "distance": round(l.distance, 3), "relation": l.relation,
+         "relation_label": RELATION_PL[l.relation], "evidence": evidence_list(l), "reasons": reasons_of(l, len(items)),
+         "comparable": l.comparable}
     if me is not None:
         other = l.b if l.a == me else l.a
         d["other"] = mat_summary(other, items[other][0], cl) if other in items else {"id": other, "name": other}
@@ -320,109 +302,92 @@ def link_brief(l: Link, items: dict, cl: dict, me: str | None = None) -> dict:
     return d
 
 
-def link_basis(l: Link) -> tuple[str, float, float, int]:
-    strong = max([v for f, v in l.families.items() if config.FAMILY_TIER.get(f) in ("S", "M")] or [0])
-    s_tier = max([v for f, v in l.families.items() if config.FAMILY_TIER.get(f) == "S"] or [0])
-    n_fam = sum(1 for f, v in l.families.items() if v >= 0.3 and config.FAMILY_TIER.get(f) in ("S", "M"))
+def link_basis(l: Link) -> str:
     if l.relation == "duplicate":
-        basis = "duplikat"
-    elif s_tier >= 0.5:
-        basis = "ślad operatora"
-    elif strong >= 0.7:
-        basis = "silny ślad kit/treść"
-    elif n_fam >= 2:
-        basis = f"{n_fam} niezależne rodziny śladów"
-    else:
-        basis = "tylko słabe podobieństwo"
-    return basis, strong, s_tier, n_fam
+        return "duplikat"
+    if l.must_link:
+        return "wspólny identyfikator"
+    if not l.comparable:
+        return "brak porównywalnej treści"
+    return f"podobna treść (d = {l.distance:.2f})" if l.relation != "none" else f"odległa treść (d = {l.distance:.2f})"
+
+
+def _rule(l: Link, n: int) -> str:
+    counted = [s for s in l.shared_ids if not s.ignored]
+    ids_txt = "; ".join(sid_detail(s, n, short=True) for s in counted[:3])
+    d = f"d = {l.distance:.2f}"
+    if l.relation == "duplicate":
+        why = ("identyczny plik (sha256)" if l.same_file else
+               "to samo ID reklamy" if any(s.group == "ad_library" and "ad_id" in s.type for s in counted) else
+               f"odległość treści {d} ≤ {config.DUPLICATE_CUT}")
+        return f"Duplikat: {why} — to ten sam materiał."
+    if l.must_link:
+        return (f"Wspólny identyfikator obecny w co najwyżej {config.MAX_DF:.0%} materiałów ({ids_txt}) — "
+                "powiązanie pewne (must-link), p = 1.")
+    if l.relation == "same_campaign":
+        return f"Brak wspólnego identyfikatora, ale treść bliska: {d} ≤ {config.CAMPAIGN_CUT}."
+    if l.relation == "similar":
+        return (f"Brak wspólnego identyfikatora; {d} > {config.CAMPAIGN_CUT}, ale ≤ {config.FAMILY_CUT} — "
+                "podobna treść, osobne kampanie (mogą należeć do jednej rodziny).")
+    if not l.comparable:
+        return "Brak wspólnego identyfikatora i brak porównywalnej treści (żaden widok nie jest dostępny po obu stronach)."
+    return f"Brak wspólnego identyfikatora i {d} > {config.FAMILY_CUT}."
+
+
+def _shared_assets(feats: list[dict]) -> list[str]:
+    """Landing-page image hashes of the first material with a pHash match in the second (for thumbnails)."""
+    if len(feats) < 2:
+        return []
+    A, B = (f.get("indicators", {}).get("asset_phash", []) for f in feats[:2])
+    return [x for x in A if any(bin(int(x, 16) ^ int(y, 16)).count("1") <= config.PHASH_HAMMING for y in B)]
 
 
 def explain_link(l: Link, items: dict | None = None) -> dict:
-    """Full, step-by-step explanation of one pairwise score (what the pair page renders)."""
+    """Full, step-by-step explanation of one pair (what the pair page renders)."""
     items = items if items is not None else _items()
-    fams = defaultdict(list)
-    ignored = []
-    for e in l.evidence:
-        if e.signal == "conflict":
-            continue                                  # shown as a guard, not as an "ignored value"
-        if e.ignored or e.weight <= 0:
-            ignored.append({"detail": detail_pl(e), "signal": e.signal, "family": e.family})
-            continue
-        fams[e.family].append(e)
+    n = len(items)
     feats = [items[x][0] for x in (l.a, l.b) if x in items]
-    groups = []
-    for fam in sorted(fams, key=lambda f: -l.families.get(f, 0)):
-        by_sig = defaultdict(list)
-        for e in fams[fam]:
-            by_sig[e.signal].append(e)
-        rows = []
-        for sig, es in by_sig.items():
-            if len(es) >= 3 or (sig == "asset_phash" and len(es) >= 2):
-                vals = sorted(e.value for e in es)
-                label = ("wspólnych obrazów na stronach docelowych" if sig == "asset_phash" else f"wspólnych wartości — {signal_label(sig)}")
-                rows.append({"signal": sig, "signal_label": signal_label(sig), "detail": f"{len(es)} {label}",
-                             "value": "", "weight": round(noisy_or([e.weight for e in es]), 3),
-                             "values": [display_value(sig, v) for v in vals],
-                             "thumbs": thumbs_for(vals, feats) if sig == "asset_phash" else []})
-            else:
-                for e in es:
-                    rows.append({"signal": sig, "signal_label": signal_label(sig), "detail": detail_pl(e), "value": e.value,
-                                 "weight": round(e.weight, 3),
-                                 "thumbs": thumbs_for([e.value], feats) if sig == "asset_phash" else []})
-        groups.append({"family": fam, "label": family_label(fam), "tier": config.FAMILY_TIER.get(fam, "W"),
-                       "tier_label": TIER_PL[config.FAMILY_TIER.get(fam, "W")], "hint": FAMILY_HINT.get(fam, ""),
-                       "score": round(l.families.get(fam, 0), 3), "items": sorted(rows, key=lambda x: -x["weight"])})
-    raw = noisy_or(l.families.values())
-    basis, strong, s_tier, n_fam = link_basis(l)
-    guards = []
-    if strong < 0.25 and raw > config.WEAK_ONLY_CAP:
-        guards.append({"name": "weak_only_cap", "label": f"Tylko słabe dowody → p ograniczone do {config.WEAK_ONLY_CAP}",
-                       "detail": "Ta sama osoba, typ oszustwa czy hosting nie wystarczą, by połączyć materiały."})
-    if any(e.signal == "conflict" for e in l.evidence):
-        guards.append({"name": "conflict", "label": f"Różny typ oszustwa → p × {CONFLICT_FACTOR}",
-                       "detail": next(detail_pl(e) for e in l.evidence if e.signal == "conflict")})
-    if l.relation == "duplicate":
-        rule = f"Rodzina „duplikat” ma wynik ≥ {config.DUPLICATE_THRESHOLD} — to ten sam materiał."
-    elif l.relation == "same_campaign":
-        why = []
-        if s_tier >= 0.5:
-            why.append(f"jest ślad operatora ({fp(s_tier)} ≥ 0.5)")
-        if strong >= 0.7:
-            why.append(f"najsilniejszy ślad operatora lub kit/treść ma {fp(strong)} ≥ 0.7")
-        if n_fam >= 2:
-            why.append(f"{plural(n_fam, 'niezależna rodzina', 'niezależne rodziny', 'niezależnych rodzin')} śladów ma wynik ≥ 0.3")
-        rule = f"p = {fp(l.p)} ≥ {config.LINK_THRESHOLD}, a do tego " + "; ".join(why) + "."
-    elif l.relation == "similar":
-        rule = (f"p = {fp(l.p)} ≥ {config.SIMILAR_THRESHOLD}" if l.p >= config.SIMILAR_THRESHOLD
-                else f"wspólny schemat (playbook) = {fp(l.playbook)} ≥ {PLAYBOOK_MIN}") + \
-            " — ale brak śladu wspólnego operatora, więc to nie jest „ta sama kampania”."
-    else:
-        rule = f"p = {fp(l.p)} < {config.SIMILAR_THRESHOLD} i brak wspólnego schematu (playbooka)."
-    weak_only = bool(l.families) and all(config.FAMILY_TIER.get(f) == "W" for f in l.families)
-    return {"p": round(l.p, 3), "p_raw": round(raw, 3), "relation": l.relation, "relation_label": RELATION_PL[l.relation],
-            "relation_hint": RELATION_HINT[l.relation], "rule": rule, "basis": basis, "weak_only": weak_only,
-            "playbook": round(l.playbook, 3), "comparable": l.comparable, "groups": groups, "ignored": ignored, "guards": guards,
-            "strongest_operator": round(s_tier, 3), "strongest_sm": round(strong, 3), "n_independent": n_fam}
+    by_group = defaultdict(list)
+    for s in l.shared_ids:
+        if not s.ignored:
+            by_group[s.group].append({"type": _type0(s), "type_label": signal_label(_type0(s)), "value": s.value,
+                                      "display": display_value(_type0(s), s.value), "df": s.df, "n": n,
+                                      "detail": sid_detail(s, n)})
+    identifiers = [{"group": g, "label": group_label(g), "hint": GROUP_HINT.get(g, ""), "items": by_group[g]}
+                   for g in GROUP_ORDER if g in by_group]
+    if l.same_file:
+        identifiers.insert(0, {"group": "file_sha", "label": "identyczny plik", "hint": "ten sam plik (sha256) w obu materiałach",
+                               "items": []})
+    ignored = [{"detail": sid_detail(s, n), "type": _type0(s), "group": s.group, "df": s.df} for s in l.shared_ids if s.ignored]
+    k = len(l.views)
+    views = [{"view": v, "label": view_label(v), "hint": VIEW_HINT[v], "available": v in l.views,
+              "score": round(l.views[v], 3) if v in l.views else None,
+              "contribution": round(l.views[v] / k, 3) if v in l.views else None,
+              "thumbs": thumbs_for(_shared_assets(feats), feats, 6) if v == "images" and l.views.get("images") else []}
+             for v in VIEWS]
+    formula = (f"d = 1 − ({' + '.join(f'{l.views[v]:.2f}' for v in VIEWS if v in l.views)}) / {k} = {l.distance:.2f}"
+               if k else "d = 1 (brak widoku dostępnego po obu stronach)")
+    return {"p": round(l.p, 3), "distance": round(l.distance, 3), "relation": l.relation,
+            "relation_label": RELATION_PL[l.relation], "relation_hint": RELATION_HINT[l.relation], "rule": _rule(l, n),
+            "basis": link_basis(l), "comparable": l.comparable, "must_link": l.must_link, "identifiers": identifiers,
+            "ignored": ignored, "views": views, "n_views": k, "formula": formula, "evidence": evidence_list(l)}
 
 
 def find_link(a: str, b: str) -> Link:
     for l in _cl()["links"]:
         if (l.a, l.b) in ((a, b), (b, a)):
-            return l if l.a == a else Link(a, b, l.p, l.relation, l.families, l.evidence, l.comparable, l.playbook)
+            return l if l.a == a else replace(l, a=a, b=b)
     items = _items()
     if a not in items or b not in items:
         raise HTTPException(404, "Nie znaleziono materiału o tym identyfikatorze.")
-    fa, va = items[a]
-    fb, vb = items[b]
-    return pair(a, fa, va, b, fb, vb, Corpus(items))
+    return pair(a, *items[a], b, *items[b], Corpus(items))
 
 
 # =============================================================================== jobs (long-running work)
 _POOL = ThreadPoolExecutor(max_workers=1)
 _JOBS: dict[str, dict] = {}
 _PROGRESS_PL = [("HAR: ", "Zapis ruchu sieciowego (HAR): "), ("HTML: ", "Zapisana strona: "), ("video keyframes: ", "Klatki wideo: "),
-                ("image (", "Obraz ("), ("text embedding (EmbeddingGemma-2)", "Embedding tekstu (EmbeddingGemma-2)"),
-                ("text embedding", "Embedding tekstu (e5)"), ("LLM attributes", "Atrybuty z modelu językowego"),
+                ("image (", "Obraz ("), ("text embedding", "Embedding tekstu (e5)"), ("LLM attributes", "Atrybuty z modelu językowego"),
                 ("enrich: ", "Metadane domeny (RDAP, DNS, certyfikaty): ")]
 
 
@@ -461,39 +426,47 @@ def get_job(jid: str):
 
 
 # =============================================================================== campaigns
+MATRIX_TYPES = set(config.IDENTIFIER_GROUP) | {"asset_phash"}
+
+
+def _group_of(t: str) -> str:
+    return config.IDENTIFIER_GROUP.get(t, "images" if t == "asset_phash" else "descriptive")
+
+
+def _group_label(g: str) -> str:
+    return {"images": "obrazy (widok treści)", "descriptive": "opisowe (nie łączą)"}.get(g) or group_label(g)
+
+
+def _group_rank(g: str) -> int:
+    return GROUP_ORDER.index(g) if g in GROUP_ORDER else len(GROUP_ORDER) + (g == "descriptive")
+
+
 def shared_rows(p: dict, items: dict, cl: dict) -> list[dict]:
-    """Every value shared by >= 2 members, grouped by (type, set of members), noise removed:
-    generic phrases, page hosts duplicating a landing domain, phrases duplicating the product name."""
+    """Every identifier value (and landing-page image) shared by >= 2 members, grouped by (type, set of members);
+    page hosts that only repeat a landing domain are dropped."""
     mem = p["members"]
     cnt: dict[tuple, list[str]] = defaultdict(list)
     for m in mem:
         for t, vals in items[m][0].get("indicators", {}).items():
-            if t in config.INDICATOR_WEIGHT:
+            if t in MATRIX_TYPES:
                 for v in set(vals):
                     cnt[(t, v)].append(m)
-    products = {text_normalize(display_value("product", v, cl)) for (t, v), ms in cnt.items() if t == "product"}
     rows: dict[tuple, dict] = {}
     for (t, v), ms in cnt.items():
-        if len(ms) < 2:
-            continue
-        if t == "phrase" and (_generic_phrase(v) or v in products):
-            continue
-        if t == "page_host" and len(cnt.get(("landing_domain", v), [])) >= len(ms):
+        if len(ms) < 2 or (t == "page_host" and len(cnt.get(("landing_domain", v), [])) >= len(ms)):
             continue
         has = tuple(m for m in mem if m in ms)
-        key = (t, has)
-        fam = config.INDICATOR_FAMILY.get(t, "kit")
-        r = rows.setdefault(key, {"type": t, "type_label": signal_label(t), "family": fam, "family_label": family_label(fam),
-                                  "tier": config.FAMILY_TIER.get(fam, "M"), "members": list(has), "raw": []})
+        g = _group_of(t)
+        r = rows.setdefault((t, has), {"type": t, "type_label": signal_label(t), "group": g, "group_label": _group_label(g),
+                                       "linking": t in config.IDENTIFIER_GROUP, "members": list(has), "raw": []})
         r["raw"].append(v)
     out = []
-    tier_rank = {"S": 0, "M": 1, "W": 2}
     for r in rows.values():
         raw = sorted(r.pop("raw"))
         r["values"] = [{"value": v, "display": display_value(r["type"], v, cl)} for v in raw]
         r["thumbs"] = thumbs_for(raw, [items[m][0] for m in r["members"]]) if r["type"] == "asset_phash" else []
         out.append(r)
-    out.sort(key=lambda r: (tier_rank[r["tier"]], -len(r["members"]), -config.INDICATOR_WEIGHT.get(r["type"], 0), r["type"]))
+    out.sort(key=lambda r: (_group_rank(r["group"]), -len(r["members"]), r["type"]))
     return out
 
 
@@ -508,19 +481,17 @@ def campaign_card(ci: int, cl: dict, items: dict) -> dict:
     p = cl["profiles"][ci]
     rows = _rows_cached(ci, items, cl)
     persons = Counter(x for m in p["members"] for x in set(items[m][0].get("persons_visual", [])) | set(items[m][0].get("persons_named", [])))
-    order = [m for g in cl.get("variants", {}).get(ci, []) for m in g] or p["members"]
-    order += [m for m in p["members"] if m not in order]
     return {
-        **camp_ref(ci, cl), "members": [mat_summary(m, items[m][0], cl) for m in order],
+        **camp_ref(ci, cl), "members": [mat_summary(m, items[m][0], cl) for m in p["members"]],
         "scam_types": [{"value": k, "label": enum_label(k), "n": v} for k, v in p["scam_types"].items()],
-        "narratives": [{"value": k, "label": enum_label(k), "n": v} for k, v in p["narratives"].items()],
         "products": list(p["products"]), "persons": [x for x, _ in sorted(persons.items(), key=lambda kv: (-kv[1], kv[0]))],
         "domains": list(p["domains"]), "date_range": p["date_range"], "mean_internal_p": p["mean_internal_p"],
         "n_shared": sum(len(r["values"]) for r in rows), "n_shared_kinds": len(rows),
-        "top_shared": [{"type": r["type"], "type_label": r["type_label"], "tier": r["tier"], "value": r["values"][0]["value"],
-                        "display": r["values"][0]["display"], "n_values": len(r["values"]), "count": len(r["members"])}
-                       for r in rows[:4]],
-        "family": next((fi for fi, fam in enumerate(cl["families"]) if p["members"][0] in fam), None),
+        "top_shared": [{"type": r["type"], "type_label": r["type_label"], "group": r["group"], "group_label": r["group_label"],
+                        "linking": r["linking"],
+                        "value": r["values"][0]["value"], "display": r["values"][0]["display"], "n_values": len(r["values"]),
+                        "count": len(r["members"])} for r in rows[:4]],
+        "family": cl["family_of"].get(p["members"][0]),
     }
 
 
@@ -535,20 +506,14 @@ def join_chain(mem: list[str], inner: list[Link], items: dict) -> list[dict]:
         return x
 
     out = []
-    for l in sorted(inner, key=lambda l: (-round(l.p, 3), sorted((_name(items, l.a), _name(items, l.b))))):
+    for l in sorted(inner, key=lambda l: (-round(l.p, 3), l.distance, sorted((_name(items, l.a), _name(items, l.b))))):
         ra, rb = find(l.a), find(l.b)
         if ra == rb:
             continue
         parent[ra] = rb
-        basis = link_basis(l)[0]
-        best: dict[str, object] = {}
-        for e in sorted([e for e in l.evidence if not e.ignored and e.weight > 0], key=lambda e: -e.weight):
-            if config.FAMILY_TIER.get(e.family) == "W" or e.family in best:
-                continue
-            best[e.family] = e
-        reasons = [detail_pl(e, short=True) for e in list(best.values())[:3]]
         out.append({"a": l.a, "b": l.b, "a_name": _name(items, l.a), "b_name": _name(items, l.b), "p": round(l.p, 3),
-                    "relation": l.relation, "basis": basis, "reasons": reasons})
+                    "distance": round(l.distance, 3), "relation": l.relation, "basis": link_basis(l),
+                    "reasons": [r["detail"] for r in reasons_of(l, len(items))]})
     return out
 
 
@@ -578,8 +543,9 @@ def campaign_detail(ci: int):
     mem = p["members"]
     card = campaign_card(ci, cl, items)
     mset = set(mem)
-    inner = sorted([l for l in cl["links"] if l.a in mset and l.b in mset], key=lambda l: -l.p)
-    outer = sorted([l for l in cl["links"] if (l.a in mset) ^ (l.b in mset) and l.p >= 0.15], key=lambda l: -l.p)
+    inner = sorted([l for l in cl["links"] if l.a in mset and l.b in mset], key=lambda l: (-l.p, l.distance))
+    outer = sorted([l for l in cl["links"] if (l.a in mset) ^ (l.b in mset) and l.relation != "none"],
+                   key=lambda l: (-l.p, l.distance))
     nearest, seen = [], set()
     for l in outer:
         other = l.b if l.a in mset else l.a
@@ -599,7 +565,7 @@ def campaign_detail(ci: int):
         siblings = [camp_ref(c, cl) for c in sorted({cl["campaign_of"][m] for m in cl["families"][fam_i]}) if c != ci]
     return {**card, "matrix": _rows_cached(ci, items, cl), "chain": join_chain(mem, inner, items),
             "links": [link_brief(l, items, cl) for l in inner], "nearest_outside": nearest, "siblings": siblings,
-            "variants": cl.get("variants", {}).get(ci, []), "titles": p["titles"],
+            "titles": p["titles"],
             "n_pairs": len(mem) * (len(mem) - 1) // 2}
 
 
@@ -611,23 +577,25 @@ def materials():
     return sorted(out, key=lambda d: ((d["campaign"] or {}).get("id", 999), d["name"]))
 
 
+DISPLAY_TYPES = MATRIX_TYPES | {"advertiser_name", "ip"}
+_EXTRA_HINT = {"images": "obrazy ze stron docelowych — porównywane w widoku „obrazy” (pHash), nie jako identyfikator",
+               "descriptive": "wyświetlane analitykowi, nigdy nie służą do łączenia"}
+
+
 def _indicator_groups(f: dict, corpus_df: Counter, items: dict, cl: dict) -> list[dict]:
-    by_fam = defaultdict(list)
+    by_group = defaultdict(list)
     for t, vals in f.get("indicators", {}).items():
-        fam = config.INDICATOR_FAMILY.get(t)
-        if fam is None or t not in config.INDICATOR_WEIGHT:
+        if t not in DISPLAY_TYPES:
             continue
         vals = sorted(vals, key=lambda v: (-corpus_df.get((t, v), 1), v))      # shared values first
-        by_fam[fam].append({"type": t, "type_label": signal_label(t),
-                            "values": [{"value": v, "display": display_value(t, v, cl), "df": corpus_df.get((t, v), 1),
-                                        "thumb": (thumbs_for([v], [f]) or [None])[0] if t == "asset_phash" else None} for v in vals[:12]],
-                            "more": max(0, len(vals) - 12)})
-    out = []
-    for fam in FAMILY_ORDER:
-        if fam in by_fam:
-            out.append({"family": fam, "label": family_label(fam), "tier": config.FAMILY_TIER.get(fam, "W"),
-                        "hint": FAMILY_HINT.get(fam, ""), "items": sorted(by_fam[fam], key=lambda x: x["type_label"])})
-    return out
+        by_group[_group_of(t)].append({
+            "type": t, "type_label": signal_label(t),
+            "values": [{"value": v, "display": display_value(t, v, cl), "df": corpus_df.get((t, v), 1),
+                        "thumb": (thumbs_for([v], [f]) or [None])[0] if t == "asset_phash" else None} for v in vals[:12]],
+            "more": max(0, len(vals) - 12)})
+    return [{"group": g, "label": _group_label(g), "linking": g in GROUP_ORDER, "hint": GROUP_HINT.get(g) or _EXTRA_HINT[g],
+             "items": sorted(by_group[g], key=lambda x: x["type_label"])}
+            for g in sorted(by_group, key=_group_rank)]
 
 
 def material_features(f: dict, items: dict | None = None) -> dict:
@@ -646,9 +614,6 @@ def material_features(f: dict, items: dict | None = None) -> dict:
         if v in (None, "", [], "other"):
             continue
         llm_rows.append({"key": k, "label": lab, "value": [enum_label(x) for x in v] if isinstance(v, list) else enum_label(v)})
-    for k, v in (llm.get("extra") or {}).items():
-        if v and str(v).lower() not in ("unknown", "null", "none", "brak"):
-            llm_rows.append({"key": f"extra:{k}", "label": k.replace("_", " "), "value": v, "discovered": True})
     t = f.get("text", {})
     w = f.get("web", {})
     images = []
@@ -705,13 +670,20 @@ def pair_detail(a: str, b: str):
 @app.get("/api/links")
 def links(min_p: float = 0.0):
     items, cl = _items(), _cl()
-    return [link_brief(l, items, cl) for l in sorted(cl["links"], key=lambda l: -l.p) if l.p >= min_p]
+    return [link_brief(l, items, cl) for l in sorted(cl["links"], key=lambda l: (-l.p, l.distance)) if l.p >= min_p]
+
+
+def _thresholds() -> dict:
+    """Cuts in p units (p = 1 - D) for filters/colour scales, plus the raw distance cuts."""
+    return {"link": round(1 - config.CAMPAIGN_CUT, 3), "similar": round(1 - config.FAMILY_CUT, 3),
+            "duplicate": round(1 - config.DUPLICATE_CUT, 3), "campaign_cut": config.CAMPAIGN_CUT,
+            "family_cut": config.FAMILY_CUT, "duplicate_cut": config.DUPLICATE_CUT}
 
 
 @app.get("/api/graph")
 def graph(traces: bool = False):
     """Nodes/edges for the network view: materials grouped in campaign boxes; optional shared-trace nodes
-    (operator and kit/content traces only — context traces like persons would turn the graph into a hairball)."""
+    (identifier values and landing-page images held by >= 2 materials)."""
     items, cl = _items(), _cl()
     nodes, edges = [], []
     for ci in range(len(cl["profiles"])):
@@ -723,32 +695,25 @@ def graph(traces: bool = False):
         nodes.append({"id": mid, "kind": "material", "label": s["name"], "parent": f"C{ci}" if ci is not None else None,
                       "title": s["title"], "campaign": s["campaign"], "thumb": s["thumb"], "scam_type_label": s["scam_type_label"]})
     for l in cl["links"]:
-        if l.p >= config.SIMILAR_THRESHOLD or l.relation in ("duplicate", "similar"):
-            if l.relation == "none":
-                continue
-            b = link_brief(l, items, cl)
-            edges.append({"id": f"{l.a}|{l.b}", "source": l.a, "target": l.b, "kind": "link", "p": b["p"],
-                          "relation": l.relation, "relation_label": b["relation_label"], "reasons": b["reasons"],
-                          "families": b["families"][:4],
-                          "same_campaign_box": cl["campaign_of"].get(l.a) == cl["campaign_of"].get(l.b)})
+        if l.relation == "none":
+            continue
+        b = link_brief(l, items, cl)
+        edges.append({"id": f"{l.a}|{l.b}", "source": l.a, "target": l.b, "kind": "link", "p": b["p"],
+                      "distance": b["distance"], "relation": l.relation, "relation_label": b["relation_label"],
+                      "reasons": b["reasons"], "evidence": b["evidence"][:4],
+                      "same_campaign_box": cl["campaign_of"].get(l.a) == cl["campaign_of"].get(l.b)})
     if traces:
-        from .graph import IND_TYPES_IN_GRAPH
-
         holders = defaultdict(set)
         for mid, (f, _) in items.items():
             for t, vals in f.get("indicators", {}).items():
-                if t in IND_TYPES_IN_GRAPH | {"landing_domain", "product", "asset_phash"}:
+                if t in MATRIX_TYPES and t != "page_host":
                     for v in vals:
                         holders[(t, v)].add(mid)
         grouped: dict[tuple, list] = defaultdict(list)      # many identical images between the same pages -> one node
         for (t, v), ms in holders.items():
-            if len(ms) >= 2 and not (t == "phrase" and _generic_phrase(v)):
+            if len(ms) >= 2:
                 grouped[(t, tuple(sorted(ms)))].append(v)
         for (t, ms), vals in grouped.items():
-            fam = config.INDICATOR_FAMILY.get(t, "kit")
-            tier = config.FAMILY_TIER.get(fam, "W")
-            if tier == "W":
-                continue
             vals = sorted(vals)
             tid = f"t:{t}:{vals[0]}"
             disp = display_value(t, vals[0], cl) if len(vals) == 1 else f"×{len(vals)}"
@@ -756,56 +721,50 @@ def graph(traces: bool = False):
                 disp = "1 obraz" if len(vals) == 1 else f"{len(vals)} obrazy" if len(vals) < 5 else f"{len(vals)} obrazów"
             nodes.append({"id": tid, "kind": "trace", "label": disp if len(disp) <= 26 else disp[:24] + "…", "full": vals[0],
                           "full_display": "obraz ze strony docelowej" if t == "asset_phash" else display_value(t, vals[0], cl),
-                          "n_values": len(vals),
-                          "type": t, "type_label": signal_label(t), "tier": tier, "n": len(ms)})
+                          "n_values": len(vals), "type": t, "type_label": signal_label(t), "group": _group_of(t),
+                          "group_label": _group_label(_group_of(t)), "n": len(ms)})
             for mid in ms:
                 edges.append({"id": f"{tid}|{mid}", "source": mid, "target": tid, "kind": "trace"})
-    return {"nodes": nodes, "edges": edges, "thresholds": {"link": config.LINK_THRESHOLD, "similar": config.SIMILAR_THRESHOLD},
+    return {"nodes": nodes, "edges": edges, "thresholds": _thresholds(),
             "counts": dict(Counter(e["relation"] for e in edges if e["kind"] == "link"))}
 
 
 @app.get("/api/matrix")
 def matrix():
     items, cl = _items(), _cl()
-    order = []
-    for ci, c in enumerate(cl["campaigns"]):
-        v = [m for g in cl.get("variants", {}).get(ci, []) for m in g]
-        order += v + [m for m in c if m not in v]
+    order = [m for c in cl["campaigns"] for m in c]
     idx = {m: i for i, m in enumerate(order)}
     n = len(order)
     P = [[None] * n for _ in range(n)]
+    Dm = [[None] * n for _ in range(n)]
     R = [[None] * n for _ in range(n)]
     for l in cl["links"]:
         i, j = idx[l.a], idx[l.b]
         P[i][j] = P[j][i] = round(l.p, 3)
+        Dm[i][j] = Dm[j][i] = round(l.distance, 3)
         R[i][j] = R[j][i] = l.relation
     return {"materials": [{"id": m, "name": _name(items, m), "campaign": camp_ref(cl["campaign_of"].get(m), cl)} for m in order],
-            "p": P, "relation": R, "thresholds": {"link": config.LINK_THRESHOLD, "similar": config.SIMILAR_THRESHOLD}}
+            "p": P, "distance": Dm, "relation": R, "thresholds": _thresholds()}
 
 
 @app.get("/api/trace")
 def trace(type: str, value: str):
-    """Pivot: every material carrying one trace value, with its rarity weight."""
+    """Pivot: every material carrying one trace value, with its document frequency (df / N vs MAX_DF)."""
     items, cl = _items(), _cl()
-    corpus = Corpus(items)
-    if type == "person":       # people are not indicators: recognised face or named in text (case-insensitive)
+    n = len(items)
+    if type == "person":       # people are descriptive: recognised face or named in text (case-insensitive)
         q = fold(value).strip()
         holders = [m for m, (f, _) in items.items()
                    if any(fold(x) == q for x in set(f.get("persons_visual", [])) | set(f.get("persons_named", [])))]
-        r = corpus.rarity(("person_visual", value), df=max(1, len(holders))) if holders else 0.0
-        return {"type": type, "type_label": "osoba", "value": value, "display": value, "family": "persons",
-                "family_label": family_label("persons"), "tier": "W", "prior": config.PERSON_REF_WEIGHT, "rarity": round(r, 3),
-                "hub": bool(holders) and r == 0.0, "weight": round(config.PERSON_REF_WEIGHT * (0.35 + 0.65 * r), 3) if holders else None,
-                "df": len(holders), "n": len(items), "thumbs": [],
-                "materials": [mat_summary(m, items[m][0], cl) for m in holders]}
+        return {"type": type, "type_label": "osoba", "value": value, "display": value, "group": "descriptive",
+                "group_label": _group_label("descriptive"), "linking": False, "counted": False, "df": len(holders), "n": n,
+                "max_df": config.MAX_DF, "thumbs": [], "materials": [mat_summary(m, items[m][0], cl) for m in holders]}
     holders = [m for m, (f, _) in items.items() if value in f.get("indicators", {}).get(type, [])]
-    fam = config.INDICATOR_FAMILY.get(type, "kit")
-    prior = config.INDICATOR_WEIGHT.get(type)
-    r = corpus.rarity((type, value), df=len(holders)) if holders else 0.0
+    linking = type in config.IDENTIFIER_GROUP
     return {"type": type, "type_label": signal_label(type), "value": value, "display": display_value(type, value, cl),
-            "family": fam, "family_label": family_label(fam), "tier": config.FAMILY_TIER.get(fam, "W"), "prior": prior,
-            "rarity": round(r, 3), "hub": bool(holders) and r == 0.0,
-            "weight": round(prior * (0.35 + 0.65 * r), 3) if prior and holders else None, "df": len(holders), "n": len(items),
+            "group": _group_of(type), "group_label": _group_label(_group_of(type)), "linking": linking,
+            "counted": linking and counted(len(holders), n),
+            "df": len(holders), "n": n, "max_df": config.MAX_DF,
             "thumbs": thumbs_for([value], [items[m][0] for m in holders]) if type == "asset_phash" else [],
             "materials": [mat_summary(m, items[m][0], cl) for m in holders]}
 
@@ -835,7 +794,7 @@ def search(q: str = Query(..., min_length=2)):
                 if lab == "osoba":
                     traces[("person", str(v))] = traces.get(("person", str(v)), 0) + 1
         for t, vals in f.get("indicators", {}).items():
-            if t not in config.INDICATOR_WEIGHT:
+            if t not in DISPLAY_TYPES or t == "asset_phash":
                 continue
             for v in vals:
                 if qq in fold(v):
@@ -861,81 +820,129 @@ def get_file(path: str):
 def examples(items: dict, cl: dict) -> list[dict]:
     """Data-driven 'look at this' links: one example per concept the methodology explains."""
     out = []
+    n = len(items)
     name = lambda m: _name(items, m)
     pair_title = lambda l: f"Materiał {name(l.a)} ↔ materiał {name(l.b)}"
+    camp = cl["campaign_of"]
     multi = [ci for ci, p in enumerate(cl["profiles"]) if p["size"] > 1]
     if multi:
         ci = multi[0]
         card = campaign_card(ci, cl, items)
         out.append({"kind": "campaign", "to": f"/campaigns/{ci}", "title": f"{card['code']} · {card['name']}",
                     "concept": "Kampania wielomateriałowa",
-                    "text": f"{plural(card['size'], 'materiał', 'materiały', 'materiałów')} jednego operatora połączonych "
+                    "text": f"{plural(card['size'], 'materiał', 'materiały', 'materiałów')} połączonych "
                             f"{card['n_shared']} wspólnymi wartościami — zobacz, który ślad łączy które materiały."})
-    ls = sorted(cl["links"], key=lambda l: (-round(l.p, 3), sorted((name(l.a), name(l.b)))))
-    op = next((l for l in ls if l.relation == "same_campaign" and link_basis(l)[2] >= 0.8), None)
+    ls = sorted(cl["links"], key=lambda l: (-round(l.p, 3), l.distance, sorted((name(l.a), name(l.b)))))
+    op = next((l for l in ls if l.must_link and l.relation == "same_campaign" and l.shared_ids), None)
     if op:
-        top = max((e for e in op.evidence if not e.ignored and config.FAMILY_TIER.get(e.family) == "S"), key=lambda e: e.weight)
-        out.append({"kind": "pair", "to": f"/pair/{op.a}/{op.b}", "title": pair_title(op), "concept": "Ślad operatora",
-                    "text": f"{detail_pl(top)}. Jeden rzadki identyfikator wystarcza, by połączyć materiały."})
+        top = next(s for s in op.shared_ids if not s.ignored)
+        out.append({"kind": "pair", "to": f"/pair/{op.a}/{op.b}", "title": pair_title(op), "concept": "Wspólny identyfikator",
+                    "text": f"{sid_detail(top, n)}. Jeden rzadki wspólny identyfikator wystarcza, by połączyć materiały."})
     inner_multi = {m for ci in multi for m in cl["profiles"][ci]["members"]}
-    chain = next((l for l in ls if l.relation != "same_campaign" and l.a in inner_multi and l.b in inner_multi
-                  and cl["campaign_of"][l.a] == cl["campaign_of"][l.b]), None)
+    chain = next((l for l in ls if l.relation not in ("same_campaign", "duplicate") and l.a in inner_multi
+                  and l.b in inner_multi and camp[l.a] == camp[l.b]), None)
     if chain:
         out.append({"kind": "pair", "to": f"/pair/{chain.a}/{chain.b}", "title": pair_title(chain), "concept": "Połączenie pośrednie",
-                    "text": f"Bezpośrednio tylko p = {fp(chain.p)}, a mimo to obie są w jednej kampanii — łączą je inne materiały tej kampanii."})
-    pb = next((l for l in ls if l.relation == "similar" and cl["campaign_of"][l.a] != cl["campaign_of"][l.b]
-               and link_basis(l)[2] < 0.3 and any(f in l.families for f in ("narrative", "visual", "offer"))), None) or \
-        next((l for l in ls if l.relation == "similar" and cl["campaign_of"][l.a] != cl["campaign_of"][l.b] and link_basis(l)[2] < 0.3), None)
-    if pb:
-        fams = ", ".join(family_label(f) for f, _ in sorted(pb.families.items(), key=lambda kv: -kv[1])[:3])
-        out.append({"kind": "pair", "to": f"/pair/{pb.a}/{pb.b}", "title": pair_title(pb), "concept": "Podobny playbook, inny operator",
-                    "text": f"p = {fp(pb.p)}: wspólne tylko {fams} — bez śladów operatora, więc osobne kampanie (ta sama rodzina)."})
-    weak = next((l for l in ls if l.families and all(config.FAMILY_TIER.get(f) == "W" for f in l.families) and "persons" in l.families
-                 and l is not pb), None)
-    if weak:
-        fams = " i ".join(family_label(f) for f in sorted(weak.families, key=lambda f: -weak.families[f]))
-        out.append({"kind": "pair", "to": f"/pair/{weak.a}/{weak.b}", "title": pair_title(weak), "concept": "Sam kontekst to za mało",
-                    "text": f"Wspólne tylko: {fams} → p = {fp(weak.p)}. Bez śladów operatora materiały pozostają w osobnych kampaniach."})
+                    "text": f"Bezpośrednio brak wspólnego identyfikatora (d = {chain.distance:.2f}), a mimo to obie są w jednej "
+                            "kampanii — łączą je inne materiały tej kampanii."})
+    sim = next((l for l in sorted(ls, key=lambda l: l.distance) if l.relation == "similar" and camp[l.a] != camp[l.b]), None)
+    if sim:
+        vs = ", ".join(f"{view_label(v)} {x:.2f}" for v, x in sorted(sim.views.items(), key=lambda kv: -kv[1]) if x > 0)
+        out.append({"kind": "pair", "to": f"/pair/{sim.a}/{sim.b}", "title": pair_title(sim), "concept": "Podobna treść, inna kampania",
+                    "text": f"d = {sim.distance:.2f} ({vs}) — bez wspólnego identyfikatora i d > {config.CAMPAIGN_CUT}, więc osobne "
+                            "kampanie; obie w jednej rodzinie."})
+    hub = next((l for l in ls if any(s.ignored for s in l.shared_ids) and not l.must_link), None)
+    if hub:
+        s0 = next(s for s in hub.shared_ids if s.ignored)
+        out.append({"kind": "pair", "to": f"/pair/{hub.a}/{hub.b}", "title": pair_title(hub), "concept": "Zbyt popularna wartość",
+                    "text": f"{sid_detail(s0, n)}. Wartość obecna w ponad {config.MAX_DF:.0%} materiałów jest pomijana."})
+    persons = lambda m: set(items[m][0].get("persons_visual", [])) | set(items[m][0].get("persons_named", []))
+    same_face = next((l for l in ls if l.relation == "none" and persons(l.a) & persons(l.b)), None)
+    if same_face:
+        who = sorted(persons(same_face.a) & persons(same_face.b))[0]
+        out.append({"kind": "pair", "to": f"/pair/{same_face.a}/{same_face.b}", "title": pair_title(same_face),
+                    "concept": "Ta sama osoba to za mało",
+                    "text": f"Oba materiały wykorzystują wizerunek: {who}. Osoby są tylko opisem — bez wspólnego identyfikatora "
+                            f"i przy d = {same_face.distance:.2f} materiały są w osobnych kampaniach."})
     single = next((ci for ci, p in enumerate(cl["profiles"]) if p["size"] == 1), None)
     if single is not None:
         ref = camp_ref(single, cl)
         out.append({"kind": "campaign", "to": f"/campaigns/{single}", "title": f"{ref['code']} · {ref['name']}",
                     "concept": "Kampania jednomateriałowa (nowy wzorzec)",
-                    "text": "Materiał bez wspólnych śladów operatora z resztą bazy — tworzy osobną kampanię."})
+                    "text": "Materiał bez wspólnych identyfikatorów i bez bliskiej treści z resztą bazy — tworzy osobną kampanię."})
     return out
+
+
+REFERENCES = [
+    ("christen2012", "Christen, Data Matching, Springer 2012", "https://doi.org/10.1007/978-3-642-31164-2"),
+    ("starov2018", "Starov et al., Betrayed by Your Dashboard, WWW 2018", "https://doi.org/10.1145/3178876.3186089"),
+    ("sparckjones1972", "Spärck Jones, A statistical interpretation of term specificity, J. Documentation 1972",
+     "https://doi.org/10.1108/eb026526"),
+    ("bijmans2021", "Bijmans et al., Catching Phishers By Their Bait, USENIX Security 2021",
+     "https://www.usenix.org/conference/usenixsecurity21/presentation/bijmans"),
+    ("jaccard1912", "Jaccard, New Phytologist 1912", "https://doi.org/10.1111/j.1469-8137.1912.tb05611.x"),
+    ("broder1997", "Broder, On the resemblance and containment of documents, 1997", "https://doi.org/10.1109/SEQUEN.1997.666900"),
+    ("wang2024", "Wang et al., Multilingual E5, 2024", "https://arxiv.org/abs/2402.05672"),
+    ("mu2018", "Mu & Viswanath, All-but-the-Top, ICLR 2018", "https://arxiv.org/abs/1702.01417"),
+    ("cui2017", "Cui et al., Tracking Phishing Attacks Over Time, WWW 2017", "https://doi.org/10.1145/3038912.3052654"),
+    ("zauner2010", "Zauner, Implementation and Benchmarking of Perceptual Image Hash Functions, 2010",
+     "https://phash.org/docs/pubs/thesis_zauner.pdf"),
+    ("deng2019", "Deng et al., ArcFace, CVPR 2019", "https://arxiv.org/abs/1801.07698"),
+    ("guo2021", "Guo et al., SCRFD, 2021", "https://arxiv.org/abs/2105.04714"),
+    ("campos2020", "Campos et al., YAKE!, Information Sciences 2020", "https://doi.org/10.1016/j.ins.2019.09.013"),
+    ("gower1971", "Gower, A general coefficient of similarity, Biometrics 1971", "https://doi.org/10.2307/2528823"),
+    ("mullner2011", "Müllner, Modern hierarchical, agglomerative clustering algorithms, 2011", "https://arxiv.org/abs/1109.2378"),
+    ("campello2013", "Campello et al., HDBSCAN, PAKDD 2013", "https://doi.org/10.1007/978-3-642-37456-2_14"),
+    ("cover1967", "Cover & Hart, Nearest neighbor pattern classification, IEEE Trans. Inf. Theory 13(1):21–27, 1967",
+     "https://doi.org/10.1109/TIT.1967.1053964"),
+    ("bendale2015", "Bendale & Boult, Towards Open World Recognition, CVPR 2015", "https://arxiv.org/abs/1412.5687"),
+    ("hubert1985", "Hubert & Arabie, Comparing partitions (ARI), 1985", "https://doi.org/10.1007/BF01908075"),
+    ("amigo2009", "Amigó et al., B-cubed, 2009", "https://doi.org/10.1007/s10791-008-9066-8"),
+]
+
+
+def method_steps() -> list[dict]:
+    c = config
+    return [
+        {"step": 1, "title": "Wspólne identyfikatory → połączenie pewne",
+         "text": "Para materiałów, które mają identyczną wartość identyfikatora (domena, piksel / ID analityki, kontakt, plik lub "
+                 "szablon kitu, ID reklamy, nazwa produktu), trafia do jednej kampanii (must-link, spójne składowe grafu). "
+                 f"Wartość liczy się tylko, gdy występuje w co najwyżej {c.MAX_DF:.0%} materiałów — zbyt popularne wartości "
+                 "są pokazywane, ale pomijane.", "refs": ["christen2012", "starov2018", "sparckjones1972", "bijmans2021"]},
+        {"step": 2, "title": "Odległość treści (Gower)",
+         "text": f"{cap(plural(len(VIEWS), 'widok', 'widoki', 'widoków'))} treści, każdy ze standardową miarą podobieństwa w [0, 1]: tekst strony i tekst kreacji (OCR) "
+                 f"(MinHash-Jaccard 4-gramów słów), {view_label('semantic')} (cosinus), struktura HTML (MinHash-Jaccard znaczników), obrazy "
+                 "(pHash). d = 1 − średnia z widoków "
+                 "dostępnych po obu stronach; brakujące widoki są pomijane, więc każdy widok wnosi dokładnie s/k.",
+         "refs": ["gower1971", "jaccard1912", "broder1997", "wang2024", "mu2018", "cui2017", "zauner2010"]},
+        {"step": 3, "title": "Grupowanie hierarchiczne",
+         "text": "D = 0 wewnątrz składowej must-link, w przeciwnym razie D = d. Grupowanie aglomeracyjne ze średnim wiązaniem "
+                 f"(UPGMA): kampanie = cięcie dendrogramu na wysokości {c.CAMPAIGN_CUT}, rodziny = cięcie na {c.FAMILY_CUT}. "
+                 "HDBSCAN na tym samym D jako punkt odniesienia.", "refs": ["mullner2011", "campello2013"]},
+        {"step": 4, "title": "Nowy materiał (zbiór otwarty)",
+         "text": "Wspólny identyfikator z jedną kampanią → znana kampania; z dwiema lub więcej → propozycja scalenia. W przeciwnym "
+                 f"razie najbliższy znany materiał (1-NN): d ≤ {c.CAMPAIGN_CUT} → jego kampania, inaczej nowy wzorzec "
+                 f"(z najbliższym materiałem; przy d ≤ {c.FAMILY_CUT} także podobna rodzina). Grupowanie pyta „które "
+                 "materiały tworzą grupę”, przypisanie — „czy to wariant znanego materiału”, stąd najbliższy sąsiad. "
+                 f"Duplikat: ten sam plik, to samo ID reklamy lub d ≤ {c.DUPLICATE_CUT}.", "refs": ["cover1967", "bendale2015"]},
+        {"step": 5, "title": "Cechy opisowe",
+         "text": "Osoby (ArcFace + gazetteer), typ oszustwa, słowa kluczowe YAKE, kwoty, rejestrator / data utworzenia / NS / "
+                 "IP / lista CERT Polska, reklamodawca, podszyte medium i marki — wyświetlane analitykowi, nigdy nie łączą.",
+         "refs": ["deng2019", "guo2021", "campos2020"]},
+    ]
 
 
 @app.get("/api/methodology")
 def methodology():
     items, cl = _items(), _cl()
-    extra = {
-        "duplicate": [("identyczny plik (sha256)", 0.99), ("ta sama treść, obraz i domena", 0.97)],
-        "visual": [("ten sam kadr / zdjęcie twarzy (ArcFace ≥ 0.80)", 0.45)],
-        "persons": [("rozpoznana twarz z bazy referencyjnej", config.PERSON_REF_WEIGHT), ("ta sama osoba wymieniona w treści", 0.22)],
-        "concept": [(f"zgodny {k.replace('scam_type', 'typ oszustwa').replace('narrative_template', 'szablon narracji').replace('creative_format', 'format kreacji')}", w)
-                    for k, w in config.CONCEPT_WEIGHTS.items()]
-        + [("podszycie pod to samo medium", 0.2), ("zgodny atrybut odkryty przez LLM (max)", 0.25)],
-    }
-    fams = []
-    for f in FAMILY_ORDER:
-        inds = sorted([{"type": t, "label": signal_label(t), "weight": w} for t, w in config.INDICATOR_WEIGHT.items()
-                       if config.INDICATOR_FAMILY.get(t) == f], key=lambda d: -d["weight"])
-        inds += [{"type": f"rule:{i}", "label": lab, "weight": w} for i, (lab, w) in enumerate(extra.get(f, []))]
-        cont = [{"name": k, "lo": v[0], "hi": v[1], "max_weight": v[2]} for k, v in config.CONTINUOUS.items() if v[3] == f]
-        fams.append({"family": f, "label": family_label(f), "tier": config.FAMILY_TIER.get(f, "M"), "hint": FAMILY_HINT.get(f, ""),
-                     "indicators": inds, "continuous": cont})
-    corpus = Corpus(items)
     N = len(items)
-    rarity_table = []
-    for df in sorted({2, 3, max(2, N // 4), max(2, N // 2)}):
-        r = corpus.rarity(("_", "_"), df=df)
-        rarity_table.append({"df": df, "rarity": round(r, 2), "mult": round(0.35 + 0.65 * r, 2)})
-    hub_df = max(config.HUB_MIN_COUNT, int(N * config.HUB_FRACTION) + 1)
-    rarity_table.append({"df": hub_df, "rarity": 0.0, "mult": 0.0, "hub": True})
+    groups = defaultdict(list)
+    for t, g in config.IDENTIFIER_GROUP.items():
+        groups[g].append({"type": t, "label": signal_label(t)})
+    df_table = [{"df": df, "share": round(df / max(1, N), 2), "counted": counted(df, N)}
+                for df in sorted({2, 3, max(2, N // 2), max(3, N // 2 + 1)})]
     ev = None
-    rp = config.DATA / "eval" / "report_full_run.json"
-    if not rp.exists():
-        rp = config.DATA / "eval" / "report.json"
+    rp = config.DATA / "eval" / "report.json"          # written by tools/evaluate.py with the current method
     if rp.exists():
         try:
             r = json.loads(rp.read_text(encoding="utf-8"))
@@ -945,29 +952,28 @@ def methodology():
         except Exception:
             ev = None
     nm = lambda l: sorted((_name(items, l.a), _name(items, l.b)))
-    cands = [l for l in cl["links"] if l.relation == "same_campaign" and 2 <= len(l.families) <= 5 and l.p < 0.995]
-    cands.sort(key=lambda l: (-len(l.families), -round(l.p, 3), nm(l)))
+    cands = sorted((l for l in cl["links"] if l.must_link and l.shared_ids and len(l.views) >= 2),
+                   key=lambda l: (-len(l.views), l.distance, nm(l)))
     best = cands[0] if cands else min((l for l in cl["links"] if l.relation == "same_campaign"),
-                                      key=lambda l: (-round(l.p, 3), nm(l)), default=None)
+                                      key=lambda l: (l.distance, nm(l)), default=None)
     worked = None
     if best:
         worked = {"a": mat_summary(best.a, items[best.a][0], cl), "b": mat_summary(best.b, items[best.b][0], cl),
                   **explain_link(best, items)}
-        ind = max((e for e in best.evidence if not e.ignored and e.signal in config.INDICATOR_WEIGHT and e.value),
-                  key=lambda e: e.weight, default=None)
-        if ind:
-            df = corpus.df.get((ind.signal, ind.value), 2)
-            r = corpus.rarity((ind.signal, ind.value))
-            worked["item"] = {"label": signal_label(ind.signal), "value": display_value(ind.signal, ind.value, cl),
-                              "prior": config.INDICATOR_WEIGHT[ind.signal], "df": df, "n": N, "rarity": round(r, 2),
-                              "weight": round(ind.weight, 3), "family": family_label(ind.family)}
-    return {"tiers": [{"tier": t, "label": TIER_PL[t], "hint": TIER_HINT[t]} for t in ("S", "M", "W")],
-            "families": fams, "rarity_table": rarity_table,
-            "thresholds": {"link": config.LINK_THRESHOLD, "similar": config.SIMILAR_THRESHOLD, "duplicate": config.DUPLICATE_THRESHOLD,
-                           "assign": config.ASSIGN_THRESHOLD, "candidate": config.CANDIDATE_THRESHOLD,
-                           "weak_cap": config.WEAK_ONLY_CAP, "hub_fraction": config.HUB_FRACTION, "hub_min": config.HUB_MIN_COUNT,
-                           "core_s": CORE_S_MIN, "strong_merge": STRONG_MERGE, "single_assign": SINGLE_ASSIGN,
-                           "conflict": CONFLICT_FACTOR, "playbook": PLAYBOOK_MIN, "family_merge": FAMILY_MERGE},
+        s0 = next((s for s in best.shared_ids if not s.ignored), None)
+        if s0:
+            worked["item"] = {"label": signal_label(_type0(s0)), "group": s0.group, "group_label": group_label(s0.group),
+                              "value": display_value(_type0(s0), s0.value, cl), "df": s0.df, "n": N,
+                              "share": round(s0.df / max(1, N), 2), "max_df": config.MAX_DF}
+    return {"steps": method_steps(), "references": [{"id": i, "text": t, "url": u} for i, t, u in REFERENCES],
+            "identifier_groups": [{"group": g, "label": group_label(g), "hint": GROUP_HINT[g], "types": groups[g]}
+                                  for g in GROUP_ORDER],
+            "views": [{"view": v, "label": view_label(v), "hint": VIEW_HINT[v]} for v in VIEWS],
+            "constants": {"max_df": config.MAX_DF, "phash_hamming": config.PHASH_HAMMING, "duplicate_cut": config.DUPLICATE_CUT,
+                          "campaign_cut": config.CAMPAIGN_CUT, "family_cut": config.FAMILY_CUT,
+                          "face_det_threshold": config.FACE_DET_THRESHOLD, "face_min_side": config.FACE_MIN_SIDE,
+                          "face_match_threshold": config.FACE_MATCH_THRESHOLD},
+            "df_table": df_table, "thresholds": _thresholds(),
             "relations": [{"relation": k, "label": RELATION_PL[k], "hint": RELATION_HINT[k]} for k in RELATION_PL],
             "decisions": [{"decision": k, "label": v[0], "hint": v[1]} for k, v in DECISION_PL.items()],
             "examples": examples(items, cl), "worked": worked, "evaluation": ev, "n_materials": N}
@@ -979,24 +985,25 @@ def _analysis_payload(res: dict, keep: bool, meta: dict) -> dict:
     f = res["features"]
     m = res["material"]
     lab, desc = DECISION_PL[res["decision"]]
-    scores = [{"score": s, **(camp_ref(c, cl) or {"id": c, "code": f"C{c + 1}", "name": "?", "size": 0, "color": None})}
-              for s, c in res["campaign_scores"]]
+    ref = lambda c: camp_ref(c, cl) or {"id": c, "code": f"C{c + 1}", "name": "?", "size": 0, "color": None}
+    scores = [{"score": s, "distance": round(1 - s, 3), **ref(c)} for s, c in res["campaign_scores"]]  # 1-NN per campaign
     all_items = {**items, m.id: (f, res.get("vectors", {}))}
     links_out = []
     for l in res["links"][:10]:
         other = l.b
-        links_out.append({"p": round(l.p, 3), "relation": l.relation, "relation_label": RELATION_PL[l.relation],
-                          "families": fam_list(l.families),
+        links_out.append({"p": round(l.p, 3), "distance": round(l.distance, 3), "relation": l.relation,
+                          "relation_label": RELATION_PL[l.relation], "evidence": evidence_list(l),
                           "other": mat_summary(other, items[other][0], cl) if other in items else {"id": other, "name": other},
                           "explain": explain_link(l, all_items)})
+    near = res.get("nearest")
     return {"decision": res["decision"], "decision_label": lab, "decision_hint": desc,
             "campaign": camp_ref(res["campaign"], cl) if res["campaign"] is not None else None,
-            "similar_playbook": camp_ref(res.get("similar_playbook"), cl) if res.get("similar_playbook") is not None else None,
+            "similar_family": camp_ref(res.get("similar_family"), cl) if res.get("similar_family") is not None else None,
+            "nearest": {**ref(near["campaign"]), "distance": near["distance"], "material_id": near["material"],
+                        "material_name": near["name"]} if near else None,
             "closest": scores[0] if scores else None, "scores": scores, "links": links_out,
             "kept": keep and m.id in items, "material_id": m.id, "name": m.name, "input": meta,
-            "features": material_features({**f, "_material": m.to_dict()}, items),
-            "thresholds": {"assign": config.ASSIGN_THRESHOLD, "candidate": config.CANDIDATE_THRESHOLD,
-                           "similar": config.SIMILAR_THRESHOLD, "link": config.LINK_THRESHOLD}}
+            "features": material_features({**f, "_material": m.to_dict()}, items), "thresholds": _thresholds()}
 
 
 @app.post("/api/analyse")
@@ -1043,7 +1050,8 @@ class DatasetReq(BaseModel):
 
 
 EVENT_PL = {"scan": "skan źródła", "scan_error": "błąd źródła", "scheduler_run": "skan zakończony", "analysed": "analiza materiału",
-            "dataset": "import zbioru", "recluster": "przeliczenie kampanii"}
+            "dataset": "import zbioru", "recluster": "przeliczenie kampanii", "watch_scan": "obserwacja kampanii: źródło",
+            "watch_run": "obserwacja kampanii zakończona"}
 
 
 def event_view(e: dict) -> dict:
@@ -1051,7 +1059,14 @@ def event_view(e: dict) -> dict:
     src = str(p.get("source", ""))
     base, _, kw = src.partition(":")
     src_pl = SCAN_SOURCE_PL.get(base, base) + (f" (hasło „{kw}”)" if kw else "")
-    if k == "scan":
+    if k == "watch_scan":
+        text = (f"{SCAN_SOURCE_PL.get(src, src)}: {p.get('campaign_label', '')}, {group_label(str(p.get('group', '')))} "
+                f"„{str(p.get('value', ''))[:60]}” → {plural(int(p.get('n', 0)), 'pozycja', 'pozycje', 'pozycji')}")
+    elif k == "watch_run":
+        text = (f"{plural(int(p.get('campaigns', 0)), 'kampania', 'kampanie', 'kampanii')}, "
+                f"{plural(int(p.get('seeds', 0)), 'ziarno', 'ziarna', 'ziaren')}; znaleziono {p.get('found', 0)}, nowych {p.get('fresh', 0)}, "
+                f"przeanalizowano {p.get('analysed', 0)}, potwierdzono {p.get('confirmed', 0)}")
+    elif k == "scan":
         text = f"{src_pl}: {plural(int(p.get('n', 0)), 'pozycja', 'pozycje', 'pozycji')}"
     elif k == "scan_error":
         text = f"{src_pl}: niedostępne ({str(p.get('error', ''))[:120]})"
@@ -1125,12 +1140,15 @@ def export(kind: str):
     if kind == "links.csv":
         buf = io.StringIO()
         w = csv.writer(buf)
-        w.writerow(["material_a", "campaign_a", "material_b", "campaign_b", "p", "relation", "families", "explanation"])
+        w.writerow(["material_a", "campaign_a", "material_b", "campaign_b", "p", "distance", "relation", "shared_identifiers",
+                    "views", "explanation"])
         code = lambda m: f"C{cl['campaign_of'][m] + 1}" if m in cl["campaign_of"] else ""
-        for l in sorted(cl["links"], key=lambda l: -l.p):
-            w.writerow([_name(items, l.a), code(l.a), _name(items, l.b), code(l.b), round(l.p, 3), RELATION_PL[l.relation],
-                        "; ".join(f"{family_label(k)}={v:.2f}" for k, v in sorted(l.families.items(), key=lambda kv: -kv[1])),
-                        "; ".join(r["detail"] for r in link_brief(l, items, cl)["reasons"])])
+        for l in sorted(cl["links"], key=lambda l: (-l.p, l.distance)):
+            w.writerow([_name(items, l.a), code(l.a), _name(items, l.b), code(l.b), round(l.p, 3), round(l.distance, 3),
+                        RELATION_PL[l.relation],
+                        "; ".join(f"{s.type}={s.value} ({s.df}/{len(items)})" for s in l.shared_ids if not s.ignored),
+                        "; ".join(f"{view_label(k)}={v:.2f}" for k, v in sorted(l.views.items(), key=lambda kv: -kv[1])),
+                        l.explain()])
         return Response(buf.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=links.csv"})
     if kind == "graph.cypher":
         p = eng().export_cypher()
@@ -1151,12 +1169,37 @@ def neo4j_push():
 class ScanReq(BaseModel):
     keywords: list[str] = []
     analyse: bool = False
+    watch: bool = False
 
 
 class StartReq(BaseModel):
     minutes: int = 30
     keywords: list[str] = []
     analyse: bool = False
+    watch: bool = False
+
+
+class WatchReq(BaseModel):
+    campaign: int | None = None
+    analyse: bool = False
+
+
+def seed_view(seed: dict) -> dict:
+    """Display labels for a campaign-watch seed (search identifier of a known campaign)."""
+    t = str(seed.get("type") or "").split("+")[0]
+    return {**seed, "group_label": group_label(str(seed.get("group", ""))), "type_label": signal_label(t) if t else "",
+            "source_label": SCAN_SOURCE_PL.get(seed.get("source", ""), seed.get("source", "")),
+            "sources_label": [SCAN_SOURCE_PL.get(x, x) for x in seed.get("sources", [])]}
+
+
+def scan_item_view(r: dict) -> dict:
+    r = {**r, "source_label": SCAN_SOURCE_PL.get(r.get("source", ""), r.get("source", ""))}
+    if r.get("seed"):
+        r["seed"] = seed_view(r["seed"])
+    o = r.get("outcome")
+    if o:
+        r["outcome"] = {**o, "decision_label": DECISION_PL.get(o.get("decision"), (o.get("note") or "—", ""))[0]}
+    return r
 
 
 @app.get("/api/scanner")
@@ -1168,13 +1211,16 @@ def scanner_status():
     if running:
         job = scheduler._SCHED.get_job("scan")
         nxt = str(job.next_run_time) if job and job.next_run_time else None
-    found = eng().store.get("scheduler_found", [])
-    for r in found:
-        r["source_label"] = SCAN_SOURCE_PL.get(r.get("source", ""), r.get("source", ""))
+    found = [scan_item_view(r) for r in eng().store.get("scheduler_found", [])]
+    watch_found = [r for r in found if r.get("seed")]
+    watch_last = eng().store.get("watch_last")
     return {"running": running, "next_run": nxt, "config": scheduler.CURRENT if running else None,
             "default_keywords": scheduler.DEFAULT_KEYWORDS, "meta_token": bool(os.environ.get("META_ACCESS_TOKEN")),
             "found": sorted(found[-300:], key=lambda r: -(r.get("score") or 0)),
-            "events": [event_view(e) for e in eng().store.events(80) if e["kind"] in ("scan", "scan_error", "scheduler_run", "analysed")]}
+            "watch_found": watch_found[-300:][::-1],
+            "watch_last": {**watch_last, "seeds": [seed_view(x) for x in watch_last.get("seeds", [])]} if watch_last else None,
+            "events": [event_view(e) for e in eng().store.events(80)
+                       if e["kind"] in ("scan", "scan_error", "scheduler_run", "analysed", "watch_scan", "watch_run")]}
 
 
 @app.post("/api/scanner/run")
@@ -1183,9 +1229,42 @@ def scanner_run(req: ScanReq):
 
     def work(progress):
         progress("Skanowanie: lista CERT Polska, Microsoft Ad Library, Google Ads Transparency, Meta Ad Library…")
-        return scheduler.run_once(eng(), keywords=req.keywords or None, analyse=req.analyse)
+        return scheduler.run_once(eng(), keywords=req.keywords or None, analyse=req.analyse, watch=req.watch)
 
-    return submit("scan", "Skan źródeł", work, {"keywords": req.keywords, "analyse": req.analyse})
+    return submit("scan", "Skan źródeł", work, {"keywords": req.keywords, "analyse": req.analyse, "watch": req.watch})
+
+
+def _check_campaign(ci: int | None) -> None:
+    if ci is not None and not 0 <= ci < len(_cl()["campaigns"]):
+        raise HTTPException(404, "Nie ma takiej kampanii (numeracja mogła się zmienić po przeliczeniu).")
+
+
+@app.get("/api/scanner/seeds")
+def scanner_seeds(campaign: int | None = None):
+    """Seeds the campaign watch would search with (one campaign, or the default set of largest campaigns)."""
+    from . import scheduler
+
+    _check_campaign(campaign)
+    seeds = scheduler.campaign_seeds(eng(), [campaign] if campaign is not None else None)
+    return {"seeds": [seed_view(x) for x in seeds], "max_campaigns": scheduler.WATCH_MAX_CAMPAIGNS,
+            "max_seeds": scheduler.WATCH_MAX_SEEDS, "meta_token": bool(os.environ.get("META_ACCESS_TOKEN"))}
+
+
+@app.post("/api/scanner/watch")
+def scanner_watch(req: WatchReq):
+    """Campaign watch: search public sources with known campaigns' own identifiers (all, or one campaign)."""
+    from . import scheduler
+
+    _check_campaign(req.campaign)
+    camps = [req.campaign] if req.campaign is not None else None
+
+    def work(progress):
+        progress("Ziarna wyszukiwania: domeny, ID reklamodawców i produkty znanych kampanii…")
+        out = scheduler.watch_campaigns(eng(), campaigns=camps, analyse=req.analyse, progress=progress)
+        return {**out, "seeds": [seed_view(x) for x in out["seeds"]], "hits": [scan_item_view(r) for r in out["hits"]]}
+
+    label = f"Obserwacja kampanii C{req.campaign + 1}" if req.campaign is not None else "Obserwacja znanych kampanii"
+    return submit("watch", label, work, {"campaign": req.campaign, "analyse": req.analyse})
 
 
 @app.post("/api/scanner/start")
@@ -1193,7 +1272,8 @@ def scanner_start(req: StartReq):
     from . import scheduler
 
     minutes = min(1440, max(5, req.minutes))
-    return {"message": scheduler.start_background(eng(), minutes=minutes, analyse=req.analyse, keywords=req.keywords or None)}
+    return {"message": scheduler.start_background(eng(), minutes=minutes, analyse=req.analyse, keywords=req.keywords or None,
+                                                  watch=req.watch)}
 
 
 @app.post("/api/scanner/stop")

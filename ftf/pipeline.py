@@ -2,8 +2,8 @@
 
 Executed as 6 explicit, typed stages:
   Stage 1 (_stage_web)              - HTML/MHTML/HAR/URLs/capture-meta/ad-library-meta/saved scripts, DOM MinHash, non-CDN IPs
-  Stage 2 (_stage_visual_and_faces) - keyframes, screenshots, UI filter, deduplicated page assets, SCRFD+ArcFace, OCR ad facts
-  Stage 3 (_stage_text)             - text aggregation, gazetteer, YAKE/amounts, MinHash (raw/masked/OCR), e5 (+ optional Gemma-2)
+  Stage 2 (_stage_visual_and_faces) - keyframes, screenshots, UI filter, deduplicated page assets (pHash), SCRFD+ArcFace, OCR ad facts
+  Stage 3 (_stage_text)             - text aggregation, gazetteer, YAKE/amounts, entity-masked MinHash (page / creative), e5
   Stage 4 (_stage_llm)              - structured LLM attributes (or deterministic rules when use_llm=False)
   Stage 5 (_stage_enrich)           - optional concurrent public OSINT enrichment (RDAP / DNS / crt.sh / CERT Polska)
   Stage 6 (_assemble_features)      - merge indicators, vectors and JSON-serialisable feature summary
@@ -11,7 +11,6 @@ Executed as 6 explicit, typed stages:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import re
 import time
@@ -29,7 +28,7 @@ from .ingest import Material, read_meta
 log = logging.getLogger(__name__)
 DATE_RX = [(re.compile(r"(20\d\d)-(\d\d)-(\d\d)"), (1, 2, 3)), (re.compile(r"(\d\d)-(\d\d)-(20\d\d)"), (3, 2, 1))]
 
-# Platform ad-library / ad-details UI chrome (identical across unrelated ads -> keep OCR, skip visual similarity).
+# Platform ad-library / ad-details UI chrome (identical across unrelated ads -> keep OCR, skip the images view).
 # Note: intentionally excludes "komentarze" / "zostaw komentarz" which appear on normal fake-news landing pages.
 UI_MARKERS = (
     "szczegoly reklamy", "link do reklamy", "identyfikator biblioteki",
@@ -63,8 +62,6 @@ class VisualStage:
     img_feats: list[dict] = field(default_factory=list)
     asset_faces: list[dict] = field(default_factory=list)
     videos: list[dict] = field(default_factory=list)
-    clip_vecs: list[np.ndarray] = field(default_factory=list)
-    dino_vecs: list[np.ndarray] = field(default_factory=list)
     face_vecs: list[np.ndarray] = field(default_factory=list)
     file_shas: set[str] = field(default_factory=set)
     qr_urls: list[str] = field(default_factory=list)
@@ -77,7 +74,6 @@ class TextStage:
     ocr_text: str = ""
     meta_text: str = ""
     text_vecs: list[np.ndarray] = field(default_factory=list)
-    gemma_vecs: list[np.ndarray] = field(default_factory=list)
 
 
 @dataclass
@@ -89,7 +85,6 @@ class LlmStage:
 @dataclass
 class EnrichStage:
     infra: dict = field(default_factory=dict)
-    indicators: dict[str, set[str]] = field(default_factory=dict)
     behind_cloudflare: bool = False
 
 
@@ -112,7 +107,7 @@ def _dates(m: Material, meta: dict) -> list[str]:
 
 
 def is_ui_screenshot(ocr_text: str) -> bool:
-    """Platform UI (ad-library details) - identical chrome across unrelated cases; keep OCR, exclude from visual sim."""
+    """Platform UI (ad-library details) - identical chrome across unrelated cases; keep OCR, exclude from the images view."""
     t = gazetteer.fold(ocr_text or "")
     return any(m in t for m in UI_MARKERS)
 
@@ -123,12 +118,6 @@ def _image_features(im, src: str, kind: str, want_faces: bool = True, want_ocr: 
         crop = vision.creative_crop(crop)
     f = {"src": src, "kind": kind, "size": list(im.size), **vision.hashes(crop)}
     vec: dict = {}
-    c = vision.clip_embed(crop)
-    if c is not None:
-        vec["clip"] = c
-    d = vision.dino_embed(crop)
-    if d is not None:
-        vec["dino"] = d
     if want_ocr:
         o = vision.ocr(im)
         f["ocr_text"], f["ocr_lines"] = o["text"], o["lines"][:80]
@@ -136,9 +125,9 @@ def _image_features(im, src: str, kind: str, want_faces: bool = True, want_ocr: 
     fl = []
     if want_faces:
         for fc in faces.faces_in_image(im):
-            ident, sim = faces.identify(fc["embedding"], quality=fc["quality"])
+            ident, sim = faces.identify(fc["embedding"])
             fl.append({
-                "identity": ident, "sim": round(sim, 3), "quality": fc["quality"],
+                "identity": ident, "sim": round(sim, 3), "det_score": fc["det_score"],
                 "box_rel": fc["box_rel"], "side": fc["side"], "src": src,
             })
             vec.setdefault("faces", []).append(fc["embedding"])
@@ -279,7 +268,8 @@ def _extract_ocr_ad_facts(img_feats: list[dict], ind: dict[str, set[str]], qr_ur
 
         for q in f.get("qr", []):
             qr_urls.append(q)
-            web.merge_ind(ind, web.url_indicators(q))
+            if not web.is_decoy_or_generic_domain(web.registrable_domain(q)):
+                web.merge_ind(ind, web.url_indicators(q))
         for u in vision.urls_in_text(f.get("ocr_text", "")):
             d = web.registrable_domain(u)
             if d and not web.is_decoy_or_generic_domain(d):
@@ -307,11 +297,6 @@ def _stage_visual_and_faces(m: Material, har_images: list[tuple[str, bytes]], sa
         if is_ui_screenshot(f.get("ocr_text", "")):
             f["kind"] = "ui_screenshot"
         st.img_feats.append(f)
-        if f["kind"] != "ui_screenshot":
-            if "clip" in v:
-                st.clip_vecs.append(v["clip"])
-            if "dino" in v:
-                st.dino_vecs.append(v["dino"])
         st.face_vecs.extend(v.get("faces", []))
 
     # Deduplicate landing-page assets by SHA-256 BEFORE hashing and face detection
@@ -349,10 +334,10 @@ def _stage_visual_and_faces(m: Material, har_images: list[tuple[str, bytes]], sa
             continue
         asset_hashes.add(vision.hashes(im)["phash"])
         if i < 10:
-            for fc in faces.faces_in_image(im, min_side=48):
-                ident, sim = faces.identify(fc["embedding"], quality=fc["quality"])
+            for fc in faces.faces_in_image(im):
+                ident, sim = faces.identify(fc["embedding"])
                 st.asset_faces.append({
-                    "identity": ident, "sim": round(sim, 3), "quality": fc["quality"],
+                    "identity": ident, "sim": round(sim, 3), "det_score": fc["det_score"],
                     "src": "asset:" + Path(src).name[:60], "box_rel": fc["box_rel"], "side": fc["side"],
                 })
                 st.face_vecs.append(fc["embedding"])
@@ -378,11 +363,12 @@ def _stage_text(m: Material, web_s: WebStage, vis_s: VisualStage, meta: dict, sa
         "\n".join(uniq_titles) + "\n" + "\n".join(m.texts) + "\n"
         + st.meta_text + "\n" + st.ocr_text + "\n" + "\n".join(web_s.page_texts)
     ).strip()
-    narrative_text = ("\n".join(uniq_titles) + "\n" + "\n".join(web_s.page_texts))[:40000] or all_text
+    page_text = ("\n".join(uniq_titles) + "\n" + "\n".join(web_s.page_texts)).strip()[:40000]
+    narrative_text = page_text or all_text
+    creative_text = (st.ocr_text + "\n" + "\n".join(m.texts) + "\n" + st.meta_text).strip()  # what the ad itself says
 
     st.text_summary = {
         "titles": uniq_titles[:10],
-        "title_templates": list(dict.fromkeys(text.title_template(t) for t in uniq_titles))[:10],
         "ocr_text": st.ocr_text[:4000],
         "excerpt": (" ".join(web_s.page_texts) or st.ocr_text or "\n".join(m.texts))[:1500],
         "n_chars": len(all_text),
@@ -391,9 +377,9 @@ def _stage_text(m: Material, web_s: WebStage, vis_s: VisualStage, meta: dict, sa
         "persons_text": gazetteer.find_persons(all_text),
         "brands_text": gazetteer.find_brands(all_text),
         "media_text": gazetteer.find_media(all_text),
-        "minhash": text.minhash_sig(narrative_text),
-        "minhash_masked": text.minhash_sig(narrative_text, masked=True),
-        "minhash_ocr": text.minhash_sig(st.ocr_text) if len(st.ocr_text) > 80 else None,
+        # entity-masked word 4-gram MinHash: landing-page text (view "text") and creative text (view "ocr")
+        "minhash_masked": text.minhash_sig(page_text, masked=True) if page_text else None,
+        "minhash_ocr_masked": text.minhash_sig(creative_text, masked=True) if creative_text else None,
     }
 
     say("text embedding")
@@ -401,13 +387,6 @@ def _stage_text(m: Material, web_s: WebStage, vis_s: VisualStage, meta: dict, sa
     tv = text.embed_text(embed_src)
     if tv is not None:
         st.text_vecs.append(tv)
-    if config.USE_GEMMA:
-        from .text_gemma import embed_text_gemma
-
-        say("text embedding (EmbeddingGemma-2)")
-        gv = embed_text_gemma(("\n".join(uniq_titles) + "\n" + (" ".join(web_s.page_texts) or all_text))[:8000])
-        if gv is not None:
-            st.gemma_vecs.append(gv)
     return st
 
 
@@ -433,22 +412,10 @@ def _stage_llm(
     if use_llm:
         say("LLM attributes")
     attrs = llm.extract_attributes(llm_input, backend=None if use_llm else "none")
-    # Gate precomputed LLM-discovered extra values strictly behind use_llm=True
-    if use_llm:
-        vf = config.CACHE / "llm_extra_values.json"
-        if vf.exists():
-            try:
-                known = json.loads(vf.read_text(encoding="utf-8")).get(m.id, {})
-                attrs["extra"] = {**known, **{k: v for k, v in (attrs.get("extra") or {}).items() if v}}
-            except Exception:
-                pass
     st.attrs = attrs
     prod = attrs.get("product_or_platform_name")
     if prod and len(prod) > 2:
         st.indicators.setdefault("product", set()).add(gazetteer.fold(prod).strip())
-    for ph in attrs.get("distinctive_phrases") or []:
-        if len(ph) > 12:
-            st.indicators.setdefault("phrase", set()).add(text.normalize(ph))
     return st
 
 
@@ -483,7 +450,6 @@ def _stage_enrich(landing_urls: list[str], say: Callable[[str], None], enabled: 
             "first_cert": crt_info.get("first_cert"),
             "cert_pl_listed": info.get("cert_pl_listed"),
         }
-        web.merge_ind(st.indicators, enrich.indicators(info))
         if any(net.is_cloudflare_ip(ip) for ip in a_recs) or any(str(ns).lower().endswith(".cloudflare.com") for ns in ns_list):
             st.behind_cloudflare = True
     return st
@@ -501,7 +467,7 @@ def _assemble_features(
     elapsed_s: float,
 ) -> tuple[dict, dict]:
     ind: dict[str, set[str]] = {}
-    for part in (web_s.indicators, vis_s.indicators, llm_s.indicators, enr_s.indicators):
+    for part in (web_s.indicators, vis_s.indicators, llm_s.indicators):
         web.merge_ind(ind, part)
 
     all_faces = [fc for f in vis_s.img_feats for fc in f.get("faces", [])] + vis_s.asset_faces
@@ -546,15 +512,7 @@ def _assemble_features(
     if vis_s.videos:
         feats["videos"] = vis_s.videos
 
-    raw_vecs: dict[str, list] = {
-        "clip": vis_s.clip_vecs,
-        "dino": vis_s.dino_vecs,
-        "faces": vis_s.face_vecs,
-        "text": text_s.text_vecs,
-        "dom": web_s.dom_sigs,
-    }
-    if text_s.gemma_vecs:
-        raw_vecs["text_gemma"] = text_s.gemma_vecs
+    raw_vecs: dict[str, list] = {"faces": vis_s.face_vecs, "text": text_s.text_vecs, "dom": web_s.dom_sigs}
     vectors = {k: (np.stack(v) if len(v) and not isinstance(v[0], list) else v) for k, v in raw_vecs.items()}
     return feats, vectors
 

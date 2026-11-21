@@ -1,8 +1,8 @@
-"""Human-readable (Polish) labels for enums, signals, families and decisions — shared by the API and exports."""
+"""Human-readable (Polish) labels for enums, identifier groups, content views, relations and decisions."""
 from __future__ import annotations
 
 from . import config
-from .similarity import FAMILY_PL, PL_SIGNAL
+from .similarity import GROUP_PL, TYPE_PL, VIEW_PL
 
 SCAM_TYPE_PL = {
     "investment_fake_platform": "fałszywa platforma inwestycyjna",
@@ -19,110 +19,69 @@ SCAM_TYPE_PL = {
     "political_disinfo_ad": "dezinformacja polityczna",
     "other": "inne",
 }
-NARRATIVE_PL = {
-    "celebrity_scandal_or_attack": "skandal / atak na celebrytę",
-    "censored_interview": "„ocenzurowany wywiad”",
-    "banker_scandal": "afera bankowa",
-    "celebrity_testament_or_death": "testament / śmierć celebryty",
-    "staged_studio_quarrel": "inscenizowana kłótnia w studiu",
-    "state_project_shares": "akcje państwowego projektu",
-    "national_income_programme": "„narodowy program dochodu”",
-    "doctor_vs_big_pharma": "lekarz kontra koncerny",
-    "miracle_cure_testimonial": "świadectwo „cudownego leku”",
-    "investment_event": "wydarzenie inwestycyjne",
-    "casino_app": "aplikacja kasynowa",
-    "brand_giveaway": "rozdanie marki",
-    "clearance_sale": "wyprzedaż",
-    "undelivered_parcel": "niedostarczona paczka",
-    "lost_funds_recovery": "odzyskanie utraconych środków",
-    "other": "inne",
-}
-FORMAT_PL = {
-    "fake_news_article": "fałszywy artykuł prasowy",
-    "fake_news_studio_video": "fałszywe wideo ze studia TV",
-    "deepfake_talking_head": "deepfake „gadająca głowa”",
-    "static_portrait_with_headline": "portret + nagłówek",
-    "product_packshot": "zdjęcie produktu",
-    "fake_app_store_page": "fałszywa strona sklepu z aplikacjami",
-    "fake_event_page": "fałszywa strona wydarzenia",
-    "quiz_or_survey": "quiz / ankieta",
-    "ugc_testimonial": "„opinia użytkownika”",
-    "other": "inne",
-}
-ENUM_PL = {**SCAM_TYPE_PL, **NARRATIVE_PL, **FORMAT_PL}
+ENUM_PL = SCAM_TYPE_PL
 
-TIER_PL = {"S": "operator", "M": "kit / treść", "W": "kontekst (słaby)"}
-TIER_HINT = {
-    "S": "ślad, który praktycznie zawsze należy do jednego operatora (ten sam piksel, domena, endpoint, ID reklamy)",
-    "M": "ten sam zestaw narzędzi lub ta sama treść/kreacja — mocny, ale może być skopiowany",
-    "W": "zgodność kontekstu (ta sama osoba, ten sam typ oszustwa) — sama w sobie niczego nie łączy",
+GROUP_ORDER = ["ad_library", "domains", "tracking_ids", "contacts", "kit_files", "product"]
+GROUP_HINT = {
+    "ad_library": "to samo ID reklamy lub reklamodawcy w bibliotece reklam",
+    "domains": "ta sama domena docelowa, w przekierowaniu, host TDS lub domena widoczna na kreacji",
+    "tracking_ids": "piksele i ID analityki, UUID tenanta landing-buildera, parametry afiliacyjne, ID kampanii w URL",
+    "contacts": "ten sam telefon, e-mail, Telegram, WhatsApp lub portfel krypto",
+    "kit_files": "identyczny skrypt, szablon API backendu, endpoint formularza, szablon ścieżki URL",
+    "product": "ta sama nazwa produktu lub fikcyjnej platformy",
 }
-FAMILY_HINT = {
-    "duplicate": "identyczny plik lub ta sama treść + obraz + domena",
-    "infra_ids": "piksele/ID analityki, telefony, komunikatory, portfele, endpointy formularzy",
-    "tracking": "ID reklam/kampanii, parametry afiliacyjne, UUID tenanta landing-buildera, hosty TDS",
-    "domain": "ta sama domena docelowa, w przekierowaniu, widoczna na kreacji; seria rejestracji",
-    "advertiser": "ten sam reklamodawca w bibliotece reklam",
-    "kit": "nazwy/hashe skryptów, szablon API, sygnatura parametrów URL, szablon DOM, favicon",
-    "assets": "ten sam obraz osadzony na stronach docelowych",
-    "visual": "podobny wygląd kreacji (CLIP), układ (DINOv2), prawie identyczny obraz (pHash)",
-    "narrative": "prawie identyczny tekst, szablon tytułu, podobna narracja, charakterystyczne frazy",
-    "offer": "ta sama nazwa produktu lub fikcyjnej platformy",
-    "persons": "ta sama osoba (twarz z bazy referencyjnej / w tekście), ta sama nieznana twarz",
-    "concept": "zgodny typ oszustwa, szablon narracji, format kreacji (atrybuty LLM)",
-    "hosting": "ten sam adres IP spoza CDN, ta sama para serwerów NS",
+VIEW_HINT = {
+    "text": "MinHash-Jaccard 4-gramów słów tekstu strony docelowej z zamaskowanymi osobami (Broder 1997)",
+    "ocr": "ta sama miara na tekście kreacji (OCR zrzutów i klatek wideo, treść reklamy), osoby zamaskowane",
+    "semantic": "cosinus embeddingów multilingual-e5-small po odjęciu średniej korpusu (Mu & Viswanath 2018)",
+    "html": "MinHash-Jaccard 5-gramów znaczników HTML (Cui et al. 2017)",
+    "images": "odsetek obrazów mniejszego zbioru z odpowiednikiem pHash w odległości Hamminga ≤ "
+              f"{config.PHASH_HAMMING} (Zauner 2010)",
 }
-FAMILY_ORDER = ["duplicate", "infra_ids", "tracking", "domain", "advertiser", "kit", "assets", "visual", "narrative",
-                "offer", "persons", "concept", "hosting"]
 
 RELATION_PL = {
     "duplicate": "duplikat",
     "same_campaign": "ta sama kampania",
-    "similar": "podobny playbook",
+    "similar": "podobna treść",
     "none": "brak powiązania",
 }
 RELATION_HINT = {
-    "duplicate": "to ten sam materiał zgłoszony ponownie",
-    "same_campaign": f"p ≥ {config.LINK_THRESHOLD} i (dowód operatorski ≥ 0.5 lub dowód kit/treść ≥ 0.7 lub ≥ 2 niezależne rodziny)",
-    "similar": f"p ≥ {config.SIMILAR_THRESHOLD} lub ten sam „przepis” (narracja, koncepcja, wizualia, osoby) — bez dowodu wspólnego operatora",
-    "none": f"p < {config.SIMILAR_THRESHOLD} i brak wspólnego playbooka",
+    "duplicate": f"ten sam plik, to samo ID reklamy lub odległość treści d ≤ {config.DUPLICATE_CUT}",
+    "same_campaign": f"wspólny identyfikator (obecny w ≤ {config.MAX_DF:.0%} materiałów) lub d ≤ {config.CAMPAIGN_CUT}",
+    "similar": f"brak wspólnego identyfikatora, ale treść podobna: d ≤ {config.FAMILY_CUT}",
+    "none": f"brak wspólnego identyfikatora i d > {config.FAMILY_CUT}",
 }
 
 DECISION_PL = {
-    "duplicate": ("Duplikat", "Ten materiał był już analizowany (identyczny plik lub ta sama treść, obraz i domena)."),
-    "known_campaign": ("Znana kampania", "Materiał ma wspólne ślady z kampanią w bazie — przypisano go do niej."),
-    "merge_proposal": ("Propozycja scalenia", "Materiał silnie łączy się z dwiema kampaniami naraz — możliwe, że to jedna kampania."),
-    "candidate_review": ("Do weryfikacji", "Umiarkowane podobieństwo z kampanią — potrzebna decyzja analityka."),
-    "new_campaign": ("Nowy wzorzec", "Brak wystarczających wspólnych śladów — prawdopodobnie nowa kampania."),
+    "duplicate": ("Duplikat", "Ten materiał był już analizowany (ten sam plik, to samo ID reklamy lub niemal identyczna treść)."),
+    "known_campaign": ("Znana kampania", "Materiał ma wspólny identyfikator z kampanią w bazie lub jego treść jest bliska "
+                                         f"pojedynczemu znanemu materiałowi (najbliższy sąsiad, 1-NN — Cover & Hart 1967; d ≤ {config.CAMPAIGN_CUT}) — przypisano go "
+                                         "do kampanii tego materiału."),
+    "merge_proposal": ("Propozycja scalenia", "Materiał ma wspólne identyfikatory z dwiema kampaniami naraz — możliwe, że to jedna kampania."),
+    "new_campaign": ("Nowy wzorzec", "Brak wspólnych identyfikatorów i żaden znany materiał nie jest dość bliski treścią — prawdopodobnie nowa kampania."),
 }
 
 SOURCE_PL = {"organizer": "zbiór organizatora", "upload": "przesłany plik", "url": "przechwycony URL", "text": "tekst"}
 
 LLM_FIELDS_PL = [
     ("scam_type", "Typ oszustwa"),
-    ("narrative_template", "Szablon narracji"),
-    ("creative_format", "Format kreacji"),
     ("product_or_platform_name", "Produkt / platforma"),
     ("spoofed_media_outlet", "Podszyte medium"),
     ("impersonated_persons", "Podszyte osoby"),
     ("impersonated_brands", "Podszyte marki"),
-    ("fictional_persona", "Fikcyjna persona"),
-    ("promised_benefit", "Obietnica"),
-    ("entry_cost", "Koszt wejścia"),
-    ("call_to_action", "Wezwanie do działania"),
-    ("urgency_cues", "Presja czasu"),
-    ("emotional_triggers", "Wyzwalacze emocji"),
-    ("target_audience", "Grupa docelowa"),
-    ("distinctive_phrases", "Charakterystyczne frazy"),
 ]
 
 
 def signal_label(t: str) -> str:
-    return PL_SIGNAL.get(t, t)
+    return TYPE_PL.get(t, t)
 
 
-def family_label(f: str) -> str:
-    return FAMILY_PL.get(f, f)
+def group_label(g: str) -> str:
+    return GROUP_PL.get(g, g)
+
+
+def view_label(v: str) -> str:
+    return VIEW_PL.get(v, v)
 
 
 def enum_label(v) -> str:

@@ -3,10 +3,10 @@ import { useState } from "react"
 import { Link, useParams, useSearchParams } from "react-router"
 
 import type { Features, LinkBrief, MaterialDetail } from "@/lib/api"
-import { P_SIMILAR, plural, useApi } from "@/lib/format"
+import { FAMILY_CUT, plural, useApi } from "@/lib/format"
 import {
-  CampaignBadge, Chips, ErrorState, HelpTip, KV, Loading, MaterialRow, PageHeader, RelationBadge, Section, Strength, StrengthLegend,
-  TierBadge, traceHref,
+  CampaignBadge, Chips, ErrorState, GroupBadge, HelpTip, KV, Loading, MaterialRow, PageHeader, RelationBadge, Section, Strength, StrengthLegend,
+  traceHref,
 } from "@/components/common"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -74,8 +74,8 @@ export default function MaterialPage() {
 
 function SimilarList({ me, links }: { me: string; links: LinkBrief[] }) {
   const [showWeak, setShowWeak] = useState(false)
-  const strong = links.filter((l) => l.p >= P_SIMILAR)
-  const weak = links.filter((l) => l.p < P_SIMILAR)
+  const strong = links.filter((l) => l.relation !== "none")
+  const weak = links.filter((l) => l.relation === "none")
   const row = (l: LinkBrief) => (
     <li key={l.other!.id} className="space-y-1.5">
       <MaterialRow
@@ -89,13 +89,13 @@ function SimilarList({ me, links }: { me: string; links: LinkBrief[] }) {
     </li>
   )
   return (
-    <Section title="Najbardziej podobne materiały" description="Posortowane według siły powiązania p (0–1)." aside={<StrengthLegend />}>
-      {strong.length ? <ul className="space-y-3">{strong.map(row)}</ul> : <p className="text-sm text-muted-foreground">Żaden materiał nie przekracza progu {P_SIMILAR} — brak istotnych powiązań.</p>}
+    <Section title="Najbardziej podobne materiały" description="Posortowane według bliskości p (1 przy wspólnym identyfikatorze, inaczej 1 − d)." aside={<StrengthLegend />}>
+      {strong.length ? <ul className="space-y-3">{strong.map(row)}</ul> : <p className="text-sm text-muted-foreground">Brak powiązanych materiałów: żadnego wspólnego identyfikatora, a odległość treści do każdego materiału d &gt; {FAMILY_CUT}.</p>}
       {weak.length > 0 && (
         <div className="mt-3">
           <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" onClick={() => setShowWeak(!showWeak)}>
             <ChevronDown className={showWeak ? "rotate-180 transition-transform" : "transition-transform"} />
-            {showWeak ? "Ukryj" : "Pokaż"} słabsze ({weak.length}, p &lt; {P_SIMILAR})
+            {showWeak ? "Ukryj" : "Pokaż"} niepowiązane ({weak.length}, d &gt; {FAMILY_CUT})
           </Button>
           {showWeak && <ul className="mt-2 space-y-3">{weak.map(row)}</ul>}
         </div>
@@ -138,14 +138,14 @@ export function FeatureTabs({ f }: { f: Features }) {
           <CardContent className="px-0">
             <p className="border-b px-4 py-3 text-sm text-muted-foreground">
               Wartości wyciągnięte z kodu strony, ruchu sieciowego (HAR), adresów URL i treści. Odznaka <Badge className="mx-0.5">w 2 z {f.n_corpus} mat.</Badge> oznacza,
-              że ta sama wartość występuje też w innych materiałach — to ona je łączy; im rzadsza, tym mocniej. Kliknij wartość, by zobaczyć te materiały.
+              że ta sama wartość występuje też w innych materiałach — wspólny identyfikator łączy je w jedną kampanię, o ile nie jest zbyt popularny. Kliknij wartość, by zobaczyć te materiały.
             </p>
             {f.indicators.length ? (
               <div className="divide-y">
                 {f.indicators.map((g) => (
-                  <section key={g.family} className="px-4 py-3">
+                  <section key={g.group} className="px-4 py-3">
                     <h3 className="mb-2 flex flex-wrap items-center gap-2 text-sm font-medium">
-                      {g.label} <TierBadge tier={g.tier} /> <HelpTip label={`Co to jest: ${g.label}`}>{g.hint}</HelpTip>
+                      <GroupBadge label={g.label} linking={g.linking} /> <HelpTip label={`Co to jest: ${g.label}`}>{g.hint}</HelpTip>
                     </h3>
                     <dl className="space-y-2">
                       {g.items.map((it) => (
@@ -188,7 +188,7 @@ export function FeatureTabs({ f }: { f: Features }) {
 
       {f.web.has_web && (
         <TabsContent value="infra" className="space-y-4">
-          <Section title="Domeny" description="Rejestracja (RDAP), serwery nazw (DNS), certyfikaty (crt.sh) i obecność na liście ostrzeżeń CERT Polska.">
+          <Section title="Domeny" description="Rejestracja (RDAP), serwery nazw (DNS), certyfikaty (crt.sh) i obecność na liście ostrzeżeń CERT Polska — tylko do wglądu, nie łączą materiałów.">
             {f.web.infra.length ? (
               <div className="grid gap-3 md:grid-cols-2">
                 {f.web.infra.map((d) => (
@@ -220,7 +220,7 @@ export function FeatureTabs({ f }: { f: Features }) {
               <KV label="Przekierowania">
                 {f.web.redirect_chains.length ? f.web.redirect_chains.map((c, i) => <div key={i} className="font-mono text-xs break-all">{c.join(" → ")}</div>) : "brak"}
               </KV>
-              <KV label="IP serwerów" hint="Z ruchu sieciowego (HAR). Adresy sieci CDN (Cloudflare, Meta, Google…) nie są traktowane jako ślad operatora."><Chips values={f.web.ips} /></KV>
+              <KV label="IP serwerów" hint="Z ruchu sieciowego (HAR). Tylko do wglądu — adres IP nie łączy materiałów."><Chips values={f.web.ips} /></KV>
               <KV label="Nagłówki serwera"><Chips values={f.web.server_headers} /></KV>
               <KV label="Za Cloudflare">{f.web.behind_cloudflare ? "tak" : "nie"}</KV>
             </dl>
@@ -246,7 +246,7 @@ export function FeatureTabs({ f }: { f: Features }) {
             )}
           </Section>
           <Section
-            title={<span className="flex items-center gap-1">Atrybuty opisowe <HelpTip label="Skąd są atrybuty opisowe">Model językowy (albo — gdy wyłączony — reguły słownikowe) czyta treść i zwraca atrybuty z zamkniętych list. Zgodność atrybutów to słaby dowód (rodzina „koncepcja”).</HelpTip></span>}
+            title={<span className="flex items-center gap-1">Atrybuty opisowe <HelpTip label="Skąd są atrybuty opisowe">Model językowy (albo — gdy wyłączony — reguły słownikowe) czyta treść i zwraca typ oszustwa, produkt, podszyte osoby, marki i media. Nazwa produktu jest identyfikatorem (grupa „produkt”); pozostałe atrybuty są tylko opisem i nie łączą materiałów.</HelpTip></span>}
             description={f.llm_backend_label ? `Źródło: ${f.llm_backend_label}` : undefined}
           >
             {f.llm_backend === "rules" && (
@@ -254,7 +254,7 @@ export function FeatureTabs({ f }: { f: Features }) {
             )}
             <dl className="divide-y">
               {f.llm.map((r) => (
-                <KV key={r.key} label={<>{r.label}{r.discovered && <Badge variant="outline" className="ml-1">odkryty</Badge>}</>}>
+                <KV key={r.key} label={r.label}>
                   {Array.isArray(r.value) ? <Chips values={r.value} max={8} /> : r.value}
                 </KV>
               ))}
@@ -292,7 +292,7 @@ export function FeatureTabs({ f }: { f: Features }) {
         {f.assets.length > 0 && (
           <Section
             title="Obrazy ze strony docelowej"
-            description={`Pokazano ${f.assets.length} z ${f.n_assets_total} plików zapisanej strony. Ten sam obraz na dwóch stronach to ślad „wspólne obrazy”.`}
+            description={`Pokazano ${f.assets.length} z ${f.n_assets_total} plików zapisanej strony. Te same obrazy na dwóch stronach zwiększają podobieństwo w widoku treści „obrazy” (pHash).`}
           >
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
               {f.assets.map((a) => (

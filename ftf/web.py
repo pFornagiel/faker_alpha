@@ -1,7 +1,7 @@
 """Web-layer feature extraction: URL structure, HTML (saved pages / captures), HAR network logs, MHTML.
 
 Produces *indicators* (discrete, typed values such as a Facebook pixel ID or a TDS tenant UUID) that
-are later matched across materials with rarity weighting, plus template signals (tag shingles).
+are later matched exactly across materials (config.IDENTIFIER_GROUP), plus HTML tag shingles (html view).
 Tracker regexes adapted from research/02 (verified live on CERT Polska-listed sites, 2026-11-21).
 """
 from __future__ import annotations
@@ -52,24 +52,12 @@ GENERIC_SCRIPT_NAMES = re.compile(
     r"runtime|polyfills?|chunk|bundle|core|min|jquery-\d|wp-|wp_|wpembed|wp-emoji|style|styles|"
     r"normalize|reset|fonts?|icons?|all|libs?)([-._]|\d|$)", re.I)
 
-GENERIC_CSS_NAMES = re.compile(
-    r"^(css|comments|header|footer|custom|theme|style|styles|main|app|index|fonts?|reset|normalize|"
-    r"bootstrap|tailwind|common|vendor|all|base|layout|global|default|print|grid|responsive|"
-    r"animate|slick|swiper|icons?)([-._]|\d|$)", re.I)
-
 TRACKER_RX = {
     "ga": r"\b(?:UA-\d{4,10}-\d{1,4}|G-[A-Z0-9]{8,12})\b",
     "gtm": r"\bGTM-[A-Z0-9]{4,9}\b",
     "gads": r"\bAW-\d{9,12}\b",
-    "adsense": r"\bca-pub-\d{16}\b",
     "fb_pixel": r"""fbq\(\s*['"]init['"]\s*,\s*['"](\d{14,17})['"]|facebook\.com/tr/?\?id=(\d{14,17})|"pixel_?id"\s*:\s*"?(\d{14,17})""",
     "tiktok_pixel": r"""ttq\.load\(\s*['"]([A-Z0-9]{18,22})['"]|analytics\.tiktok\.com/[^"']*?sdkid=([A-Z0-9]{18,22})""",
-    "ym": r"""ym\(\s*(\d{7,9})\s*,\s*['"]init|mc\.yandex\.ru/watch/(\d{7,9})""",
-    "hotjar": r"hjid\s*[:=]\s*(\d{5,8})",
-    "clarity": r"clarity\.ms/tag/([a-z0-9]{8,12})",
-    "sentry_key": r"sentry[-_]public[-_]key=([0-9a-f]{32})|https://([0-9a-f]{32})@[a-z0-9.-]*sentry",
-    "recaptcha": r"\b(6L[0-9A-Za-z_-]{38})\b",
-    "build_id": r"""buildId["']?\s*[:=]\s*["']([A-Za-z0-9_-]{8,40})["']""",
 }
 CONTACT_RX = {
     "telegram": r"(?:t\.me|telegram\.me)/(\+?[A-Za-z0-9_]{5,32})",
@@ -100,7 +88,6 @@ VOLATILE_PARAMS = {
     "ttclid", "msclkid", "wbraid", "gbraid", "yclid", "t", "ts", "v", "_", "cb", "rnd", "nocache",
 }
 SESSION_PARAM_HINTS = ("utm_visit", "clickid", "click_id", "session", "visit")
-GENERIC_FAVICON_HASHES = {"0", "-1", "116323821"}  # empty/blank/default favicon hashes
 
 
 def registrable_domain(url_or_host: str) -> str:
@@ -144,19 +131,8 @@ def _clean_asset_filename(raw_name: str) -> str:
     return name
 
 
-def value_shape(v: str) -> str:
-    """Shape of a parameter value: 'A20' (alnum len 20), 'D18' (digits), 'U' (uuid) ... TDS fingerprint."""
-    if UUID_RX.fullmatch(v or ""):
-        return "U"
-    if re.fullmatch(r"\d+", v or ""):
-        return f"D{len(v)}"
-    if re.fullmatch(r"[A-Za-z0-9]+", v or ""):
-        return f"A{len(v)}"
-    return "S"
-
-
 def url_indicators(url: str) -> dict:
-    """Indicators carried by a URL: domain, canonical param signature, ID-bearing params, path template."""
+    """Indicators carried by a URL: domain, host, ID-bearing params, tenant UUIDs, path template."""
     if not url or not url.startswith(("http://", "https://")):
         return {}
     p = urlparse(url)
@@ -168,11 +144,6 @@ def url_indicators(url: str) -> dict:
         out["landing_domain"] = {dom}
     if host and not is_generic(dom or host):
         out["page_host"] = {host}
-
-    # Canonical parameter signature: exclude volatile click/visit/token params and sort by name.
-    sig_pairs = sorted((k, value_shape(v)) for k, v in q if k.lower() not in VOLATILE_PARAMS)
-    if sig_pairs:
-        out["param_signature"] = {"&".join(f"{k}={sh}" for k, sh in sig_pairs)}
 
     for kind, keys in ID_PARAMS.items():
         for k, v in q:
@@ -241,7 +212,7 @@ def regex_indicators(text: str) -> dict:
 
 
 def extract_script_indicators(path: Path) -> dict[str, set[str]]:
-    """Scan a local saved JS asset (.js, .js.pobrane, .js.pobierz) for trackers, script name, and hash."""
+    """Scan a local saved JS asset (.js, .js.pobrane, .js.pobierz) for trackers and its content hash."""
     out: dict[str, set[str]] = {}
     p = Path(path)
     try:
@@ -254,10 +225,8 @@ def extract_script_indicators(path: Path) -> dict[str, set[str]]:
     merge_ind(out, {k: v for k, v in raw_ind.items() if k not in ("email", "phone")})
     name = _clean_asset_filename(p.name)
     name_norm = re.sub(r"[._-][0-9a-f]{6,}(?=\.)", "", name)
-    if name_norm.lower().endswith(".js") and not GENERIC_SCRIPT_NAMES.match(name_norm) and len(name_norm) > 4:
-        out.setdefault("script_name", set()).add(name_norm.lower())
-        if len(body) > 500:
-            out.setdefault("script_hash", set()).add(hashlib.sha1(body.encode("utf-8", "replace")).hexdigest()[:16])
+    if name_norm.lower().endswith(".js") and not GENERIC_SCRIPT_NAMES.match(name_norm) and len(body) > 500:
+        out.setdefault("script_hash", set()).add(hashlib.sha1(body.encode("utf-8", "replace")).hexdigest()[:16])
     return out
 
 
@@ -304,19 +273,6 @@ def extract_html(html: str, base_url: str = "") -> dict:
     for u in [saved_url, canon.get("href") if canon else "", og_url.get("content") if og_url else ""]:
         if u and u.startswith("http"):
             merge_ind(ind, url_indicators(u))
-    for s in scripts:
-        name = _clean_asset_filename(urlparse(s).path.rsplit("/", 1)[-1])
-        name_norm = re.sub(r"[._-][0-9a-f]{6,}(?=\.)", "", name)
-        if name_norm.lower().endswith(".js") and not GENERIC_SCRIPT_NAMES.match(name_norm) and len(name_norm) > 4:
-            ind.setdefault("script_name", set()).add(name_norm.lower())
-    for c in css:
-        name = _clean_asset_filename(urlparse(c).path.rsplit("/", 1)[-1])
-        name_norm = re.sub(r"[._-][0-9a-f]{6,}(?=\.)", "", name)
-        if (name_norm.lower().endswith(".css")
-                and not GENERIC_SCRIPT_NAMES.match(name_norm)
-                and not GENERIC_CSS_NAMES.match(name_norm)
-                and len(name_norm) > 6):
-            ind.setdefault("css_name", set()).add(name_norm.lower())
     for f in forms:
         act = f["action"]
         if act and not act.startswith(("#", "javascript")):
@@ -329,8 +285,6 @@ def extract_html(html: str, base_url: str = "") -> dict:
                 ep = f"{(pr.hostname or '').lower()}{pr.path}" if pr.hostname else pr.path
                 if ep and ep not in ("/", ""):
                     ind.setdefault("form_endpoint", set()).add(ep)
-        if f["inputs"]:
-            ind.setdefault("form_fields", set()).add(",".join(f["inputs"]))
     out_domains = set()
     for u in scripts + css + links + imgs:
         if u and u.startswith(("http", "//")):
@@ -468,21 +422,6 @@ def parse_har(path: str | Path, keep_images: bool = True) -> dict:
                 if len(body) > 500 and not GENERIC_SCRIPT_NAMES.match(name):
                     script_hashes.add(hashlib.sha1(body.encode("utf-8", "replace")).hexdigest()[:16])
 
-        # Favicon mmh3 hash
-        is_fav = (
-            status == 200 and not is_generic(dom)
-            and ("favicon" in pr.path.lower() or "image/x-icon" in mime or "vnd.microsoft.icon" in mime)
-        )
-        if is_fav:
-            raw_fav = _body_bytes(rs.get("content", {}))
-            if len(raw_fav) >= 100:
-                try:
-                    fh = str(favicon_hash(raw_fav))
-                    if fh not in GENERIC_FAVICON_HASHES:
-                        ind.setdefault("favicon", set()).add(fh)
-                except Exception:
-                    pass
-
         if keep_images and mime.startswith("image/") and status == 200:
             raw = _body_bytes(rs.get("content", {}))
             if len(raw) > 4000:
@@ -550,10 +489,3 @@ def parse_mhtml(path: str | Path) -> tuple[str, str]:
                 html = (part.get_payload(decode=True) or b"").decode("utf-8", "replace")
             return html, part.get("Content-Location", loc) or loc
     return "", loc
-
-
-def favicon_hash(raw: bytes) -> int:
-    """Shodan-compatible favicon hash (mmh3 of base64 with newlines)."""
-    import mmh3
-
-    return mmh3.hash(base64.encodebytes(raw))

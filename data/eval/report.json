@@ -4,17 +4,23 @@
    {
     "material": "1",
     "expected": "known_campaign",
-    "decision": "known_campaign",
+    "decision": "duplicate",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 0,
+     "distance": 0.025,
+     "material": "e43c453a5729",
+     "name": "2"
+    },
     "best": [
      [
-      1.0,
+      0.975,
       0
      ],
      [
-      0.15,
-      3
+      0.008,
+      5
      ]
     ]
    },
@@ -24,14 +30,20 @@
     "decision": "new_campaign",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 4,
+     "distance": 0.952,
+     "material": "5309b4d69543",
+     "name": "14"
+    },
     "best": [
      [
-      0.132,
-      0
+      0.048,
+      4
      ],
      [
-      0.0,
-      4
+      0.043,
+      3
      ]
     ]
    },
@@ -41,30 +53,42 @@
     "decision": "new_campaign",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 1,
+     "distance": 0.913,
+     "material": "06fdbfcaed89",
+     "name": "47"
+    },
     "best": [
      [
-      0.405,
+      0.087,
       1
      ],
      [
-      0.405,
-      2
+      0.048,
+      4
      ]
     ]
    },
    {
     "material": "2",
     "expected": "known_campaign",
-    "decision": "merge_proposal",
+    "decision": "duplicate",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 0,
+     "distance": 0.025,
+     "material": "40d7e461c14a",
+     "name": "1"
+    },
     "best": [
      [
-      1.0,
+      0.975,
       0
      ],
      [
-      1.0,
+      0.01,
       5
      ]
     ]
@@ -75,14 +99,20 @@
     "decision": "known_campaign",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 0,
+     "distance": 0.886,
+     "material": "e43c453a5729",
+     "name": "2"
+    },
     "best": [
      [
-      1.0,
+      0.114,
       0
      ],
      [
-      0.15,
-      3
+      0.002,
+      1
      ]
     ]
    },
@@ -92,14 +122,20 @@
     "decision": "new_campaign",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 4,
+     "distance": 0.957,
+     "material": "ff3d34de92d5",
+     "name": "10"
+    },
     "best": [
      [
-      0.219,
-      0
+      0.043,
+      4
      ],
      [
-      0.097,
-      3
+      0.005,
+      0
      ]
     ]
    },
@@ -109,14 +145,20 @@
     "decision": "new_campaign",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 3,
+     "distance": 0.913,
+     "material": "5309b4d69543",
+     "name": "14"
+    },
     "best": [
      [
-      0.405,
+      0.087,
       3
      ],
      [
-      0.405,
-      1
+      0.023,
+      4
      ]
     ]
    },
@@ -126,14 +168,20 @@
     "decision": "known_campaign",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 0,
+     "distance": 0.768,
+     "material": "61b1f6fcb214",
+     "name": "61"
+    },
     "best": [
      [
-      1.0,
+      0.232,
       0
      ],
      [
-      0.15,
-      3
+      0.006,
+      5
      ]
     ]
    },
@@ -143,13 +191,19 @@
     "decision": "new_campaign",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 1,
+     "distance": 1.0,
+     "material": "06fdbfcaed89",
+     "name": "47"
+    },
     "best": [
      [
-      0.405,
-      3
+      0.0,
+      0
      ],
      [
-      0.405,
+      0.0,
       1
      ]
     ]
@@ -160,14 +214,20 @@
     "decision": "known_campaign",
     "ok": true,
     "soft_ok": true,
+    "nearest": {
+     "campaign": 0,
+     "distance": 0.768,
+     "material": "78d878f7359e",
+     "name": "48"
+    },
     "best": [
      [
-      1.0,
+      0.232,
       0
      ],
      [
-      0.288,
-      3
+      0.008,
+      5
      ]
     ]
    }
@@ -189,6 +249,491 @@
    }
   }
  },
+ "variants": {
+  "rows": [
+   {
+    "variant": "1~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.333,
+    "why": "identyczny plik (sha256); tekst kreacji (OCR) 1.00; obrazy 1.00; narracja (e5) 0.00; odległość treści d = 0.33"
+   },
+   {
+    "variant": "1~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.054,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „civicdaybook.live” (2 mat.); wspólny Facebook Pixel: „2012165449475163” (3 mat.); wspólny UUID tenanta landing-buildera: „a7b9f833-7f9b-4bd4-ac5a-5d6d5743fbba” (3 mat.); wspólny UUID tenanta landing-buildera: „f141c307-7ca2-41d9-b311-5ed107964c8b” (3 mat.); struktura HTML 1.00; obrazy 1.00; tekst strony 0.99; narracja (e5) 0.79; odległość treści d = 0.05"
+   },
+   {
+    "variant": "1~recompressed",
+    "kind": "recompressed",
+    "decision": "new_campaign",
+    "campaign": null,
+    "expected_campaign": 0,
+    "ok": false,
+    "soft_ok": false,
+    "p_to_source": 0.07,
+    "d_to_source": 0.93,
+    "why": "tekst kreacji (OCR) 0.21; narracja (e5) 0.00; obrazy 0.00; odległość treści d = 0.93"
+   },
+   {
+    "variant": "1~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 0.928,
+    "d_to_source": 0.072,
+    "why": "struktura HTML 1.00; tekst strony 0.99; narracja (e5) 0.79; odległość treści d = 0.07"
+   },
+   {
+    "variant": "1~person_swap",
+    "kind": "person_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.144,
+    "why": "wspólny domena docelowa: „civicdaybook.live” (2 mat.); struktura HTML 1.00; tekst strony 0.99; narracja (e5) 0.58; odległość treści d = 0.14"
+   },
+   {
+    "variant": "10~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 5,
+    "expected_campaign": 5,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.309,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „shop-77vault.xyz” (2 mat.); wspólny nazwa produktu / platformy: „sweet bonanza” (2 mat.); tekst kreacji (OCR) 1.00; obrazy 0.67; narracja (e5) 0.41; odległość treści d = 0.31"
+   },
+   {
+    "variant": "10~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 5,
+    "expected_campaign": 5,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.017,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „shop-77vault.xyz” (2 mat.); wspólny ID kampanii w URL: „120250477528820329” (2 mat.); wspólny ID kampanii w URL: „120250477557530329” (2 mat.); wspólny Facebook Pixel: „1376242401352160” (2 mat.); struktura HTML 1.00; obrazy 1.00; tekst strony 0.97; narracja (e5) 0.96; odległość treści d = 0.02"
+   },
+   {
+    "variant": "10~recompressed",
+    "kind": "recompressed",
+    "decision": "known_campaign",
+    "campaign": 5,
+    "expected_campaign": 5,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.698,
+    "why": "wspólny nazwa produktu / platformy: „sweet bonanza” (2 mat.); tekst kreacji (OCR) 0.46; narracja (e5) 0.44; obrazy 0.00; odległość treści d = 0.70"
+   },
+   {
+    "variant": "10~domain_swap",
+    "kind": "domain_swap",
+    "decision": "duplicate",
+    "campaign": 5,
+    "expected_campaign": 5,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.022,
+    "why": "wspólny Facebook Pixel: „1376242401352160” (2 mat.); wspólny Facebook Pixel: „1549107073347817” (2 mat.); wspólny Facebook Pixel: „2070071404384324” (2 mat.); wspólny UUID tenanta landing-buildera: „2bcae51f-3bb5-4567-887b-a59d05d19641” (2 mat.); struktura HTML 1.00; tekst strony 0.97; narracja (e5) 0.96; odległość treści d = 0.02"
+   },
+   {
+    "variant": "14~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 4,
+    "expected_campaign": 4,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.357,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „ineptsolidoval.top” (2 mat.); tekst kreacji (OCR) 0.86; obrazy 0.60; narracja (e5) 0.47; odległość treści d = 0.36"
+   },
+   {
+    "variant": "14~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 4,
+    "expected_campaign": 4,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.029,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „ineptsolidoval.top” (2 mat.); wspólny host strony: „eu-vi-stream.org” (2 mat.); wspólny host strony: „puuuuuush-king.org” (2 mat.); wspólny host strony: „clickline.org” (2 mat.); tekst strony 1.00; struktura HTML 1.00; narracja (e5) 0.91; odległość treści d = 0.03"
+   },
+   {
+    "variant": "14~recompressed",
+    "kind": "recompressed",
+    "decision": "new_campaign",
+    "campaign": null,
+    "expected_campaign": 4,
+    "ok": false,
+    "soft_ok": false,
+    "p_to_source": 0.321,
+    "d_to_source": 0.679,
+    "why": "narracja (e5) 0.54; tekst kreacji (OCR) 0.42; obrazy 0.00; odległość treści d = 0.68"
+   },
+   {
+    "variant": "14~domain_swap",
+    "kind": "domain_swap",
+    "decision": "duplicate",
+    "campaign": 4,
+    "expected_campaign": 4,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.029,
+    "why": "wspólny nazwa zestawu reklam: „ad_name=tvtextdc3_text156tv” (2 mat.); wspólny nazwa zestawu reklam: „adset_name=1208_pl_w_tvtextdc3_text156tv_сс_d3 (8) Adv  lang” (2 mat.); wspólny parametr afiliacyjny: „_camp_id=113” (2 mat.); wspólny parametr afiliacyjny: „acc=hk77_tv6_tvtextdc3_feed15_text156tv_w_pl” (2 mat.); tekst strony 1.00; struktura HTML 1.00; narracja (e5) 0.91; odległość treści d = 0.03"
+   },
+   {
+    "variant": "2~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 0.929,
+    "d_to_source": 0.071,
+    "why": "struktura HTML 1.00; tekst strony 0.99; narracja (e5) 0.79; odległość treści d = 0.07"
+   },
+   {
+    "variant": "2~person_swap",
+    "kind": "person_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.147,
+    "why": "wspólny domena docelowa: „acrosscommunities.live” (2 mat.); struktura HTML 1.00; tekst strony 0.99; narracja (e5) 0.57; odległość treści d = 0.15"
+   },
+   {
+    "variant": "3~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.667,
+    "why": "identyczny plik (sha256); tekst kreacji (OCR) 1.00; narracja (e5) 0.00; obrazy 0.00; odległość treści d = 0.67"
+   },
+   {
+    "variant": "3~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.059,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „healthlinkq.pro” (3 mat.); wspólny szablon ścieżki URL: „/L{n}fl-{n}e{n}-fkf{n}Z/” (3 mat.); struktura HTML 1.00; tekst strony 0.97; narracja (e5) 0.85; odległość treści d = 0.06"
+   },
+   {
+    "variant": "3~recompressed",
+    "kind": "recompressed",
+    "decision": "new_campaign",
+    "campaign": null,
+    "expected_campaign": 0,
+    "ok": false,
+    "soft_ok": false,
+    "p_to_source": 0.0,
+    "d_to_source": 1.0,
+    "why": "tekst kreacji (OCR) 0.00; narracja (e5) 0.00; obrazy 0.00; odległość treści d = 1.00"
+   },
+   {
+    "variant": "3~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.059,
+    "why": "wspólny szablon ścieżki URL: „/L{n}fl-{n}e{n}-fkf{n}Z/” (3 mat.); struktura HTML 1.00; tekst strony 0.97; narracja (e5) 0.85; odległość treści d = 0.06"
+   },
+   {
+    "variant": "3~person_swap",
+    "kind": "person_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.119,
+    "why": "wspólny domena docelowa: „healthlinkq.pro” (3 mat.); wspólny szablon ścieżki URL: „/L{n}fl-{n}e{n}-fkf{n}Z/” (3 mat.); struktura HTML 1.00; tekst strony 0.97; narracja (e5) 0.68; odległość treści d = 0.12"
+   },
+   {
+    "variant": "36~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 3,
+    "expected_campaign": 3,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.333,
+    "why": "identyczny plik (sha256); tekst kreacji (OCR) 1.00; obrazy 1.00; narracja (e5) 0.00; odległość treści d = 0.33"
+   },
+   {
+    "variant": "36~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 3,
+    "expected_campaign": 3,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.01,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „meroporepufulo.life” (2 mat.); wspólny host strony: „fast-assets.netlify.app” (2 mat.); wspólny host strony: „libs-lazysizes-26959.netlify.app” (2 mat.); wspólny ID kampanii w URL: „120254577452770651” (2 mat.); struktura HTML 1.00; obrazy 1.00; tekst strony 0.98; narracja (e5) 0.98; odległość treści d = 0.01"
+   },
+   {
+    "variant": "36~recompressed",
+    "kind": "recompressed",
+    "decision": "new_campaign",
+    "campaign": null,
+    "expected_campaign": 3,
+    "ok": false,
+    "soft_ok": false,
+    "p_to_source": 0.0,
+    "d_to_source": 1.0,
+    "why": "narracja (e5) 0.00; obrazy 0.00; odległość treści d = 1.00"
+   },
+   {
+    "variant": "36~domain_swap",
+    "kind": "domain_swap",
+    "decision": "duplicate",
+    "campaign": 3,
+    "expected_campaign": 3,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.013,
+    "why": "wspólny e-mail: „conduct@polandinvest.pl” (2 mat.); wspólny e-mail: „info@polandinvest.pl” (2 mat.); wspólny e-mail: „privacy@polandinvest.pl” (2 mat.); struktura HTML 1.00; tekst strony 0.98; narracja (e5) 0.98; odległość treści d = 0.01"
+   },
+   {
+    "variant": "47~creative_only",
+    "kind": "creative_only",
+    "decision": "known_campaign",
+    "campaign": 1,
+    "expected_campaign": 1,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 0.409,
+    "d_to_source": 0.591,
+    "why": "tekst kreacji (OCR) 1.00; narracja (e5) 0.23; obrazy 0.00; odległość treści d = 0.59"
+   },
+   {
+    "variant": "47~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 1,
+    "expected_campaign": 1,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.032,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „shryxla-mynx.icu” (2 mat.); wspólny nazwa zestawu reklam: „ad_name=PL78T” (2 mat.); wspólny nazwa zestawu reklam: „adset_name=PL78T” (2 mat.); wspólny ID kampanii w URL: „120248107429420117” (2 mat.); tekst strony 1.00; struktura HTML 1.00; obrazy 1.00; narracja (e5) 0.87; odległość treści d = 0.03"
+   },
+   {
+    "variant": "47~domain_swap",
+    "kind": "domain_swap",
+    "decision": "duplicate",
+    "campaign": 1,
+    "expected_campaign": 1,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.043,
+    "why": "wspólny nazwa zestawu reklam: „ad_name=PL78T” (2 mat.); wspólny nazwa zestawu reklam: „adset_name=PL78T” (2 mat.); wspólny szablon ścieżki URL: „/gKcXtVhV” (2 mat.); tekst strony 1.00; struktura HTML 1.00; narracja (e5) 0.87; odległość treści d = 0.04"
+   },
+   {
+    "variant": "48~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.333,
+    "why": "identyczny plik (sha256); tekst kreacji (OCR) 1.00; obrazy 1.00; narracja (e5) 0.00; odległość treści d = 0.33"
+   },
+   {
+    "variant": "48~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.026,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „novumfy.com” (2 mat.); wspólny host strony: „oceanicbay.info” (2 mat.); wspólny UUID tenanta landing-buildera: „307973dd-e974-4729-8a73-f32195a80f42” (2 mat.); wspólny endpoint formularza: „novumfy.com/api/v1/agent/persist-session-record/{id}/{id}” (2 mat.); tekst strony 1.00; struktura HTML 1.00; obrazy 1.00; narracja (e5) 0.90; odległość treści d = 0.03"
+   },
+   {
+    "variant": "48~recompressed",
+    "kind": "recompressed",
+    "decision": "new_campaign",
+    "campaign": null,
+    "expected_campaign": 0,
+    "ok": false,
+    "soft_ok": false,
+    "p_to_source": 0.0,
+    "d_to_source": 1.0,
+    "why": "narracja (e5) 0.00; obrazy 0.00; odległość treści d = 1.00"
+   },
+   {
+    "variant": "48~domain_swap",
+    "kind": "domain_swap",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 0.966,
+    "d_to_source": 0.034,
+    "why": "tekst strony 1.00; struktura HTML 1.00; narracja (e5) 0.90; odległość treści d = 0.03"
+   },
+   {
+    "variant": "48~person_swap",
+    "kind": "person_swap",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.034,
+    "why": "wspólny domena docelowa: „novumfy.com” (2 mat.); tekst strony 1.00; struktura HTML 1.00; narracja (e5) 0.90; odległość treści d = 0.03"
+   },
+   {
+    "variant": "61~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.667,
+    "why": "identyczny plik (sha256); tekst kreacji (OCR) 1.00; narracja (e5) 0.00; obrazy 0.00; odległość treści d = 0.67"
+   },
+   {
+    "variant": "61~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.056,
+    "why": "identyczny plik (sha256); wspólny domena docelowa: „glowpixel.org” (2 mat.); wspólny Google Ads (AW-) ID: „AW-18463917747” (2 mat.); wspólny UUID tenanta landing-buildera: „91837506-95eb-4263-946d-73d5d4f62c73” (2 mat.); wspólny telefon: „+48768952436” (2 mat.); struktura HTML 1.00; obrazy 1.00; tekst strony 0.89; narracja (e5) 0.89; odległość treści d = 0.06"
+   },
+   {
+    "variant": "61~recompressed",
+    "kind": "recompressed",
+    "decision": "new_campaign",
+    "campaign": null,
+    "expected_campaign": 0,
+    "ok": false,
+    "soft_ok": false,
+    "p_to_source": 0.078,
+    "d_to_source": 0.922,
+    "why": "tekst kreacji (OCR) 0.23; narracja (e5) 0.00; obrazy 0.00; odległość treści d = 0.92"
+   },
+   {
+    "variant": "61~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.074,
+    "why": "wspólny Google Ads (AW-) ID: „AW-18463917747” (2 mat.); wspólny telefon: „+48768952436” (2 mat.); struktura HTML 1.00; tekst strony 0.89; narracja (e5) 0.89; odległość treści d = 0.07"
+   },
+   {
+    "variant": "61~person_swap",
+    "kind": "person_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "d_to_source": 0.059,
+    "why": "wspólny domena docelowa: „glowpixel.org” (2 mat.); wspólny Google Ads (AW-) ID: „AW-18463917747” (2 mat.); struktura HTML 1.00; tekst strony 0.92; narracja (e5) 0.90; odległość treści d = 0.06"
+   }
+  ],
+  "summary": {
+   "creative_only": {
+    "n": 8,
+    "ok": 8,
+    "soft_ok": 8,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   },
+   "landing_only": {
+    "n": 8,
+    "ok": 8,
+    "soft_ok": 8,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   },
+   "recompressed": {
+    "n": 7,
+    "ok": 1,
+    "soft_ok": 1,
+    "acc": 0.143,
+    "soft_acc": 0.143
+   },
+   "domain_swap": {
+    "n": 9,
+    "ok": 9,
+    "soft_ok": 9,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   },
+   "person_swap": {
+    "n": 5,
+    "ok": 5,
+    "soft_ok": 5,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   }
+  }
+ },
  "labels": {
   "n": 10,
   "pairwise_precision": 1.0,
@@ -197,6 +742,6 @@
   "bcubed_precision": 1.0,
   "bcubed_recall": 1.0,
   "ARI": 1.0,
-  "ARI_hdbscan_baseline": 0.352
+  "ARI_hdbscan_baseline": 0.682
  }
 }

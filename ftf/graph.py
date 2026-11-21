@@ -1,7 +1,7 @@
 """Graph representation: NetworkX (analysis), pyvis (interactive HTML in the UI) and Neo4j export.
 
 Node labels : Material, Campaign, Family, Domain, Indicator (pixel/TDS/endpoint/...), Person, Product
-Relations   : (Material)-[:LINKED {p, relation, explanation, families}]-(Material)
+Relations   : (Material)-[:LINKED {p, distance, relation, explanation}]-(Material)
               (Material)-[:IN_CAMPAIGN]->(Campaign)-[:IN_FAMILY]->(Family)
               (Material)-[:USES_DOMAIN]->(Domain), (Material)-[:HAS_INDICATOR {type}]->(Indicator)
               (Material)-[:DEPICTS {source: face|text}]->(Person), (Material)-[:PROMOTES]->(Product)
@@ -18,19 +18,17 @@ from . import config
 
 PALETTE = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#42d4f4", "#f032e6", "#bfef45", "#fabed4",
            "#469990", "#dcbeff", "#9a6324", "#800000", "#aaffc3", "#808000", "#000075", "#a9a9a9"]
-IND_TYPES_IN_GRAPH = {"fb_pixel", "ga", "gtm", "gads", "tiktok_pixel", "ym", "tenant_uuid", "form_endpoint", "api_template",
-                      "affiliate", "ad_id", "advertiser_id", "advertiser_name", "tds_host", "phone", "telegram", "wallet",
-                      "param_signature", "script_hash", "ip"}
+IND_TYPES_IN_GRAPH = set(config.IDENTIFIER_GROUP) - {"landing_domain", "page_host", "redirect_domain", "ocr_domain", "product"}
 
 
-def build_graph(items: dict, clustering: dict, profiles: list[dict], with_entities: bool = True,
-                min_p: float = config.SIMILAR_THRESHOLD) -> nx.Graph:
+def build_graph(items: dict, clustering: dict, profiles: list[dict], with_entities: bool = True) -> nx.Graph:
     G = nx.Graph()
     for ci, prof in enumerate(profiles):
         G.add_node(f"C{ci + 1}", kind="Campaign", label=f"C{ci + 1}: {prof['name'][:40]}", size=prof["size"])
-    for fi, fam in enumerate(clustering["families"]):
-        if len(fam) > 1:
-            G.add_node(f"F{fi + 1}", kind="Family", label=f"Rodzina F{fi + 1}", size=len(fam))
+    multi = {fi for fi, fam in enumerate(clustering["families"])          # families spanning >= 2 campaigns
+             if len({clustering["campaign_of"][m] for m in fam}) > 1}
+    for fi in multi:
+        G.add_node(f"F{fi + 1}", kind="Family", label=f"Rodzina F{fi + 1}", size=len(clustering["families"][fi]))
     for mid, (f, _) in items.items():
         ci = clustering["campaign_of"].get(mid, -1)
         title = (f.get("text", {}).get("titles") or [f.get("name")])[0]
@@ -39,7 +37,7 @@ def build_graph(items: dict, clustering: dict, profiles: list[dict], with_entiti
         if ci >= 0:
             G.add_edge(mid, f"C{ci + 1}", kind="IN_CAMPAIGN")
             fi = clustering["family_of"].get(mid)
-            if fi is not None and len(clustering["families"][fi]) > 1:
+            if fi in multi:
                 G.add_edge(f"C{ci + 1}", f"F{fi + 1}", kind="IN_FAMILY")
         if with_entities:
             for d in f.get("web", {}).get("landing_domains", []):
@@ -61,9 +59,9 @@ def build_graph(items: dict, clustering: dict, profiles: list[dict], with_entiti
                 G.add_node(f"product:{prod.lower()}", kind="Product", label=prod)
                 G.add_edge(mid, f"product:{prod.lower()}", kind="PROMOTES")
     for l in clustering["links"]:
-        if l.p >= min_p or l.relation == "duplicate":
-            G.add_edge(l.a, l.b, kind="LINKED", p=round(l.p, 3), relation=l.relation, explanation=l.explain(),
-                       families=json.dumps({k: round(v, 2) for k, v in l.families.items()}))
+        if l.relation != "none":
+            G.add_edge(l.a, l.b, kind="LINKED", p=round(l.p, 3), distance=round(l.distance, 3), relation=l.relation,
+                       explanation=l.explain())
     if with_entities:   # drop indicator/entity nodes connected to a single material (no linking value)
         G.remove_nodes_from([n for n, d in list(G.nodes(data=True))
                              if d.get("kind") in ("Indicator", "Domain", "Product", "Person") and G.degree(n) < 2])

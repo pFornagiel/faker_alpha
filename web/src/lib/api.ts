@@ -1,8 +1,7 @@
 // Typed client for the FakeTrace API (ftf/api.py).
 
-export type Tier = "S" | "M" | "W"
 export type Relation = "duplicate" | "same_campaign" | "similar" | "none"
-export type Decision = "duplicate" | "known_campaign" | "merge_proposal" | "candidate_review" | "new_campaign"
+export type Decision = "duplicate" | "known_campaign" | "merge_proposal" | "new_campaign"
 
 export interface CampaignRef {
   id: number
@@ -30,26 +29,28 @@ export interface MaterialSummary {
   counts: { pages: number; images: number; videos: number }
 }
 
-export interface FamilyScore {
-  family: string
-  label: string
-  tier: Tier
-  score: number
-}
+/** One piece of evidence behind a link: a shared identifier value or one content view's similarity. */
+export type Evidence =
+  | { kind: "identifier"; key: string; label: string; type: string; type_label: string; value: string; df: number; ignored: boolean }
+  | { kind: "view"; key: string; label: string; score: number; contribution: number }
 
 export interface Reason {
   detail: string
   weight: number
-  family: string
+  kind: "identifier" | "view"
+  key: string
 }
 
 export interface LinkBrief {
   a: string
   b: string
+  /** clustering similarity 1 − D: 1 when a counted identifier is shared, else 1 − distance */
   p: number
+  /** content (Gower) distance d in [0, 1] */
+  distance: number
   relation: Relation
   relation_label: string
-  families: FamilyScore[]
+  evidence: Evidence[]
   reasons: Reason[]
   comparable: boolean
   other?: MaterialSummary
@@ -60,7 +61,8 @@ export interface LinkBrief {
 export interface SharedTrace {
   type: string
   type_label: string
-  tier: Tier
+  group: string
+  group_label: string
   value: string
   display: string
   n_values: number
@@ -70,7 +72,6 @@ export interface SharedTrace {
 export interface CampaignCard extends CampaignRef {
   members: MaterialSummary[]
   scam_types: { value: string; label: string; n: number }[]
-  narratives: { value: string; label: string; n: number }[]
   products: string[]
   persons: string[]
   domains: string[]
@@ -82,6 +83,14 @@ export interface CampaignCard extends CampaignRef {
   family: number | null
 }
 
+export interface Example {
+  kind: "campaign" | "pair"
+  to: string
+  title: string
+  concept: string
+  text: string
+}
+
 export interface Overview {
   n_materials: number
   n_campaigns: number
@@ -90,8 +99,10 @@ export interface Overview {
   n_in_multi: number
   n_duplicate_groups: number
   links: Record<Relation, number>
+  /** families of similar campaigns (only those spanning 2+ campaigns) */
   families: { id: number; campaigns: number[]; refs: CampaignRef[]; size: number }[]
   campaigns: CampaignCard[]
+  examples: Example[]
 }
 
 export interface MatrixRow {
@@ -99,9 +110,10 @@ export interface MatrixRow {
   type_label: string
   values: { value: string; display: string }[]
   thumbs: string[]
-  family: string
-  family_label: string
-  tier: Tier
+  group: string
+  group_label: string
+  /** identifier that forces same campaign (false for landing-page images, which are a content view) */
+  linking: boolean
   members: string[]
 }
 
@@ -111,6 +123,7 @@ export interface ChainStep {
   a_name: string
   b_name: string
   p: number
+  distance: number
   relation: Relation
   basis: string
   reasons: string[]
@@ -122,15 +135,14 @@ export interface CampaignDetail extends CampaignCard {
   links: LinkBrief[]
   nearest_outside: (LinkBrief & { inside: string; outside_campaign: CampaignRef | null })[]
   siblings: CampaignRef[]
-  variants: string[][]
   titles: string[]
   n_pairs: number
 }
 
 export interface IndicatorGroup {
-  family: string
+  group: string
   label: string
-  tier: Tier
+  linking: boolean
   hint: string
   items: { type: string; type_label: string; values: { value: string; display: string; df: number; thumb: string | null }[]; more: number }[]
 }
@@ -139,7 +151,7 @@ export interface Features {
   summary: string | null
   llm_backend: string | null
   llm_backend_label: string | null
-  llm: { key: string; label: string; value: string | string[]; discovered?: boolean }[]
+  llm: { key: string; label: string; value: string | string[] }[]
   text: { titles: string[]; excerpt: string; keywords: string[]; amounts: string[]; brands: string[]; media: string[]; n_chars: number }
   persons: { faces: string[]; named: string[] }
   web: {
@@ -170,33 +182,39 @@ export interface MaterialDetail extends MaterialSummary {
   links: LinkBrief[]
 }
 
-export interface EvidenceItem {
-  signal: string
-  signal_label: string
-  detail: string
-  value: string
-  weight: number
-  values?: string[]
-  thumbs?: string[]
+export interface IdentifierGroupEvidence {
+  group: string
+  label: string
+  hint: string
+  items: { type: string; type_label: string; value: string; display: string; df: number; n: number; detail: string }[]
+}
+
+export interface ViewEvidence {
+  view: string
+  label: string
+  hint: string
+  available: boolean
+  score: number | null
+  contribution: number | null
+  thumbs: string[]
 }
 
 export interface Explanation {
   p: number
-  p_raw: number
+  distance: number
   relation: Relation
   relation_label: string
   relation_hint: string
   rule: string
   basis: string
-  weak_only: boolean
-  playbook: number
   comparable: boolean
-  groups: { family: string; label: string; tier: Tier; tier_label: string; hint: string; score: number; items: EvidenceItem[] }[]
-  ignored: { detail: string; signal: string; family: string }[]
-  guards: { name: string; label: string; detail: string }[]
-  strongest_operator: number
-  strongest_sm: number
-  n_independent: number
+  must_link: boolean
+  identifiers: IdentifierGroupEvidence[]
+  ignored: { detail: string; type: string; group: string; df: number }[]
+  views: ViewEvidence[]
+  n_views: number
+  formula: string
+  evidence: Evidence[]
 }
 
 export interface PairDetail extends Explanation {
@@ -218,7 +236,8 @@ export interface GraphNode {
   n_values?: number
   type?: string
   type_label?: string
-  tier?: Tier
+  group?: string
+  group_label?: string
   n?: number
 }
 
@@ -228,25 +247,37 @@ export interface GraphEdge {
   target: string
   kind: "link" | "trace"
   p?: number
+  distance?: number
   relation?: Relation
   relation_label?: string
   reasons?: Reason[]
-  families?: FamilyScore[]
+  evidence?: Evidence[]
   same_campaign_box?: boolean
+}
+
+/** link/similar/duplicate in p units (p = 1 − D); *_cut are the raw distance cuts */
+export interface Thresholds {
+  link: number
+  similar: number
+  duplicate: number
+  campaign_cut: number
+  family_cut: number
+  duplicate_cut: number
 }
 
 export interface GraphData {
   nodes: GraphNode[]
   edges: GraphEdge[]
-  thresholds: { link: number; similar: number }
+  thresholds: Thresholds
   counts: Partial<Record<Relation, number>>
 }
 
 export interface MatrixData {
   materials: { id: string; name: string; campaign: CampaignRef | null }[]
   p: (number | null)[][]
+  distance: (number | null)[][]
   relation: (Relation | null)[][]
-  thresholds: { link: number; similar: number }
+  thresholds: Thresholds
 }
 
 export interface TraceDetail {
@@ -255,13 +286,13 @@ export interface TraceDetail {
   value: string
   display: string
   thumbs: string[]
-  family: string
-  family_label: string
-  tier: Tier
-  prior: number | null
-  rarity: number
-  hub: boolean
-  weight: number | null
+  group: string
+  group_label: string
+  /** an identifier type (can force same campaign) */
+  linking: boolean
+  /** linking and df/N <= max_df */
+  counted: boolean
+  max_df: number
   df: number
   n: number
   materials: MaterialSummary[]
@@ -273,50 +304,42 @@ export interface SearchResult {
   traces: { type: string; type_label: string; value: string; display: string; n: number }[]
 }
 
-export interface Example {
-  kind: "campaign" | "pair"
-  to: string
-  title: string
-  concept: string
-  text: string
+export interface EvalSummary {
+  n: number
+  ok: number
+  soft_ok: number
+  acc: number
+  soft_acc: number
 }
 
 export interface Methodology {
-  tiers: { tier: Tier; label: string; hint: string }[]
-  families: {
-    family: string
-    label: string
-    tier: Tier
-    hint: string
-    indicators: { type: string; label: string; weight: number }[]
-    continuous: { name: string; lo: number; hi: number; max_weight: number }[]
-  }[]
-  thresholds: {
-    link: number
-    similar: number
-    duplicate: number
-    assign: number
-    candidate: number
-    weak_cap: number
-    hub_fraction: number
-    hub_min: number
-    core_s: number
-    strong_merge: number
-    single_assign: number
-    conflict: number
-    playbook: number
-    family_merge: number
+  steps: { step: number; title: string; text: string; refs: string[] }[]
+  references: { id: string; text: string; url: string }[]
+  identifier_groups: { group: string; label: string; hint: string; types: { type: string; label: string }[] }[]
+  views: { view: string; label: string; hint: string }[]
+  constants: {
+    max_df: number
+    phash_hamming: number
+    duplicate_cut: number
+    campaign_cut: number
+    family_cut: number
+    face_det_threshold: number
+    face_min_side: number
+    face_match_threshold: number
   }
-  rarity_table: { df: number; rarity: number; mult: number; hub?: boolean }[]
+  df_table: { df: number; share: number; counted: boolean }[]
+  thresholds: Thresholds
   relations: { relation: Relation; label: string; hint: string }[]
   decisions: { decision: Decision; label: string; hint: string }[]
   examples: Example[]
-  worked: (PairDetail & { item?: { label: string; value: string; prior: number; df: number; n: number; rarity: number; weight: number; family: string } }) | null
+  worked: (PairDetail & {
+    item?: { label: string; group: string; group_label: string; value: string; df: number; n: number; share: number; max_df: number }
+  }) | null
   evaluation: {
     file: string
     labels: Record<string, number> | null
-    leave_one_out: Record<string, { n: number; ok: number; soft_ok: number; acc: number; soft_acc: number }> | null
-    variants: Record<string, { n: number; ok: number; soft_ok: number; acc: number; soft_acc: number }> | null
+    leave_one_out: Record<string, EvalSummary> | null
+    variants: Record<string, EvalSummary> | null
   } | null
   n_materials: number
 }
@@ -339,16 +362,19 @@ export interface AnalysisResult {
   decision_label: string
   decision_hint: string
   campaign: CampaignRef | null
-  similar_playbook: CampaignRef | null
-  closest: (CampaignRef & { score: number }) | null
-  scores: (CampaignRef & { score: number })[]
-  links: { p: number; relation: Relation; relation_label: string; families: FamilyScore[]; other: MaterialSummary; explain: Explanation }[]
+  /** new pattern, but the nearest campaign is within the family cut */
+  similar_family: CampaignRef | null
+  /** campaign of the nearest known material (1-NN by content distance d) */
+  nearest: (CampaignRef & { distance: number; material_id: string; material_name: string }) | null
+  closest: (CampaignRef & { score: number; distance: number }) | null
+  scores: (CampaignRef & { score: number; distance: number })[]
+  links: { p: number; distance: number; relation: Relation; relation_label: string; evidence: Evidence[]; other: MaterialSummary; explain: Explanation }[]
   kept: boolean
   material_id: string
   name: string
   input: { mode: "url" | "file" | "text"; source: string; use_llm: boolean; keep: boolean; render: boolean }
   features: Features
-  thresholds: { assign: number; candidate: number; similar: number; link: number }
+  thresholds: Thresholds
 }
 
 export interface EventView {
@@ -356,6 +382,38 @@ export interface EventView {
   kind: string
   label: string
   text: string
+}
+
+/** Campaign-watch seed: a counted identifier of a known campaign used as a search term in public sources. */
+export interface WatchSeed {
+  campaign: number
+  campaign_label: string
+  group: string
+  group_label: string
+  type: string
+  type_label: string
+  value: string
+  df?: number
+  n_members?: number
+  campaign_size?: number
+  sources?: string[]
+  sources_label?: string[]
+  cert_stem?: string | null
+  note?: string | null
+  /** on a hit: the source that returned it */
+  source?: string
+  source_label?: string
+}
+
+/** Result of the normal assignment (capture -> analyse_new -> assign) of a seed hit. */
+export interface WatchOutcome {
+  decision: Decision | null
+  decision_label: string
+  campaign?: number | null
+  campaign_label?: string | null
+  confirmed: boolean
+  material?: string
+  note?: string
 }
 
 export interface ScanItem {
@@ -370,15 +428,32 @@ export interface ScanItem {
   advertiser?: string
   name?: string
   ad_id?: string
+  seed?: WatchSeed
+  outcome?: WatchOutcome
+  /** watch job result only: not seen in earlier scans */
+  new?: boolean
+}
+
+export interface WatchResult {
+  campaigns: string[]
+  seeds: WatchSeed[]
+  found: number
+  fresh: number
+  hits: ScanItem[]
+  analysed: unknown[]
+  confirmed: number
+  errors: Record<string, string>
 }
 
 export interface ScannerStatus {
   running: boolean
   next_run: string | null
-  config: { minutes: number; keywords: string[]; analyse: boolean } | null
+  config: { minutes: number; keywords: string[]; analyse: boolean; watch?: boolean } | null
   default_keywords: string[]
   meta_token: boolean
   found: ScanItem[]
+  watch_found: ScanItem[]
+  watch_last: { ts: string; campaigns: number[] | null; seeds: WatchSeed[] } | null
   events: EventView[]
 }
 

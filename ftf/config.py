@@ -1,8 +1,9 @@
-"""Central configuration: paths, model locations, evidence weights and thresholds.
+"""Central configuration: paths, model locations, extraction limits and the five linking constants.
 
-All weights are *priors* (probability that two materials sharing this signal belong to the same
-campaign when the shared value is rare). They are discounted by value rarity in `similarity.py`.
-Rationale for each weight is documented in docs/METHODOLOGY.md (sections 4-5).
+Method (docs/METHODOLOGY.md): exact shared identifiers -> must-link (Christen 2012), filtered by document
+frequency (Spärck Jones 1972); four content views -> Gower (1971) distance; average-linkage clustering
+(Müllner 2011) cut at CAMPAIGN_CUT (campaigns) and FAMILY_CUT (families); open-set assignment by nearest
+campaign mean with a rejection threshold (Bendale & Boult 2015).
 """
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ for _p in (CACHE, ARTIFACTS, EXPORTS, STORE_PATH.parent):
     _p.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------- feature extraction limits
-MAX_IMAGES_PER_MATERIAL = 40       # screenshots + keyframes + page assets considered for embeddings
+MAX_IMAGES_PER_MATERIAL = 40       # screenshots + keyframes considered per material
 MAX_VIDEO_KEYFRAMES = 8
 MIN_ASSET_BYTES = 6_000            # ignore icons/spacers when hashing page assets
 MIN_ASSET_SIDE = 120
@@ -31,92 +32,32 @@ MIN_ASSET_SIDE = 120
 LLM_BACKEND = os.environ.get("FTF_LLM", "auto")         # auto | claude_cli | gemini | none
 LLM_MODEL = os.environ.get("FTF_LLM_MODEL", "haiku")
 LLM_TIMEOUT = int(os.environ.get("FTF_LLM_TIMEOUT", "120"))
-USE_GEMMA = os.environ.get("FTF_GEMMA", "0") == "1"   # EmbeddingGemma-2 as 2nd narrative embedding
 
-# ---------------------------------------------------------------- similarity: evidence families
-# tier S = operator-level (near-certain same operator), M = kit/creative level, W = weak/context
-FAMILY_TIER = {
-    "duplicate": "S",
-    "infra_ids": "S",      # pixel / analytics / ad-account IDs, contacts, form endpoints, wallets
-    "tracking": "S",       # TDS / landing-builder tenant IDs, campaign/affiliate IDs in URLs
-    "domain": "S",         # same landing registrable domain
-    "kit": "M",            # first-party script/css names, DOM template, favicon, URL param signature
-    "assets": "M",         # identical images re-used on landing pages
-    "visual": "M",         # creative look (CLIP / DINOv2 / pHash)
-    "narrative": "M",      # text near-duplicate / semantic narrative / title template
-    "offer": "M",          # same promoted product or fake platform name
-    "persons": "W",        # same recognised person (celebrity alone is weak)
-    "concept": "W",        # LLM-derived scam type, narrative template, product
-    "advertiser": "S",     # same ad-library advertiser / page ID
-    "hosting": "W",        # same non-CDN IP / ASN
+# ---------------------------------------------------------------- linking (docs/METHODOLOGY.md)
+# A. Identifiers: a shared exact value is a must-link (deterministic record linkage, Christen 2012;
+#    shared analytics IDs reveal campaigns, Starov et al. 2018). Raw indicator type -> group.
+IDENTIFIER_GROUP = {
+    "ad_id": "ad_library", "advertiser_id": "ad_library",
+    "landing_domain": "domains", "redirect_domain": "domains", "page_host": "domains", "ocr_domain": "domains",
+    "tds_host": "domains",
+    "fb_pixel": "tracking_ids", "tiktok_pixel": "tracking_ids", "ga": "tracking_ids", "gtm": "tracking_ids",
+    "gads": "tracking_ids", "tenant_uuid": "tracking_ids", "affiliate": "tracking_ids", "adset": "tracking_ids",
+    "campaign_param": "tracking_ids",
+    "phone": "contacts", "email": "contacts", "telegram": "contacts", "whatsapp": "contacts", "wallet": "contacts",
+    "script_hash": "kit_files", "api_template": "kit_files", "form_endpoint": "kit_files", "path_template": "kit_files",
+    "product": "product",
 }
+MAX_DF = 0.5            # a shared value counts only if held by <= 50 % of materials (IDF idea, Spärck Jones 1972)
 
-# prior weight of a single shared *indicator* value (before rarity discount)
-INDICATOR_WEIGHT = {
-    "fb_pixel": 0.92, "tiktok_pixel": 0.9, "ga": 0.9, "gtm": 0.88, "gads": 0.88, "ym": 0.9,
-    "clarity": 0.88, "hotjar": 0.85, "sentry_key": 0.85, "recaptcha": 0.8, "adsense": 0.85,
-    "phone": 0.9, "email": 0.85, "telegram": 0.9, "whatsapp": 0.9, "wallet": 0.95,
-    "form_endpoint": 0.9, "form_fields": 0.35, "ad_id": 0.95, "adset": 0.85, "affiliate": 0.85, "tds_host": 0.8,
-    "tenant_uuid": 0.9, "campaign_param": 0.6, "build_id": 0.75,
-    "landing_domain": 0.9, "redirect_domain": 0.75, "page_host": 0.6,
-    "script_name": 0.55, "script_hash": 0.65, "css_name": 0.45, "favicon": 0.5,
-    "param_signature": 0.45, "path_template": 0.5, "api_template": 0.65, "ocr_domain": 0.85,
-    "asset_phash": 0.7, "advertiser_id": 0.95, "advertiser_name": 0.8,
-    "ip": 0.45, "ns_pair": 0.35, "reg_burst": 0.75, "product": 0.75, "phrase": 0.55,
-}
-INDICATOR_FAMILY = {
-    "fb_pixel": "infra_ids", "tiktok_pixel": "infra_ids", "ga": "infra_ids", "gtm": "infra_ids",
-    "gads": "infra_ids", "ym": "infra_ids", "clarity": "infra_ids", "hotjar": "infra_ids",
-    "sentry_key": "infra_ids", "recaptcha": "infra_ids", "adsense": "infra_ids",
-    "phone": "infra_ids", "email": "infra_ids", "telegram": "infra_ids", "whatsapp": "infra_ids",
-    "wallet": "infra_ids", "form_endpoint": "infra_ids", "form_fields": "kit",
-    "ad_id": "tracking", "adset": "tracking", "affiliate": "tracking", "tds_host": "tracking",
-    "tenant_uuid": "tracking", "campaign_param": "tracking", "build_id": "kit",
-    "landing_domain": "domain", "redirect_domain": "domain", "page_host": "domain",
-    "script_name": "kit", "script_hash": "kit", "css_name": "kit", "favicon": "kit",
-    "param_signature": "kit", "path_template": "kit", "api_template": "kit", "ocr_domain": "domain",
-    "asset_phash": "assets", "advertiser_id": "advertiser", "advertiser_name": "advertiser",
-    "ip": "hosting", "ns_pair": "hosting", "reg_burst": "domain", "product": "offer", "phrase": "narrative",
-}
+# B. Content views -> Gower (1971) distance d = 1 - mean(available view similarities).
+PHASH_HAMMING = 4       # two images match when their 64-bit pHashes differ in <= 4 bits (Zauner 2010)
 
-# values shared by more than this fraction of materials are treated as hubs (ignored)
-HUB_FRACTION = 0.5
-HUB_MIN_COUNT = 6
-HUB_MIN_CORPUS = 15                                                      # do not drop hubs on tiny corpora
-HUB_EXEMPT_FAMILIES = ("duplicate", "infra_ids", "tracking", "advertiser")  # S-tier operator IDs exempt when N < 30
+# C. Clustering: average linkage (UPGMA) on D (0 inside a must-link component, else d); fcluster cuts.
+DUPLICATE_CUT = 0.05    # d <= this -> duplicate
+CAMPAIGN_CUT = 0.6      # dendrogram cut -> campaigns; also the open-set rejection threshold (assign)
+FAMILY_CUT = 0.93       # dendrogram cut -> families (groups of content-similar campaigns)
 
-# continuous similarity -> evidence (piecewise linear between lo and hi, scaled by max weight)
-CONTINUOUS = {
-    #  name              (lo,   hi,   max_weight, family)
-    "text_minhash":      (0.30, 0.80, 0.85, "narrative"),
-    "masked_minhash":    (0.35, 0.80, 0.75, "narrative"),
-    "title_template":    (0.80, 0.97, 0.70, "narrative"),
-    "text_embedding":    (0.45, 0.85, 0.55, "narrative"),   # centred cosine
-    "clip":              (0.55, 0.85, 0.60, "visual"),      # centred cosine
-    "dinov2":            (0.55, 0.85, 0.55, "visual"),      # centred cosine
-    "phash":             (0.80, 0.97, 0.80, "visual"),   # 1 - hamming/64
-    "dom_template":      (0.45, 0.90, 0.60, "kit"),
-    "face_unknown":      (0.45, 0.65, 0.60, "persons"),   # same non-reference face (recurring persona)
-}
-PERSON_REF_WEIGHT = 0.30      # same *famous* person: weak alone (celebrities are hubs by nature)
-CONCEPT_WEIGHTS = {"scam_type": 0.15, "narrative_template": 0.30, "creative_format": 0.15}
-
-WEAK_ONLY_CAP = 0.45          # link probability cap when no S/M family contributed
-LINK_THRESHOLD = 0.55         # edge counts as "same campaign"
-SIMILAR_THRESHOLD = 0.30      # edge counts as "similar / same playbook"
-DUPLICATE_THRESHOLD = 0.97
-ASSIGN_THRESHOLD = 0.55       # new material -> existing campaign
-CANDIDATE_THRESHOLD = 0.40    # below this (or weak-only evidence) -> new campaign (open-set)
-
-# Engine clustering & scoring constants (single source of truth)
-CORE_S_MIN = 0.60             # cluster.build: operator-level link that forms a campaign core
-STRONG_MERGE = 0.85           # cluster.agglomerate: a single link this strong merges campaigns
-SINGLE_ASSIGN = 0.75          # cluster.assign: a single link this strong assigns a new material
-CONFLICT_FACTOR = 0.60        # similarity.pair: penalty multiplier for contradicting scam types
-PLAYBOOK_MIN = 0.45           # similarity.pair: 'similar' via playbook score
-FAMILY_MERGE = 0.40           # cluster.build: playbook families merge threshold
-
-FACE_MATCH_THRESHOLD = 0.42   # ArcFace cosine vs reference gallery
-FACE_DET_THRESHOLD = 0.6
-FACE_QUALITY_MIN = 0.22       # minimum face quality proxy for gallery ID / same-face matching
-FACE_MARGIN_MIN = 0.06        # minimum top-1 minus top-2 margin when gallery has >= 2 identities
+# ---------------------------------------------------------------- faces (SCRFD detection + ArcFace gallery match)
+FACE_DET_THRESHOLD = 0.6      # SCRFD detector score
+FACE_MIN_SIDE = 48            # px; smaller faces are not embedded
+FACE_MATCH_THRESHOLD = 0.42   # ArcFace cosine vs reference gallery (top-1)

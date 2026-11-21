@@ -43,7 +43,7 @@ def _load_readonly_store(path: Path) -> dict[str, tuple[dict, dict]]:
 
 def _leave_one_out(items: dict[str, tuple[dict, dict]]) -> list[dict]:
     full = cluster.build(items)
-    ok_decisions = {"known_campaign", "duplicate", "merge_proposal"}
+    ok_decisions = {"known_campaign", "duplicate"}
     rows = []
     for mid in items:
         rest = {k: v for k, v in items.items() if k != mid}
@@ -156,12 +156,19 @@ class TestRealDataRegression(unittest.TestCase):
         self.assertEqual(len(loo), 10)
         self.assertEqual(sum(r["ok"] for r in loo), 10, f"LOO failures: {[r for r in loo if not r['ok']]}")
 
-        # Subset {1, 2, 48, 61} (N=4) clusters into 1 single campaign
+        # Subset {1, 2, 48, 61} + 4 unrelated cases (N=8): the backend API template held by 4/8 = MAX_DF still counts,
+        # so the four materials form one campaign. (With N=4 the same value is held by every material -> df filter drops it.)
         subset_ids = {name2id[k] for k in ("1", "2", "48", "61")}
-        subset_items = {k: v for k, v in items.items() if k in subset_ids}
+        subset_items = {k: v for k, v in items.items() if k in subset_ids or items[k][0]["name"] in ("5", "10", "14", "36")}
         sub_cl = cluster.build(subset_items)
-        self.assertEqual(len(sub_cl["campaigns"]), 1)
+        self.assertEqual(len(sub_cl["campaigns"]), 5)
         self.assertEqual(set(sub_cl["campaigns"][0]), subset_ids)
+
+        # Every different-campaign pair stays below the family cut except the two health-product singletons 14 & 47
+        name = {m: f["name"] for m, (f, _) in items.items()}
+        cross = [l for l in cl["links"] if gold[l.a] != gold[l.b] and l.relation != "none"]
+        self.assertEqual({frozenset((name[l.a], name[l.b])) for l in cross}, {frozenset(("14", "47"))})
+        self.assertTrue(all(not l.must_link for l in cross))
 
     @unittest.skipUnless(ORGANIZER_DIR.exists(), "organiser dataset not present")
     def test_04_end_to_end_offline_pipeline_case_14_and_48(self):

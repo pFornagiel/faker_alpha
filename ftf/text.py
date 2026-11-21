@@ -1,5 +1,6 @@
-"""Text / narrative features (Polish): normalisation, MinHash near-duplicate signatures (raw and
-entity-masked), multilingual-e5-small embeddings (ONNX int8), YAKE keywords, money amounts."""
+"""Text features (Polish): normalisation, MinHash signatures of word 4-gram shingles (Broder 1997) on
+entity-masked text, multilingual-e5-small embeddings (ONNX int8; Wang et al. 2024) and, for display only,
+YAKE keywords (Campos et al. 2020) and money amounts."""
 from __future__ import annotations
 
 import re
@@ -58,23 +59,6 @@ def jaccard_sig(a: list[int] | None, b: list[int] | None) -> float | None:
         return None
     a, b = np.asarray(a), np.asarray(b)
     return float(np.mean(a == b))
-
-
-def title_template(title: str) -> str:
-    """Title with person names and numbers masked: 'pilne brutalna napasc na <per> tuz po publikacji ...'"""
-    t = mask_entities(title or "")
-    t = re.sub(r"\d+", "<n>", t)
-    t = re.sub(r"[^\w<>\s]", " ", t)
-    t = re.sub(r"\b(gazeta pl|tvn24|onet|wp pl|interia|polsat news|fakt|wprost)\b", " <media> ", t)
-    return re.sub(r"\s+", " ", t).strip()
-
-
-def char_ngram_sim(a: str, b: str, n: int = 3) -> float:
-    if not a or not b:
-        return 0.0
-    A = {a[i:i + n] for i in range(len(a) - n + 1)}
-    B = {b[i:i + n] for i in range(len(b) - n + 1)}
-    return len(A & B) / max(1, len(A | B))
 
 
 # ----------------------------------------------------------------------------- e5 embeddings

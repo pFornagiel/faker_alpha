@@ -1,6 +1,6 @@
-"""Visual features: perceptual hashes, CLIP (ad look) and DINOv2 (layout/template) embeddings,
-OCR (RapidOCR, Polish-capable PP-OCRv6), QR decoding, URL extraction and video keyframes.
-CPU-only ONNX; models are loaded lazily and cached."""
+"""Visual preprocessing: perceptual hash (pHash, Zauner 2010), creative cropping, OCR (RapidOCR,
+Polish-capable PP-OCRv6), QR decoding, URL extraction and video keyframes. `_session` is the shared
+CPU-only ONNX loader used by the e5 text embedder and the face models."""
 from __future__ import annotations
 
 import hashlib
@@ -114,7 +114,7 @@ def creative_crop(im: Image.Image, min_frac: float = 0.15, min_area_frac: float 
     return im.crop((x0, int(y0), x1 + 1, int(y1) + 1))
 
 
-# ----------------------------------------------------------------------------- ONNX embedders
+# ----------------------------------------------------------------------------- ONNX runtime
 @lru_cache(maxsize=None)
 def _session(path: str):
     import onnxruntime as ort
@@ -123,43 +123,6 @@ def _session(path: str):
     so.intra_op_num_threads = 4
     so.log_severity_level = 3
     return ort.InferenceSession(path, so, providers=["CPUExecutionProvider"])
-
-
-def _square_pad(im: Image.Image, fill=(255, 255, 255)) -> Image.Image:
-    w, h = im.size
-    s = max(w, h)
-    canvas = Image.new("RGB", (s, s), fill)
-    canvas.paste(im, ((s - w) // 2, (s - h) // 2))
-    return canvas
-
-
-def _prep(im: Image.Image, mean, std, size=224) -> np.ndarray:
-    im = _square_pad(im).resize((size, size), Image.BICUBIC)
-    a = np.asarray(im, dtype=np.float32) / 255.0
-    a = (a - np.array(mean, np.float32)) / np.array(std, np.float32)
-    return a.transpose(2, 0, 1)[None]
-
-
-def clip_embed(im: Image.Image) -> np.ndarray | None:
-    p = config.MODELS / "clip" / "vision_model.onnx"
-    if not p.exists():
-        return None
-    x = _prep(im, (0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
-    v = _session(str(p)).run(["image_embeds"], {"pixel_values": x})[0][0]
-    return (v / (np.linalg.norm(v) + 1e-9)).astype(np.float32)
-
-
-def dino_embed(im: Image.Image) -> np.ndarray | None:
-    p = config.MODELS / "dinov2" / "model.onnx"
-    if not p.exists():
-        return None
-    x = _prep(im, (0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-    h = _session(str(p)).run(["last_hidden_state"], {"pixel_values": x})[0][0]
-    cls_tok = h[0] / (np.linalg.norm(h[0]) + 1e-9)
-    patch_tok = h[1:].mean(0)
-    patch_tok = patch_tok / (np.linalg.norm(patch_tok) + 1e-9)
-    v = np.concatenate([cls_tok, patch_tok])
-    return (v / (np.linalg.norm(v) + 1e-9)).astype(np.float32)
 
 
 # ----------------------------------------------------------------------------- OCR / QR / URLs

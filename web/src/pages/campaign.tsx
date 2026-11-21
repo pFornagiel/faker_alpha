@@ -1,14 +1,20 @@
-import { ArrowRight, Check, Network } from "lucide-react"
+import { useMutation } from "@tanstack/react-query"
+import { ArrowRight, Check, Network, Radar } from "lucide-react"
+import { useState } from "react"
 import { Link, useParams } from "react-router"
 
-import type { CampaignDetail, MaterialSummary, MatrixRow } from "@/lib/api"
-import { fmtP, P_LINK, plural, useApi } from "@/lib/format"
+import { api, type CampaignDetail, type Job, type MaterialSummary, type MatrixRow, type WatchResult, type WatchSeed } from "@/lib/api"
+import { CAMPAIGN_CUT, FAMILY_CUT, fmtP, plural, useApi } from "@/lib/format"
 import {
-  CampaignBadge, CampaignDot, Chips, ErrorState, HelpTip, KV, Loading, PageHeader, RelationBadge, Section, Strength, StrengthLegend,
-  Thumb, TierBadge, traceHref,
+  CampaignBadge, CampaignDot, Chips, ErrorState, GroupBadge, HelpTip, KV, Loading, PageHeader, RelationBadge, Section, Strength, StrengthLegend,
+  Thumb, traceHref,
 } from "@/components/common"
+import { JobProgress, useJob } from "@/components/job"
+import { SeedList, WATCH_HINT, WatchHits } from "@/components/watch"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -33,8 +39,8 @@ export default function CampaignPage() {
         }
         description={
           single
-            ? "Kampania jednomateriałowa: materiał nie dzieli śladów operatora z żadnym innym materiałem w bazie, więc tworzy osobną kampanię (nowy wzorzec)."
-            : `${plural(c.size, "materiał", "materiały", "materiałów")} połączonych ${c.n_shared} wspólnymi wartościami (${c.n_shared_kinds} rodzajów śladów). Poniżej: jak materiały dołączyły do kampanii, który ślad łączy które materiały i jak silne jest każde powiązanie.`
+            ? "Kampania jednomateriałowa: materiał nie ma wspólnego identyfikatora ani bliskiej treści z żadnym innym materiałem w bazie, więc tworzy osobną kampanię (nowy wzorzec)."
+            : `${plural(c.size, "materiał", "materiały", "materiałów")} połączonych ${c.n_shared} wspólnymi wartościami (${c.n_shared_kinds} rodzajów śladów). Poniżej: jak materiały dołączyły do kampanii, który ślad łączy które materiały i jak blisko są poszczególne pary.`
         }
         actions={
           <Button asChild variant="outline" size="sm">
@@ -47,13 +53,12 @@ export default function CampaignPage() {
         <CardContent>
           <dl className="grid gap-x-8 md:grid-cols-2">
             <KV label="Typ oszustwa"><Chips values={c.scam_types.map((s) => s.label)} /></KV>
-            <KV label="Szablon narracji"><Chips values={c.narratives.map((s) => s.label)} /></KV>
             <KV label="Produkty / platformy"><Chips values={c.products} /></KV>
             <KV label="Domeny docelowe"><Chips values={c.domains} max={6} /></KV>
             <KV label="Wykorzystane osoby"><Chips values={c.persons} max={8} /></KV>
             <KV label="Okres aktywności">{c.date_range.length ? `${c.date_range[0]} → ${c.date_range[1]}` : "brak dat w materiałach"}</KV>
             {!single && c.mean_internal_p !== null && (
-              <KV label="Średnia siła powiązań" hint="Średnie p wszystkich par materiałów w kampanii. Niska średnia przy wysokich pojedynczych p oznacza kampanię spiętą przez kilka materiałów-łączników.">
+              <KV label="Średnia bliskość par" hint="Średnie p = 1 − D wszystkich par materiałów w kampanii (p = 1 przy wspólnym identyfikatorze). Niska średnia oznacza kampanię spiętą przez kilka materiałów-łączników.">
                 {fmtP(c.mean_internal_p)} <span className="text-muted-foreground">({plural(c.n_pairs, "para", "pary", "par")})</span>
               </KV>
             )}
@@ -61,10 +66,12 @@ export default function CampaignPage() {
         </CardContent>
       </Card>
 
+      <CampaignWatch ci={c.id} />
+
       {!single && (
         <Section
           title="Jak materiały trafiły do kampanii"
-          description="Najsilniejsze powiązania, które razem spinają wszystkie materiały kampanii. Każdy krok podaje rodzaj dowodu i najważniejsze wspólne ślady."
+          description="Najsilniejsze powiązania, które razem spinają wszystkie materiały kampanii. Każdy krok podaje podstawę (wspólny identyfikator albo bliska treść) i najważniejsze dowody."
         >
           <ol className="space-y-4">
             {c.chain.map((s, i) => (
@@ -73,9 +80,10 @@ export default function CampaignPage() {
                 <div className="space-y-1">
                   <div className="font-medium">mat. {s.a_name} ↔ mat. {s.b_name}</div>
                   <Strength p={s.p} className="max-w-44" />
+                  <div className="text-xs text-muted-foreground tabular">odległość treści d = {fmtP(s.distance)}</div>
                 </div>
                 <div className="min-w-0 space-y-1 text-sm">
-                  <Badge variant={s.basis === "ślad operatora" ? "default" : "secondary"}>{s.basis}</Badge>
+                  <Badge variant={s.basis === "wspólny identyfikator" || s.basis === "duplikat" ? "default" : "secondary"}>{s.basis}</Badge>
                   <ul className="text-muted-foreground">
                     {s.reasons.map((r) => <li key={r} className="break-words">{r}</li>)}
                   </ul>
@@ -89,23 +97,9 @@ export default function CampaignPage() {
         </Section>
       )}
 
-      <Section
-        title="Materiały w kampanii"
-        description={c.variants.length > 1 ? "Pogrupowane w warianty przekazu: ten sam tekst lub ta sama kreacja w obrębie kampanii." : undefined}
-      >
-        <div className="space-y-4">
-          {(c.variants.length ? c.variants : [c.members.map((m) => m.id)]).map((g, gi) => (
-            <div key={gi} className="space-y-2">
-              {c.variants.length > 1 && (
-                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  Wariant {String.fromCharCode(65 + gi)} · {g.length === 1 ? "unikalny przekaz" : `ten sam przekaz w ${g.length} materiałach`}
-                </p>
-              )}
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {g.map((mid) => byId.get(mid)).filter(Boolean).map((m) => <MemberCard key={m!.id} m={m!} />)}
-              </div>
-            </div>
-          ))}
+      <Section title="Materiały w kampanii">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {c.members.map((m) => <MemberCard key={m.id} m={m} />)}
         </div>
       </Section>
 
@@ -114,7 +108,7 @@ export default function CampaignPage() {
       {!single && (
         <Section
           title="Wszystkie pary materiałów w kampanii"
-          description="Para może mieć niskie p, a i tak należeć do kampanii — łączą ją inne materiały (np. A↔B przez wspólny piksel, B↔C przez wspólną domenę)."
+          description="Para może nie mieć bezpośredniego powiązania, a i tak należeć do kampanii — łączą ją inne materiały (np. A↔B przez wspólny piksel, B↔C przez wspólną domenę)."
           aside={<StrengthLegend />}
         >
           <ul className="divide-y">
@@ -123,7 +117,7 @@ export default function CampaignPage() {
                 <span className="font-medium">mat. {byId.get(l.a)?.name} ↔ {byId.get(l.b)?.name}</span>
                 <Strength p={l.p} />
                 <span className="min-w-0 text-sm text-muted-foreground md:truncate" title={l.reasons.map((r) => r.detail).join("\n")}>
-                  {l.reasons[0]?.detail ?? "brak bezpośrednich wspólnych śladów"}
+                  {l.reasons[0]?.detail ?? "brak bezpośrednich dowodów"}
                 </span>
                 <span className="flex items-center gap-2">
                   <RelationBadge relation={l.relation} />
@@ -139,7 +133,7 @@ export default function CampaignPage() {
 
       <Section
         title="Najbliższe materiały spoza kampanii"
-        description={`Dlaczego nie zostały dołączone: do kampanii potrzeba p ≥ ${P_LINK} oraz śladu operatora albo kilku niezależnych śladów kit/treść. Wspólna osoba czy typ oszustwa to za mało.`}
+        description={`Dlaczego nie zostały dołączone: do kampanii potrzeba wspólnego identyfikatora albo średniej odległości treści do jej materiałów d ≤ ${CAMPAIGN_CUT}. Wspólna osoba czy typ oszustwa to za mało.`}
         aside={<StrengthLegend />}
       >
         {c.nearest_outside.length ? (
@@ -155,7 +149,7 @@ export default function CampaignPage() {
                   </span>
                   <Strength p={l.p} />
                   <span className="min-w-0 text-sm text-muted-foreground md:truncate" title={l.reasons.map((r) => r.detail).join("\n")}>
-                    {l.reasons.map((r) => r.detail).join(" · ") || "brak wspólnych śladów"}
+                    {l.reasons.map((r) => r.detail).join(" · ") || "brak wspólnych śladów"} <span className="tabular">(d = {fmtP(l.distance)})</span>
                   </span>
                   <span className="flex items-center gap-2">
                     <RelationBadge relation={l.relation} />
@@ -168,14 +162,14 @@ export default function CampaignPage() {
             })}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Brak materiałów z jakimkolwiek istotnym podobieństwem (p ≥ 0.15).</p>
+          <p className="text-sm text-muted-foreground">Brak materiałów spoza kampanii o podobnej treści (d ≤ {FAMILY_CUT}).</p>
         )}
       </Section>
 
       {c.siblings.length > 0 && (
         <Section
-          title={<span className="flex items-center gap-1">Podobny playbook (ta sama rodzina) <HelpTip label="Co to jest rodzina">Rodzina = kampanie połączone wyłącznie narracją, koncepcją, wizualiami lub osobami. To ten sam „przepis na oszustwo”, ale bez dowodu, że stoi za nim ten sam operator — dlatego są to osobne kampanie.</HelpTip></span>}
-          description="Kampanie o podobnym schemacie oszustwa, bez wspólnej infrastruktury."
+          title={<span className="flex items-center gap-1">Podobna treść (ta sama rodzina) <HelpTip label="Co to jest rodzina">Rodzina = kampanie, które łączą się na wyższym cięciu tego samego dendrogramu (d ≤ {FAMILY_CUT}): podobna treść, ale bez wspólnego identyfikatora — dlatego są to osobne kampanie.</HelpTip></span>}
+          description="Kampanie o podobnej treści, bez wspólnego identyfikatora."
         >
           <div className="flex flex-wrap gap-2">
             {c.siblings.map((s) => (
@@ -246,7 +240,7 @@ function EvidenceMatrix({ c, byId }: { c: CampaignDetail; byId: Map<string, Mate
   return (
     <Section
       title="Który ślad łączy które materiały"
-      description="Każdy wiersz to rodzaj śladu z wartością występującą w co najmniej dwóch materiałach kampanii. Ślady operatora (najmocniejsze) są na górze. Kliknij wartość, by zobaczyć wszystkie materiały, które ją zawierają."
+      description="Każdy wiersz to rodzaj śladu z wartością występującą w co najmniej dwóch materiałach kampanii. Identyfikatory (łączą materiały) są na górze; obrazy ze stron docelowych to widok treści. Kliknij wartość, by zobaczyć wszystkie materiały, które ją zawierają."
       contentClassName="px-0"
     >
       {/* desktop: matrix */}
@@ -254,7 +248,7 @@ function EvidenceMatrix({ c, byId }: { c: CampaignDetail; byId: Map<string, Mate
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-28 pl-4">Siła śladu</TableHead>
+              <TableHead className="w-40 pl-4">Rodzaj śladu</TableHead>
               <TableHead>Wspólny ślad</TableHead>
               {c.members.map((m) => (
                 <TableHead key={m.id} className="w-14 text-center">
@@ -266,7 +260,7 @@ function EvidenceMatrix({ c, byId }: { c: CampaignDetail; byId: Map<string, Mate
           <TableBody>
             {c.matrix.map((r) => (
               <TableRow key={`${r.type}:${r.members.join()}:${r.values[0].value}`}>
-                <TableCell className="pl-4"><TierBadge tier={r.tier} /></TableCell>
+                <TableCell className="pl-4"><GroupBadge label={r.group_label} linking={r.linking} /></TableCell>
                 <TableCell className="max-w-md space-y-1">
                   <div className="text-xs text-muted-foreground">
                     {r.type_label}{r.values.length > 1 && <span className="font-medium text-foreground"> ×{r.values.length}</span>}
@@ -288,7 +282,7 @@ function EvidenceMatrix({ c, byId }: { c: CampaignDetail; byId: Map<string, Mate
         {c.matrix.map((r) => (
           <li key={`${r.type}:${r.members.join()}:${r.values[0].value}`} className="space-y-1.5 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <TierBadge tier={r.tier} />
+              <GroupBadge label={r.group_label} linking={r.linking} />
               <span className="text-xs text-muted-foreground">{r.type_label}{r.values.length > 1 && ` ×${r.values.length}`}</span>
             </div>
             <TraceValue r={r} />
@@ -296,6 +290,54 @@ function EvidenceMatrix({ c, byId }: { c: CampaignDetail; byId: Map<string, Mate
           </li>
         ))}
       </ul>
+    </Section>
+  )
+}
+
+function CampaignWatch({ ci }: { ci: number }) {
+  const [analyse, setAnalyse] = useState(false)
+  const [jobId, setJobId] = useState<string | null>(null)
+  const job = useJob<WatchResult>(jobId)
+  const seeds = useApi<{ seeds: WatchSeed[] }>(`/api/scanner/seeds?campaign=${ci}`)
+  const run = useMutation({
+    mutationFn: () => api.post<Job>("/api/scanner/watch", { campaign: ci, analyse }),
+    onSuccess: (j) => setJobId(j.id),
+  })
+  const busy = run.isPending || job.data?.status === "running" || job.data?.status === "queued"
+  const res = job.data?.status === "done" ? job.data.result : null
+  const list = res?.seeds ?? seeds.data?.seeds ?? []
+  return (
+    <Section
+      title={<span className="flex items-center gap-1">Nowe materiały tej kampanii w źródłach publicznych <HelpTip label="Jak to działa">{WATCH_HINT}</HelpTip></span>}
+      description="Identyfikatory kampanii użyte jako hasła w bibliotekach reklam i na liście ostrzeżeń CERT Polska. Trafienie to trop, nie powiązanie."
+    >
+      <div className="space-y-4">
+        <div>
+          <p className="mb-2 text-sm font-medium">{res ? "Użyte ziarna" : "Ziarna wyszukiwania"}</p>
+          {seeds.isLoading ? <Loading /> : <SeedList seeds={list} showCampaign={false} />}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Button variant="outline" onClick={() => run.mutate()} disabled={busy || !list.length}>
+            <Radar /> {busy ? "Szukam…" : "Szukaj nowych materiałów tej kampanii"}
+          </Button>
+          <div className="flex items-start gap-2">
+            <Checkbox id={`wan-${ci}`} checked={analyse} onCheckedChange={(v) => setAnalyse(v === true)} className="mt-0.5" />
+            <Label htmlFor={`wan-${ci}`} className="leading-snug font-normal">od razu przeanalizuj nowe trafienia (do 5, zapis w bazie)</Label>
+          </div>
+        </div>
+        {jobId && <JobProgress job={job.data} error={job.error} />}
+        {res && (
+          <div className="space-y-2">
+            <p className="text-sm">
+              Znaleziono {res.found}, nowych <span className="font-medium">{res.fresh}</span>
+              {res.analysed.length > 0 && <>, przeanalizowano {res.analysed.length}, potwierdzono <span className="font-medium">{res.confirmed}</span></>}.
+              {Object.keys(res.errors).length > 0 && <span className="text-muted-foreground"> Niedostępne: {Object.keys(res.errors).slice(0, 4).join(", ")}{Object.keys(res.errors).length > 4 ? "…" : ""}.</span>}
+              {" "}<Link to="/scanner" className="underline-offset-4 hover:underline">Wszystkie tropy w skanerze</Link>
+            </p>
+            {res.hits.length ? <WatchHits items={res.hits} showSeedCampaign={false} /> : <p className="text-sm text-muted-foreground">Źródła nie zwróciły żadnych pozycji dla tych ziaren.</p>}
+          </div>
+        )}
+      </div>
     </Section>
   )
 }

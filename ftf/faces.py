@@ -2,15 +2,15 @@
 
 Implemented directly on onnxruntime (no `insightface` package / Cython build needed).
 Model weights: InsightFace buffalo_l — non-commercial research licence (fine for the hackathon POC).
-Face quality: we gate matches by a simple quality proxy (detector score x face size x sharpness),
-in the spirit of MagFace/eDifFIQA suggested by the organisers.
+A face is used when the SCRFD detector score >= config.FACE_DET_THRESHOLD (Guo et al. 2021) and its side
+>= config.FACE_MIN_SIDE px; it is named when the ArcFace cosine (Deng et al. 2019) to the nearest reference
+identity >= config.FACE_MATCH_THRESHOLD. Persons are descriptive only (never used for linking).
 """
 from __future__ import annotations
 
 import json
 import logging
 from functools import lru_cache
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -139,7 +139,7 @@ def embed(img_bgr: np.ndarray, kps: np.ndarray) -> tuple[np.ndarray, np.ndarray]
     return (v / (np.linalg.norm(v) + 1e-9)).astype(np.float32), crop
 
 
-def faces_in_image(im: Image.Image, min_side: int = 36) -> list[dict]:
+def faces_in_image(im: Image.Image, min_side: int = config.FACE_MIN_SIDE) -> list[dict]:
     bgr = cv2.cvtColor(np.asarray(im), cv2.COLOR_RGB2BGR)
     H, W = bgr.shape[:2]
     out = []
@@ -152,14 +152,11 @@ def faces_in_image(im: Image.Image, min_side: int = 36) -> list[dict]:
         if r is None:
             continue
         vec, crop = r
-        sharp = float(cv2.Laplacian(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var())
-        quality = float(np.clip(score, 0, 1) * np.clip(side / 112, 0.2, 1.0) * np.clip(sharp / 150, 0.3, 1.0))
         out.append({
             "box": [float(v) for v in box],
             "box_rel": [float(x0 / W), float(y0 / H), float(x1 / W), float(y1 / H)],
             "det_score": round(score, 3),
             "side": round(float(side), 1),
-            "quality": round(quality, 3),
             "embedding": vec,
             "crop": crop,
         })
@@ -212,25 +209,12 @@ def gallery() -> tuple[list[str], np.ndarray, dict]:
     return names, arr, meta
 
 
-def identify(
-    vec: np.ndarray,
-    quality: float = 1.0,
-    thresh: float = config.FACE_MATCH_THRESHOLD,
-    margin: float = config.FACE_MARGIN_MIN,
-) -> tuple[str | None, float]:
-    """Identify a face embedding against the reference gallery with quality and top-1/top-2 margin guards."""
-    if quality < config.FACE_QUALITY_MIN:
-        return None, 0.0
+def identify(vec: np.ndarray, thresh: float = config.FACE_MATCH_THRESHOLD) -> tuple[str | None, float]:
+    """Nearest reference identity by ArcFace cosine; named only when the cosine >= thresh."""
     names, vecs, _ = gallery()
     if len(names) == 0:
         return None, 0.0
     sims = vecs @ vec
-    if len(names) == 1:
-        best = float(sims[0])
-        return (names[0] if best >= thresh else None), best
-    order = np.argsort(sims)[::-1]
-    best = float(sims[order[0]])
-    second = float(sims[order[1]])
-    if best >= thresh and (best - second) >= margin:
-        return names[int(order[0])], best
-    return None, best
+    i = int(np.argmax(sims))
+    best = float(sims[i])
+    return (names[i] if best >= thresh else None), best
