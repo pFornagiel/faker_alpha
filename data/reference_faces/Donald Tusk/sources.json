@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/22/Donald_Tusk_KPRM_HQ.jpg/960px-Donald_Tusk_KPRM_HQ.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Donald_Tusk",
+  "file": "Donald_Tusk_KPRM_HQ.jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/aa/Donald_Tusk_EPP_Summit_2023.png/960px-Donald_Tusk_EPP_Summit_2023.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.76,
+  "file": "File:Donald Tusk EPP Summit 2023.png",
+  "licence": "CC BY 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external free\" href=\"https://www.flickr.com/people/45198836@N04\">https://www.flickr.com/people/45198836@N04</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Prime_Minister_Donald_Tusk_of_Poland_in_the_Oval_Office_in_2024_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.751,
+  "file": "File:Prime Minister Donald Tusk of Poland in the Oval Office in 2024 (cropped).jpg",
+  "licence": "Public domain",
+  "author": "The White House"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/2/2a/Premier_Donald_Tusk_KPRM.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.958,
+  "file": "File:Premier Donald Tusk KPRM.jpg",
+  "licence": "CC BY 3.0 pl",
+  "author": "The Chancellery of the Prime Minister of the Republic of Poland"
+ }
+]

@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a0/2017_Woodstock_250_Piotr_Kra%C5%9Bko.jpg/960px-2017_Woodstock_250_Piotr_Kra%C5%9Bko.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Piotr_Kraśko",
+  "file": "2017_Woodstock_250_Piotr_Kraśko.jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a0/2017_Woodstock_250_Piotr_Kra%C5%9Bko.jpg/960px-2017_Woodstock_250_Piotr_Kra%C5%9Bko.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:2017 Woodstock 250 Piotr Kraśko.jpg",
+  "licence": "CC BY 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Sicherlich\" title=\"User:Sicherlich\">Ralf Lotys</a> (Sicherlich)"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/56/2017_Woodstock_252_Piotr_Kra%C5%9Bko.jpg/960px-2017_Woodstock_252_Piotr_Kra%C5%9Bko.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.734,
+  "file": "File:2017 Woodstock 252 Piotr Kraśko.jpg",
+  "licence": "CC BY 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Sicherlich\" title=\"User:Sicherlich\">Ralf Lotys</a> (Sicherlich)"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4b/Piotr_Kra%C5%9Bko_2_%2834673116082%29.jpg/960px-Piotr_Kra%C5%9Bko_2_%2834673116082%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.735,
+  "file": "File:Piotr Kraśko 2 (34673116082).jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Fryta 73</a>"
+ }
+]

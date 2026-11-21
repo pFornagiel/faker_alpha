@@ -1,0 +1,650 @@
+{
+ "leave_one_out": {
+  "rows": [
+   {
+    "material": "1",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.15,
+      3
+     ]
+    ]
+   },
+   {
+    "material": "10",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.151,
+      0
+     ],
+     [
+      0.0,
+      4
+     ]
+    ]
+   },
+   {
+    "material": "14",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.405,
+      1
+     ],
+     [
+      0.405,
+      2
+     ]
+    ]
+   },
+   {
+    "material": "2",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.151,
+      5
+     ]
+    ]
+   },
+   {
+    "material": "3",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.151,
+      5
+     ]
+    ]
+   },
+   {
+    "material": "36",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.228,
+      0
+     ],
+     [
+      0.11,
+      3
+     ]
+    ]
+   },
+   {
+    "material": "47",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.405,
+      3
+     ],
+     [
+      0.405,
+      1
+     ]
+    ]
+   },
+   {
+    "material": "48",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.15,
+      3
+     ]
+    ]
+   },
+   {
+    "material": "5",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.405,
+      3
+     ],
+     [
+      0.405,
+      1
+     ]
+    ]
+   },
+   {
+    "material": "61",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.306,
+      3
+     ]
+    ]
+   }
+  ],
+  "summary": {
+   "known_campaign": {
+    "n": 5,
+    "ok": 5,
+    "soft_ok": 5,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   },
+   "new_campaign": {
+    "n": 5,
+    "ok": 5,
+    "soft_ok": 5,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   }
+  }
+ },
+ "variants": {
+  "rows": [
+   {
+    "variant": "1~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; tekst prawie identyczny (MinHash): 1.00 [+0.85]; wspólny nazwa reklamodawcy: „formal favorable” (2/11) [+0.80]; prawie identyczny obraz (pHash): 1.00 [+0.80]"
+   },
+   {
+    "variant": "1~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; ta sama treść i ta sama domena (near-duplicate) [+0.97]; wspólny endpoint formularza/API: „civicdaybook.live/api/v1/agent/persist-session-record/{id}/{” (2/11) [+0.90]; wspólny endpoint formularza/API: „civicdaybook.live/api/v1/trigger/field/{id}/” (2/11) [+0.90]"
+   },
+   {
+    "variant": "1~recompressed",
+    "kind": "recompressed",
+    "decision": "candidate_review",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": false,
+    "soft_ok": true,
+    "p_to_source": 0.589,
+    "why": "ten sam kadr/zdjęcie twarzy (ArcFace cos=0.82) [+0.45]; rozpoznana twarz: Rafał Brzoska (w obu) [+0.25]"
+   },
+   {
+    "variant": "1~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "tekst prawie identyczny (MinHash): 1.00 [+0.85]; ten sam szablon tekstu po zamaskowaniu osób: 1.00 [+0.75]; ten sam szablon tytułu: 1.00 [+0.70]; wspólny nazwa produktu/platformy: „switowin zyskarnia” (3/11) [+0.63]"
+   },
+   {
+    "variant": "1~person_swap",
+    "kind": "person_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny domena docelowa: „civicdaybook.live” (2/11) [+0.90]; tekst prawie identyczny (MinHash): 0.91 [+0.85]; wspólny seria rejestracji (rejestrator+NS+dzień): „Dynadot Inc|ns1.dyna-ns.net+ns2.dyna-ns.net|2026-10-08” (2/11) [+0.75]; ten sam szablon tekstu po zamaskowaniu osób: 1.00 [+0.75]"
+   },
+   {
+    "variant": "10~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 5,
+    "expected_campaign": 5,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×6 [+0.99]; wspólny ID reklamy/kampanii Meta: „library=4414624315417273” (2/11) [+0.95]; wspólny domena widoczna na kreacji: „amazon.com” (2/11) [+0.85]; wspólny domena widoczna na kreacji: „shop-77vault.xyz” (2/11) [+0.85]"
+   },
+   {
+    "variant": "10~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 5,
+    "expected_campaign": 5,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; ta sama treść i ta sama domena (near-duplicate) [+0.97]; wspólny Facebook Pixel: „1376242401352160” (2/11) [+0.92]; wspólny Facebook Pixel: „1549107073347817” (2/11) [+0.92]"
+   },
+   {
+    "variant": "10~recompressed",
+    "kind": "recompressed",
+    "decision": "known_campaign",
+    "campaign": 5,
+    "expected_campaign": 5,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny ID reklamy/kampanii Meta: „library=4414624315417273” (2/11) [+0.95]; wspólny domena widoczna na kreacji: „amazon.com” (2/11) [+0.85]; wspólny nazwa reklamodawcy: „sweet bonanza” (2/11) [+0.80]; wspólny nazwa produktu/platformy: „sweet bonanza” (2/11) [+0.75]"
+   },
+   {
+    "variant": "10~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 5,
+    "expected_campaign": 5,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny Facebook Pixel: „1376242401352160” (2/11) [+0.92]; wspólny Facebook Pixel: „1549107073347817” (2/11) [+0.92]; wspólny Facebook Pixel: „2070071404384324” (2/11) [+0.92]; wspólny UUID tenanta landing-buildera: „2bcae51f-3bb5-4567-887b-a59d05d19641” (2/11) [+0.90]"
+   },
+   {
+    "variant": "14~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 4,
+    "expected_campaign": 4,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×11 [+0.99]; wspólny ID reklamy/kampanii Meta: „library=2186769435230928” (2/11) [+0.95]; wspólny domena widoczna na kreacji: „fb.me” (2/11) [+0.85]; wspólny domena widoczna na kreacji: „ineptsolidoval.top” (2/11) [+0.85]"
+   },
+   {
+    "variant": "14~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 4,
+    "expected_campaign": 4,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×2 [+0.99]; ta sama treść i ta sama domena (near-duplicate) [+0.97]; wspólny ID reklamy/kampanii Meta: „ad_id=120250558396250564” (2/11) [+0.95]; wspólny Facebook Pixel: „pxl=1071875908635809” (2/11) [+0.92]"
+   },
+   {
+    "variant": "14~recompressed",
+    "kind": "recompressed",
+    "decision": "known_campaign",
+    "campaign": 4,
+    "expected_campaign": 4,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny ID reklamy/kampanii Meta: „library=2186769435230928” (2/11) [+0.95]; wspólny domena widoczna na kreacji: „fb.me” (2/11) [+0.85]; wspólny domena widoczna na kreacji: „interia.pl” (2/11) [+0.85]; wspólny nazwa reklamodawcy: „sustain studio” (2/11) [+0.80]"
+   },
+   {
+    "variant": "14~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 4,
+    "expected_campaign": 4,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny nazwa zestawu reklam: „ad_name=tvtextdc3_text156tv” (2/11) [+0.85]; wspólny nazwa zestawu reklam: „adset_name=1208_pl_w_tvtextdc3_text156tv_сс_d3 (8) Adv  lang” (2/11) [+0.85]; wspólny parametr afiliacyjny/TDS: „_camp_id=113” (2/11) [+0.85]; wspólny parametr afiliacyjny/TDS: „acc=hk77_tv6_tvtextdc3_feed15_text156tv_w_pl” (2/11) [+0.85]"
+   },
+   {
+    "variant": "2~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "tekst prawie identyczny (MinHash): 1.00 [+0.85]; ten sam szablon tekstu po zamaskowaniu osób: 1.00 [+0.75]; ten sam szablon tytułu: 1.00 [+0.70]; wspólny nazwa produktu/platformy: „switowin zyskarnia” (3/11) [+0.63]"
+   },
+   {
+    "variant": "2~person_swap",
+    "kind": "person_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny domena docelowa: „acrosscommunities.live” (2/11) [+0.90]; tekst prawie identyczny (MinHash): 0.91 [+0.85]; wspólny seria rejestracji (rejestrator+NS+dzień): „Dynadot Inc|cartman.ns.cloudflare.com+fish.ns.cloudflare.com” (2/11) [+0.75]; ten sam szablon tekstu po zamaskowaniu osób: 1.00 [+0.75]"
+   },
+   {
+    "variant": "3~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; tekst prawie identyczny (MinHash): 1.00 [+0.85]; wspólny nazwa reklamodawcy: „easyjoy” (2/11) [+0.80]; prawie identyczny obraz (pHash): 1.00 [+0.80]"
+   },
+   {
+    "variant": "3~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; ta sama treść i ta sama domena (near-duplicate) [+0.97]; tekst prawie identyczny (MinHash): 1.00 [+0.85]; wspólny domena docelowa: „healthlinkq.pro” (3/11) [+0.76]"
+   },
+   {
+    "variant": "3~recompressed",
+    "kind": "recompressed",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 0.922,
+    "why": "prawie identyczny obraz (pHash): 0.91 [+0.50]; ten sam kadr/zdjęcie twarzy (ArcFace cos=0.89) [+0.45]; podobny układ/szablon graficzny (DINOv2): 0.79 [+0.43]; rozpoznana twarz: Adam Glapiński (w obu) [+0.25]"
+   },
+   {
+    "variant": "3~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "tekst prawie identyczny (MinHash): 1.00 [+0.85]; ten sam szablon tekstu po zamaskowaniu osób: 1.00 [+0.75]; ten sam szablon tytułu: 1.00 [+0.70]; wspólny nazwa produktu/platformy: „orzel fundaris” (3/11) [+0.63]"
+   },
+   {
+    "variant": "3~person_swap",
+    "kind": "person_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "tekst prawie identyczny (MinHash): 0.91 [+0.85]; wspólny domena docelowa: „healthlinkq.pro” (3/11) [+0.76]; ten sam szablon tekstu po zamaskowaniu osób: 1.00 [+0.75]; ten sam szablon tytułu: 1.00 [+0.70]"
+   },
+   {
+    "variant": "36~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 3,
+    "expected_campaign": 3,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; tekst prawie identyczny (MinHash): 1.00 [+0.85]; wspólny nazwa reklamodawcy: „el john production” (2/11) [+0.80]; prawie identyczny obraz (pHash): 1.00 [+0.80]"
+   },
+   {
+    "variant": "36~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 3,
+    "expected_campaign": 3,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; ta sama treść i ta sama domena (near-duplicate) [+0.97]; wspólny ID reklamy/kampanii Meta: „ad_id=120254577452770651” (2/11) [+0.95]; wspólny Facebook Pixel: „fbpx=1536860380829193” (2/11) [+0.92]"
+   },
+   {
+    "variant": "36~recompressed",
+    "kind": "recompressed",
+    "decision": "known_campaign",
+    "campaign": 3,
+    "expected_campaign": 3,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 0.585,
+    "why": "podobny układ/szablon graficzny (DINOv2): 0.82 [+0.49]; podobny wygląd kreacji (CLIP): 0.65 [+0.19]"
+   },
+   {
+    "variant": "36~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 3,
+    "expected_campaign": 3,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny telefon: „+48225550199” (2/11) [+0.90]; wspólny e-mail: „conduct@polandinvest.pl” (2/11) [+0.85]; wspólny e-mail: „info@polandinvest.pl” (2/11) [+0.85]; wspólny e-mail: „privacy@polandinvest.pl” (2/11) [+0.85]"
+   },
+   {
+    "variant": "47~creative_only",
+    "kind": "creative_only",
+    "decision": "known_campaign",
+    "campaign": 1,
+    "expected_campaign": 1,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "tekst prawie identyczny (MinHash): 1.00 [+0.85]; wspólny nazwa reklamodawcy: „evelyn johnson” (2/11) [+0.80]; prawie identyczny obraz (pHash): 1.00 [+0.80]; podobny wygląd kreacji (CLIP): 1.00 [+0.60]"
+   },
+   {
+    "variant": "47~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 1,
+    "expected_campaign": 1,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; ta sama treść i ta sama domena (near-duplicate) [+0.97]; wspólny ID reklamy/kampanii Meta: „ad_id=120248107450320117” (2/11) [+0.95]; wspólny domena docelowa: „shryxla-mynx.icu” (2/11) [+0.90]"
+   },
+   {
+    "variant": "47~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 1,
+    "expected_campaign": 1,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny nazwa zestawu reklam: „ad_name=PL78T” (2/11) [+0.85]; wspólny nazwa zestawu reklam: „adset_name=PL78T” (2/11) [+0.85]; tekst prawie identyczny (MinHash): 1.00 [+0.85]; wspólny nazwa produktu/platformy: „uromexil forte” (2/11) [+0.75]"
+   },
+   {
+    "variant": "48~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; tekst prawie identyczny (MinHash): 1.00 [+0.85]; wspólny nazwa reklamodawcy: „sharon coleman” (2/11) [+0.80]; prawie identyczny obraz (pHash): 1.00 [+0.80]"
+   },
+   {
+    "variant": "48~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; ta sama treść i ta sama domena (near-duplicate) [+0.97]; wspólny domena docelowa: „novumfy.com” (2/11) [+0.90]; wspólny endpoint formularza/API: „novumfy.com/api/v1/agent/persist-session-record/{id}/{id}” (2/11) [+0.90]"
+   },
+   {
+    "variant": "48~recompressed",
+    "kind": "recompressed",
+    "decision": "candidate_review",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": false,
+    "soft_ok": true,
+    "p_to_source": 0.838,
+    "why": "podobny układ/szablon graficzny (DINOv2): 0.90 [+0.55]; ten sam kadr/zdjęcie twarzy (ArcFace cos=0.82) [+0.45]; podobny wygląd kreacji (CLIP): 0.70 [+0.31]; prawie identyczny obraz (pHash): 0.81 [+0.06]"
+   },
+   {
+    "variant": "48~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "tekst prawie identyczny (MinHash): 1.00 [+0.85]; ten sam szablon tekstu po zamaskowaniu osób: 1.00 [+0.75]; ten sam szablon tytułu: 1.00 [+0.70]; wspólny nazwa produktu/platformy: „orzel fundaris” (3/11) [+0.63]"
+   },
+   {
+    "variant": "48~person_swap",
+    "kind": "person_swap",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "ta sama treść i ta sama domena (near-duplicate) [+0.97]; wspólny domena docelowa: „novumfy.com” (2/11) [+0.90]; tekst prawie identyczny (MinHash): 0.97 [+0.85]; wspólny seria rejestracji (rejestrator+NS+dzień): „NameSilo, LLC|adam.ns.cloudflare.com+nancy.ns.cloudflare.com” (2/11) [+0.75]"
+   },
+   {
+    "variant": "61~creative_only",
+    "kind": "creative_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×1 [+0.99]; tekst prawie identyczny (MinHash): 1.00 [+0.85]; wspólny nazwa reklamodawcy: „nowe detale zainteresowaly media oraz opinie publiczna” (2/11) [+0.80]; prawie identyczny obraz (pHash): 1.00 [+0.80]"
+   },
+   {
+    "variant": "61~landing_only",
+    "kind": "landing_only",
+    "decision": "duplicate",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "identyczny plik (sha256) ×3 [+0.99]; wspólny telefon: „+48768952436” (2/11) [+0.90]; wspólny domena docelowa: „glowpixel.org” (2/11) [+0.90]; wspólny UUID tenanta landing-buildera: „91837506-95eb-4263-946d-73d5d4f62c73” (2/11) [+0.90]"
+   },
+   {
+    "variant": "61~recompressed",
+    "kind": "recompressed",
+    "decision": "new_campaign",
+    "campaign": null,
+    "expected_campaign": 0,
+    "ok": false,
+    "soft_ok": false,
+    "p_to_source": 0.615,
+    "why": "podobny układ/szablon graficzny (DINOv2): 0.82 [+0.49]; podobny wygląd kreacji (CLIP): 0.67 [+0.24]"
+   },
+   {
+    "variant": "61~domain_swap",
+    "kind": "domain_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny telefon: „+48768952436” (2/11) [+0.90]; wspólny Google Ads (AW-) ID: „AW-18463917747” (2/11) [+0.88]; tekst prawie identyczny (MinHash): 0.92 [+0.85]; wspólny nazwa produktu/platformy: „polska platforma aktywnego oszczedzania emerytalnego” (2/11) [+0.75]"
+   },
+   {
+    "variant": "61~person_swap",
+    "kind": "person_swap",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 1.0,
+    "why": "wspólny domena docelowa: „glowpixel.org” (2/11) [+0.90]; wspólny Google Ads (AW-) ID: „AW-18463917747” (2/11) [+0.88]; tekst prawie identyczny (MinHash): 0.93 [+0.85]; wspólny nazwa produktu/platformy: „polska platforma aktywnego oszczedzania emerytalnego” (2/11) [+0.75]"
+   }
+  ],
+  "summary": {
+   "creative_only": {
+    "n": 8,
+    "ok": 8,
+    "soft_ok": 8,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   },
+   "landing_only": {
+    "n": 8,
+    "ok": 8,
+    "soft_ok": 8,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   },
+   "recompressed": {
+    "n": 7,
+    "ok": 4,
+    "soft_ok": 6,
+    "acc": 0.571,
+    "soft_acc": 0.857
+   },
+   "domain_swap": {
+    "n": 9,
+    "ok": 9,
+    "soft_ok": 9,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   },
+   "person_swap": {
+    "n": 5,
+    "ok": 5,
+    "soft_ok": 5,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   }
+  }
+ },
+ "labels": {
+  "n": 10,
+  "pairwise_precision": 1.0,
+  "pairwise_recall": 1.0,
+  "pairwise_f1": 1.0,
+  "bcubed_precision": 1.0,
+  "bcubed_recall": 1.0,
+  "ARI": 1.0,
+  "ARI_hdbscan_baseline": 0.352
+ }
+}

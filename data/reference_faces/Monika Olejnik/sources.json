@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1f/Monika_Olejnik.JPG/960px-Monika_Olejnik.JPG?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Monika_Olejnik",
+  "file": "Monika_Olejnik.JPG"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1f/Monika_Olejnik.JPG/960px-Monika_Olejnik.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:Monika Olejnik.JPG",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Ja Fryta</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/84/Monika.Olejnik.JPG/960px-Monika.Olejnik.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.671,
+  "file": "File:Monika.Olejnik.JPG",
+  "licence": "CC BY 3.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.youtube.com/channel/UCxNoihYztl7J-r6Qw_I-pYQ\">Fashion Post</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c0/Energa_Camerimage_Festiwal_2025_Toru%C5%84.jpg/960px-Energa_Camerimage_Festiwal_2025_Toru%C5%84.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.717,
+  "file": "File:Energa Camerimage Festiwal 2025 Toruń.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Aawiosnaa&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Aawiosnaa (page does not exist)\">Aawiosnaa</a>"
+ }
+]

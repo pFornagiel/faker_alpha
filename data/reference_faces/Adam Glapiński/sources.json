@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/a/a1/Adam_Glapi%C5%84ski.JPG?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "page": "https://pl.wikipedia.org/wiki/Adam_Glapiński",
+  "file": "Adam_Glapiński.JPG"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d8/Prof._Adam_Glapinski_Nov_2015_%28cropped%29.jpg/960px-Prof._Adam_Glapinski_Nov_2015_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.759,
+  "file": "File:Prof. Adam Glapinski Nov 2015 (cropped).jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "Piotr Malecki, Narodowy Bank Polski (National Bank of Poland)<br><b>Derivative work: </b> <a href=\"//commons.wikimedia.org/wiki/User:TharonXX\" class=\"mw-redirect\" title=\"User:TharonXX\">TharonXX</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/a/a1/Adam_Glapi%C5%84ski.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 1.0,
+  "file": "File:Adam Glapiński.JPG",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/photos/narodowybankpolski\">Narodowy Bank Polski</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/90/Prof._Adam_Glapinski%2C_Nov_2015.jpg/960px-Prof._Adam_Glapinski%2C_Nov_2015.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.767,
+  "file": "File:Prof. Adam Glapinski, Nov 2015.jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "Piotr Malecki, Narodowy Bank Polski (National Bank of Poland)"
+ }
+]

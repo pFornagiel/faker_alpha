@@ -1,0 +1,14 @@
+# case,label  -- reference labels set by manual verification of raw files (not organiser ground truth)
+# A = one operator: fake Gazeta.pl/TVN24 articles; 1&2 share FB pixel 2012165449475163 + tenant UUIDs,
+#     2&3 share landing domain healthlinkq.pro, 3&48 name the same fake platform "Orzeł Fundaris",
+#     48&61 are the same article ("37 minut po emisji..."), 1/2/48/61 share backend API + TDS signature
+1,A
+2,A
+3,A
+48,A
+61,A
+5,B
+10,C
+14,D
+36,E
+47,F

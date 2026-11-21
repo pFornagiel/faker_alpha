@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/1/14/Wojciech_Cejrowski_selfie-2020.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "page": "https://pl.wikipedia.org/wiki/Wojciech_Cejrowski",
+  "file": "Wojciech_Cejrowski_selfie-2020.jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/1/14/Wojciech_Cejrowski_selfie-2020.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 1.0,
+  "file": "File:Wojciech Cejrowski selfie-2020.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "Wojciech Cejrowski"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Wojciechcejrowski.jpg/960px-Wojciechcejrowski.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.573,
+  "file": "File:Wojciechcejrowski.jpg",
+  "licence": "CC BY 3.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:%C5%BBbiczek\" class=\"mw-redirect\" title=\"User:Żbiczek\">Żbiczek</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5a/Wojciech_Cejrowski_2011.jpg/960px-Wojciech_Cejrowski_2011.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.543,
+  "file": "File:Wojciech Cejrowski 2011.jpg",
+  "licence": "Public domain",
+  "author": "<table cellspacing=\"5\" style=\"width:400px; text-align:center; color:#000; background:#EEEEEE; border:2px solid #bbb; margin:1px; direction:ltr;\" class=\"layouttemplate\">\n<tbody><tr>\n<td style=\"width:25"
+ }
+]

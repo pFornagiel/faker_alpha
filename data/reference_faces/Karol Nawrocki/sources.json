@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/89/Karol_Nawrocki_i_Roberta_Metsola_%282026%29_%28cropped_%26_flipped%29.jpg/960px-Karol_Nawrocki_i_Roberta_Metsola_%282026%29_%28cropped_%26_flipped%29.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Karol_Nawrocki",
+  "file": "Karol_Nawrocki_i_Roberta_Metsola_(2026)_(cropped_&_flipped).jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/71/01_Karol_Nawrocki.jpg/960px-01_Karol_Nawrocki.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.596,
+  "file": "File:01 Karol Nawrocki.jpg",
+  "licence": "CC BY 3.0 pl",
+  "author": "Chancellery of the Prime Minister of Poland"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8d/JKRUK_20220903_KAROL_NAWROCKI_MIELEC_DSCN8323A.jpg/960px-JKRUK_20220903_KAROL_NAWROCKI_MIELEC_DSCN8323A.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.72,
+  "file": "File:JKRUK 20220903 KAROL NAWROCKI MIELEC DSCN8323A.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<table style=\"margin: 1.5em auto; width:700px; background-color:#f6f6f6; border:2px solid #cccccc; padding:1px;\" cellspacing=\"10\" dir=\"ltr\" class=\"layouttemplate\">\n\n<tbody><tr>\n<td>This image is a wor"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/3/33/Karol_Nawrocki_cropped.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.536,
+  "file": "File:Karol Nawrocki cropped.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Artur_Andrzej\" title=\"User:Artur Andrzej\">Artur Andrzej</a>"
+ }
+]

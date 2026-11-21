@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/Elon_Musk_-_54820081119_%283x4_cropped%2C_Rule_of_thirds%29.jpg/960px-Elon_Musk_-_54820081119_%283x4_cropped%2C_Rule_of_thirds%29.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Elon_Musk",
+  "file": "Elon_Musk_-_54820081119_(3x4_cropped,_Rule_of_thirds).jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/USAFA_Hosts_Elon_Musk_%28Image_1_of_17%29_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.769,
+  "file": "File:USAFA Hosts Elon Musk (Image 1 of 17) (cropped).jpg",
+  "licence": "Public domain",
+  "author": "Justin Pacheco"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/9/99/Elon_Musk_Colorado_2022_%28cropped2%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.823,
+  "file": "File:Elon Musk Colorado 2022 (cropped2).jpg",
+  "licence": "Public domain",
+  "author": "U.S. Air Force / Trevor Cokley"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/34/Elon_Musk_Royal_Society_%28crop2%29.jpg/960px-Elon_Musk_Royal_Society_%28crop2%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.728,
+  "file": "File:Elon Musk Royal Society (crop2).jpg",
+  "licence": "CC BY-SA 3.0",
+  "author": "Debbie Rowe"
+ }
+]

@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0a/Rafal_Trzaskowski_2020_Bytom.jpg/960px-Rafal_Trzaskowski_2020_Bytom.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Rafał_Trzaskowski",
+  "file": "Rafal_Trzaskowski_2020_Bytom.jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/EPP_Congress_Bucharest_-_Day_1_IMG_8877_%2853571548879%29_%28cropped%29.jpg/960px-EPP_Congress_Bucharest_-_Day_1_IMG_8877_%2853571548879%29_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.673,
+  "file": "File:EPP Congress Bucharest - Day 1 IMG 8877 (53571548879) (cropped).jpg",
+  "licence": "CC BY 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/45198836@N04\">European People's Party</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0a/Rafal_Trzaskowski_2020_Bytom.jpg/960px-Rafal_Trzaskowski_2020_Bytom.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:Rafal Trzaskowski 2020 Bytom.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Gower\" title=\"User:Gower\">Adrian Tync</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/10/HiT_happens_-_Rafal_Trzaskowski.jpg/960px-HiT_happens_-_Rafal_Trzaskowski.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.724,
+  "file": "File:HiT happens - Rafal Trzaskowski.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Tomasz_Molina&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Tomasz Molina (page does not exist)\">Tomasz Molina</a>"
+ }
+]

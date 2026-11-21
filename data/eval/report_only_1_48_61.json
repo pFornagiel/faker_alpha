@@ -1,0 +1,238 @@
+{
+ "leave_one_out": {
+  "rows": [
+   {
+    "material": "1",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.15,
+      3
+     ]
+    ]
+   },
+   {
+    "material": "10",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.151,
+      0
+     ],
+     [
+      0.0,
+      4
+     ]
+    ]
+   },
+   {
+    "material": "14",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.405,
+      1
+     ],
+     [
+      0.405,
+      2
+     ]
+    ]
+   },
+   {
+    "material": "2",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.151,
+      5
+     ]
+    ]
+   },
+   {
+    "material": "3",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.151,
+      5
+     ]
+    ]
+   },
+   {
+    "material": "36",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.228,
+      0
+     ],
+     [
+      0.11,
+      3
+     ]
+    ]
+   },
+   {
+    "material": "47",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.405,
+      3
+     ],
+     [
+      0.405,
+      1
+     ]
+    ]
+   },
+   {
+    "material": "48",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.15,
+      3
+     ]
+    ]
+   },
+   {
+    "material": "5",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.405,
+      3
+     ],
+     [
+      0.405,
+      1
+     ]
+    ]
+   },
+   {
+    "material": "61",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.306,
+      3
+     ]
+    ]
+   }
+  ],
+  "summary": {
+   "known_campaign": {
+    "n": 5,
+    "ok": 5,
+    "soft_ok": 5,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   },
+   "new_campaign": {
+    "n": 5,
+    "ok": 5,
+    "soft_ok": 5,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   }
+  }
+ },
+ "variants": {
+  "rows": [
+   {
+    "variant": "1~recompressed",
+    "kind": "recompressed",
+    "decision": "candidate_review",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": false,
+    "soft_ok": true,
+    "p_to_source": 0.589,
+    "why": "ten sam kadr/zdjęcie twarzy (ArcFace cos=0.82) [+0.45]; rozpoznana twarz: Rafał Brzoska (w obu) [+0.25]"
+   },
+   {
+    "variant": "48~recompressed",
+    "kind": "recompressed",
+    "decision": "known_campaign",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": true,
+    "soft_ok": true,
+    "p_to_source": 0.838,
+    "why": "podobny układ/szablon graficzny (DINOv2): 0.90 [+0.55]; ten sam kadr/zdjęcie twarzy (ArcFace cos=0.82) [+0.45]; podobny wygląd kreacji (CLIP): 0.70 [+0.31]; prawie identyczny obraz (pHash): 0.81 [+0.06]"
+   },
+   {
+    "variant": "61~recompressed",
+    "kind": "recompressed",
+    "decision": "candidate_review",
+    "campaign": 0,
+    "expected_campaign": 0,
+    "ok": false,
+    "soft_ok": true,
+    "p_to_source": 0.615,
+    "why": "podobny układ/szablon graficzny (DINOv2): 0.82 [+0.49]; podobny wygląd kreacji (CLIP): 0.67 [+0.24]"
+   }
+  ],
+  "summary": {
+   "recompressed": {
+    "n": 3,
+    "ok": 1,
+    "soft_ok": 3,
+    "acc": 0.333,
+    "soft_acc": 1.0
+   }
+  }
+ }
+}

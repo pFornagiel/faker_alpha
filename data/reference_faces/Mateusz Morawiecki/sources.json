@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/0/0a/Morawiecki_Mateusz_2.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "page": "https://pl.wikipedia.org/wiki/Mateusz_Morawiecki",
+  "file": "Morawiecki_Mateusz_2.jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5d/Mateusz_Morawiecki_Prezes_Rady_Ministr%C3%B3w_%28cropped%29.jpg/960px-Mateusz_Morawiecki_Prezes_Rady_Ministr%C3%B3w_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.794,
+  "file": "File:Mateusz Morawiecki Prezes Rady Ministrów (cropped).jpg",
+  "licence": "Public domain",
+  "author": "Kancelaria Premiera"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5e/Strajk_Wszystkich_Polakow_-_Miska_ryzu_dla_Morawieckiego.jpg/960px-Strajk_Wszystkich_Polakow_-_Miska_ryzu_dla_Morawieckiego.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.692,
+  "file": "File:Strajk Wszystkich Polakow - Miska ryzu dla Morawieckiego.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Tomasz_Molina&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Tomasz Molina (page does not exist)\">Tomasz Molina</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/29/75th_anniversary_of_the_landing_of_Allied_forces_in_Normandy.jpg/960px-75th_anniversary_of_the_landing_of_Allied_forces_in_Normandy.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.615,
+  "file": "File:75th anniversary of the landing of Allied forces in Normandy.jpg",
+  "licence": "Public domain",
+  "author": "Kancelaria Premiera / Adam Guz"
+ }
+]

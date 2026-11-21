@@ -1,0 +1,24 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/Kuba_Wojew%C3%B3dzki_%282018%29.jpg/960px-Kuba_Wojew%C3%B3dzki_%282018%29.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Kuba_Wojewódzki",
+  "file": "Kuba_Wojewódzki_(2018).jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/Kuba_Wojew%C3%B3dzki_%282018%29.jpg/960px-Kuba_Wojew%C3%B3dzki_%282018%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:Kuba Wojewódzki (2018).jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Fryta 73</a> from Strzegom (Wikimedia Commons account: <a href=\"//commons.wikimedia.org/wiki/User:Fryta73\" tit"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/72/Kuba_Wojew%C3%B3dzki_2017.jpg/960px-Kuba_Wojew%C3%B3dzki_2017.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.461,
+  "file": "File:Kuba Wojewódzki 2017.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Serecki\" title=\"User:Serecki\">Serecki</a>"
+ }
+]

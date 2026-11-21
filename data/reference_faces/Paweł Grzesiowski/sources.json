@@ -1,0 +1,16 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c7/Pawe%C5%82_Grzesiowski.JPG/960px-Pawe%C5%82_Grzesiowski.JPG?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Paweł_Grzesiowski",
+  "file": "Paweł_Grzesiowski.JPG"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c7/Pawe%C5%82_Grzesiowski.JPG/960px-Pawe%C5%82_Grzesiowski.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:Paweł Grzesiowski.JPG",
+  "licence": "CC BY 3.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.youtube.com/channel/UCtzlKKwkUNlBUC_xawmTRgQ\">newsrm.tv</a>"
+ }
+]

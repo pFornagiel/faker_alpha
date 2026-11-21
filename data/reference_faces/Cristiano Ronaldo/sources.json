@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/9/94/2025_Cristiano_Ronaldo_%28cropped%29.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "page": "https://pl.wikipedia.org/wiki/Cristiano_Ronaldo",
+  "file": "2025_Cristiano_Ronaldo_(cropped).jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/b/be/Cristiano_Ronaldo%2C_2023.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.712,
+  "file": "File:Cristiano Ronaldo, 2023.jpg",
+  "licence": "Attribution",
+  "author": "Mehrdad Esfahani/SNN"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b5/%D0%9C%D0%B0%D1%82%D1%87_%C2%AB%D0%A0%D0%B5%D0%B0%D0%BB%C2%BB_-_%C2%AB%D0%9B%D0%B8%D0%B2%D0%B5%D1%80%D0%BF%D1%83%D0%BB%D1%8C%C2%BB_3-1._26_%D0%BC%D0%B0%D1%8F_2018_%D0%B3%D0%BE%D0%B4%D0%B0_%E2%80%94_873650.jpg/960px-%D0%9C%D0%B0%D1%82%D1%87_%C2%AB%D0%A0%D0%B5%D0%B0%D0%BB%C2%BB_-_%C2%AB%D0%9B%D0%B8%D0%B2%D0%B5%D1%80%D0%BF%D1%83%D0%BB%D1%8C%C2%BB_3-1._26_%D0%BC%D0%B0%D1%8F_2018_%D0%B3%D0%BE%D0%B4%D0%B0_%E2%80%94_873650.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.471,
+  "file": "File:Матч «Реал» - «Ливерпуль» 3-1. 26 мая 2018 года — 873650.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<bdi><a href=\"https://www.wikidata.org/wiki/Q131344231\" class=\"extiw\" title=\"d:Q131344231\"><span title=\"Ukrainian photographer\">Olga Shcherbytska</span></a></bdi>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Argentine_-_Portugal_-_Cristiano_Ronaldo.jpg/960px-Argentine_-_Portugal_-_Cristiano_Ronaldo.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.554,
+  "file": "File:Argentine - Portugal - Cristiano Ronaldo.jpg",
+  "licence": "CC BY-SA 3.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Ludo29\" title=\"User:Ludo29\">Ludovic Péron</a>"
+ }
+]

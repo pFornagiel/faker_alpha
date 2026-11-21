@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2f/Krzysztof_Ibisz%2C_Polsat_Superhit_Festival_2023_03.jpg/960px-Krzysztof_Ibisz%2C_Polsat_Superhit_Festival_2023_03.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Krzysztof_Ibisz",
+  "file": "Krzysztof_Ibisz,_Polsat_Superhit_Festival_2023_03.jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/35/Krzysztof_Ibisz%2C_Polsat_Superhit_Festival_2023_01.jpg/960px-Krzysztof_Ibisz%2C_Polsat_Superhit_Festival_2023_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.686,
+  "file": "File:Krzysztof Ibisz, Polsat Superhit Festival 2023 01.jpg",
+  "licence": "CC BY 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Wojciech_P%C4%99dzich\" title=\"User:Wojciech Pędzich\">Wojciech Pędzich</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/96/Krzysztof_Ibisz_..._%2849005234482%29.jpg/960px-Krzysztof_Ibisz_..._%2849005234482%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.631,
+  "file": "File:Krzysztof Ibisz ... (49005234482).jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Fryta 73</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/00/Krzysztof_Ibisz_i_Patrycja_Madejska_%2838117374601%29.jpg/960px-Krzysztof_Ibisz_i_Patrycja_Madejska_%2838117374601%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.635,
+  "file": "File:Krzysztof Ibisz i Patrycja Madejska (38117374601).jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Fryta 73</a>"
+ }
+]

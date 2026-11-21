@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/98/Anna_Lewandowska_%28cropped%29.jpg/960px-Anna_Lewandowska_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://en.wikipedia.org/wiki/Anna_Lewandowska",
+  "file": "Anna_Lewandowska_(cropped).jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/98/Anna_Lewandowska_%28cropped%29.jpg/960px-Anna_Lewandowska_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:Anna Lewandowska (cropped).jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Ja Fryta</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6c/Ania_lewandowska.jpg/960px-Ania_lewandowska.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.496,
+  "file": "File:Ania lewandowska.jpg",
+  "licence": "CC0",
+  "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Magda_warsaw&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Magda warsaw (page does not exist)\">Magda warsaw</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8c/Anna_Lewandowska.jpg/960px-Anna_Lewandowska.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.97,
+  "file": "File:Anna Lewandowska.jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Ja Fryta</a>"
+ }
+]

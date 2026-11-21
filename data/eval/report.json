@@ -1,0 +1,202 @@
+{
+ "leave_one_out": {
+  "rows": [
+   {
+    "material": "1",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.15,
+      3
+     ]
+    ]
+   },
+   {
+    "material": "10",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.151,
+      0
+     ],
+     [
+      0.0,
+      4
+     ]
+    ]
+   },
+   {
+    "material": "14",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.405,
+      1
+     ],
+     [
+      0.405,
+      2
+     ]
+    ]
+   },
+   {
+    "material": "2",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.151,
+      5
+     ]
+    ]
+   },
+   {
+    "material": "3",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.151,
+      5
+     ]
+    ]
+   },
+   {
+    "material": "36",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.228,
+      0
+     ],
+     [
+      0.11,
+      3
+     ]
+    ]
+   },
+   {
+    "material": "47",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.405,
+      3
+     ],
+     [
+      0.405,
+      1
+     ]
+    ]
+   },
+   {
+    "material": "48",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.15,
+      3
+     ]
+    ]
+   },
+   {
+    "material": "5",
+    "expected": "new_campaign",
+    "decision": "new_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      0.405,
+      3
+     ],
+     [
+      0.405,
+      1
+     ]
+    ]
+   },
+   {
+    "material": "61",
+    "expected": "known_campaign",
+    "decision": "known_campaign",
+    "ok": true,
+    "soft_ok": true,
+    "best": [
+     [
+      1.0,
+      0
+     ],
+     [
+      0.306,
+      3
+     ]
+    ]
+   }
+  ],
+  "summary": {
+   "known_campaign": {
+    "n": 5,
+    "ok": 5,
+    "soft_ok": 5,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   },
+   "new_campaign": {
+    "n": 5,
+    "ok": 5,
+    "soft_ok": 5,
+    "acc": 1.0,
+    "soft_acc": 1.0
+   }
+  }
+ },
+ "labels": {
+  "n": 10,
+  "pairwise_precision": 1.0,
+  "pairwise_recall": 1.0,
+  "pairwise_f1": 1.0,
+  "bcubed_precision": 1.0,
+  "bcubed_recall": 1.0,
+  "ARI": 1.0,
+  "ARI_hdbscan_baseline": 0.352
+ }
+}

@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a5/Krzysztof_Bosak.jpg/960px-Krzysztof_Bosak.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Krzysztof_Bosak",
+  "file": "Krzysztof_Bosak.jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c8/K_bosak2020.jpg/960px-K_bosak2020.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.726,
+  "file": "File:K bosak2020.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Evereststudio&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Evereststudio (page does not exist)\">Evereststudio</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5e/Krzysztof_Bosak_Sejm_2016.jpg/960px-Krzysztof_Bosak_Sejm_2016.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.718,
+  "file": "File:Krzysztof Bosak Sejm 2016.jpg",
+  "licence": "CC BY-SA 3.0 pl",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Boston9\" title=\"User:Boston9\">Adrian Grycuk</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2a/02020_0168_Krzysztof_Bosak%2C_Krak%C3%B3w.jpg/960px-02020_0168_Krzysztof_Bosak%2C_Krak%C3%B3w.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.754,
+  "file": "File:02020 0168 Krzysztof Bosak, Kraków.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Silar&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Silar (page does not exist)\">Silar</a>"
+ }
+]

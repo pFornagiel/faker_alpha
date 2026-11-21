@@ -1,0 +1,18 @@
+[
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/Krzysztof-Stanowski-2017.jpg/960px-Krzysztof-Stanowski-2017.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:Krzysztof-Stanowski-2017.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "Vitalii Nishchymenko"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Sejm_2009_Krzysztof_Stanowski.jpg/960px-Sejm_2009_Krzysztof_Stanowski.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.706,
+  "file": "File:Sejm 2009 Krzysztof Stanowski.jpg",
+  "licence": "CC BY-SA 3.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Polimerek\" title=\"User:Polimerek\">Polimerek</a>"
+ }
+]

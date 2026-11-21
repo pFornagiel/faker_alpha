@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2c/S%C5%82awomir_Mentzen_2_%28cropped%29.jpg/960px-S%C5%82awomir_Mentzen_2_%28cropped%29.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Sławomir_Mentzen",
+  "file": "Sławomir_Mentzen_2_(cropped).jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/45/S%C5%82awomir_Mentzen_Sejm_2022.jpg/960px-S%C5%82awomir_Mentzen_Sejm_2022.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.736,
+  "file": "File:Sławomir Mentzen Sejm 2022.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Boston9\" title=\"User:Boston9\">Adrian Grycuk</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1d/Slawomir_Mentzen_2023.jpg/960px-Slawomir_Mentzen_2023.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.714,
+  "file": "File:Slawomir Mentzen 2023.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Tomasz_Molina&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Tomasz Molina (page does not exist)\">Tomasz Molina</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c5/S%C5%82awomir_Mentzen_2022.jpg/960px-S%C5%82awomir_Mentzen_2022.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.359,
+  "file": "File:Sławomir Mentzen 2022.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Matlin\" title=\"User:Matlin\">Matlin</a>"
+ }
+]

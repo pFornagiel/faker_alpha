@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1a/2018_-_Pol%E2%80%99and%E2%80%99Rock_Festival_-_Dorota_Wellman_11.jpg/960px-2018_-_Pol%E2%80%99and%E2%80%99Rock_Festival_-_Dorota_Wellman_11.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Dorota_Wellman",
+  "file": "2018_-_Pol’and’Rock_Festival_-_Dorota_Wellman_11.jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/06/2021_Pol%E2%80%99and%E2%80%99Rock_-_By%C4%87_Kobiet%C4%85_On_Tour_%2803%29.jpg/960px-2021_Pol%E2%80%99and%E2%80%99Rock_-_By%C4%87_Kobiet%C4%85_On_Tour_%2803%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.715,
+  "file": "File:2021 Pol’and’Rock - Być Kobietą On Tour (03).jpg",
+  "licence": "CC BY 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Sicherlich\" title=\"User:Sicherlich\">Ralf Lotys</a> (Sicherlich)"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a2/2021_Pol%E2%80%99and%E2%80%99Rock_-_By%C4%87_Kobiet%C4%85_On_Tour_%2812%29.jpg/960px-2021_Pol%E2%80%99and%E2%80%99Rock_-_By%C4%87_Kobiet%C4%85_On_Tour_%2812%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.726,
+  "file": "File:2021 Pol’and’Rock - Być Kobietą On Tour (12).jpg",
+  "licence": "CC BY 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Sicherlich\" title=\"User:Sicherlich\">Ralf Lotys</a> (Sicherlich)"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1f/2021_Pol%E2%80%99and%E2%80%99Rock_-_By%C4%87_Kobiet%C4%85_On_Tour_%2802%29.jpg/960px-2021_Pol%E2%80%99and%E2%80%99Rock_-_By%C4%87_Kobiet%C4%85_On_Tour_%2802%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.71,
+  "file": "File:2021 Pol’and’Rock - Być Kobietą On Tour (02).jpg",
+  "licence": "CC BY 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Sicherlich\" title=\"User:Sicherlich\">Ralf Lotys</a> (Sicherlich)"
+ }
+]

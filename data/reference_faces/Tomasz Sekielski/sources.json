@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/7/77/Tomasz.Sekielski_%28cropped%29.JPG?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "page": "https://pl.wikipedia.org/wiki/Tomasz_Sekielski",
+  "file": "Tomasz.Sekielski_(cropped).JPG"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/8/83/Tomasz_Sekielski-tsekielski.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.604,
+  "file": "File:Tomasz Sekielski-tsekielski.jpg",
+  "licence": "CC BY-SA 3.0",
+  "author": "<a href=\"https://pl.wikipedia.org/wiki/Wikipedysta:Cezary_p\" class=\"extiw\" title=\"pl:Wikipedysta:Cezary p\">Cezary p</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3f/Tomasz.Sekielski.JPG/960px-Tomasz.Sekielski.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.987,
+  "file": "File:Tomasz.Sekielski.JPG",
+  "licence": "CC BY 3.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.youtube.com/channel/UCKlweKdmBUDD3X64lIkwKzA\">#WybieramEuropę</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/7/77/Tomasz.Sekielski_%28cropped%29.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 1.0,
+  "file": "File:Tomasz.Sekielski (cropped).JPG",
+  "licence": "CC BY 3.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.youtube.com/channel/UCKlweKdmBUDD3X64lIkwKzA\">#WybieramEuropę</a>"
+ }
+]

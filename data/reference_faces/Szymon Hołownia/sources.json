@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/32/Szymon_Ho%C5%82ownia_2022.jpg/960px-Szymon_Ho%C5%82ownia_2022.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Szymon_Hołownia",
+  "file": "Szymon_Hołownia_2022.jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/32/Szymon_Ho%C5%82ownia_2022.jpg/960px-Szymon_Ho%C5%82ownia_2022.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:Szymon Hołownia 2022.jpg",
+  "licence": "CC BY-SA 3.0 pl",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Boston9\" title=\"User:Boston9\">Adrian Grycuk</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d6/02019_0996_Szymon_Ho%C5%82ownia.jpg/960px-02019_0996_Szymon_Ho%C5%82ownia.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.691,
+  "file": "File:02019 0996 Szymon Hołownia.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Silar&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Silar (page does not exist)\">Silar</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/Szymon_Ho%C5%82ownia_w_Sejmie_2022a.jpg/960px-Szymon_Ho%C5%82ownia_w_Sejmie_2022a.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.705,
+  "file": "File:Szymon Hołownia w Sejmie 2022a.jpg",
+  "licence": "CC BY-SA 3.0 pl",
+  "author": "<a href=\"//commons.wikimedia.org/wiki/User:Boston9\" title=\"User:Boston9\">Adrian Grycuk</a>"
+ }
+]

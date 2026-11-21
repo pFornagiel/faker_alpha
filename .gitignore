@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.pyc
+models/
+# organiser material must not be redistributed publicly (spec §8)
+data/organizer/
+data/store/
+data/cache/
+data/artifacts/
+data/uploads/
+data/exports/
+data/*.log
+data/reference_faces/**/*.jpg
+data/reference_faces/_gallery_cache.npz
+.env
+data/eval/variants/
+data/eval_variants.log
+data/streamlit.log
+models/embeddinggemma2/
+
+# web UI (build output and dependencies)
+web/node_modules/
+web/dist/

@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a2/Rafa%C5%82_Brzoska.png/960px-Rafa%C5%82_Brzoska.png?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Rafał_Brzoska",
+  "file": "Rafał_Brzoska.png"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/13/Prime_minister_Keir_Starmer_meets_Poland_PM_Donald_Tusk_%2854272116934%29.jpg/960px-Prime_minister_Keir_Starmer_meets_Poland_PM_Donald_Tusk_%2854272116934%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.597,
+  "file": "File:Prime minister Keir Starmer meets Poland PM Donald Tusk (54272116934).jpg",
+  "licence": "CC BY 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/49707497@N06\">Number 10</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a2/Rafa%C5%82_Brzoska.png/960px-Rafa%C5%82_Brzoska.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:Rafał Brzoska.png",
+  "licence": "CC0",
+  "author": "Warsaw PhotoProton Studio"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/52/Prime_minister_Keir_Starmer_meets_Poland_PM_Donald_Tusk_%2854271923026%29.jpg/960px-Prime_minister_Keir_Starmer_meets_Poland_PM_Donald_Tusk_%2854271923026%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.365,
+  "file": "File:Prime minister Keir Starmer meets Poland PM Donald Tusk (54271923026).jpg",
+  "licence": "CC BY 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/49707497@N06\">Number 10</a>"
+ }
+]

@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/32/Grzegorz_Braun_MEP_%282024%29.jpg/960px-Grzegorz_Braun_MEP_%282024%29.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Grzegorz_Braun",
+  "file": "Grzegorz_Braun_MEP_(2024).jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/b/b0/Grzegorz_Braun_2018_foto_oficjalne_Klucz_Pobudki_Jastrz%C4%99bie_Zdr%C3%B3j.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.655,
+  "file": "File:Grzegorz Braun 2018 foto oficjalne Klucz Pobudki Jastrzębie Zdrój.jpg",
+  "licence": "CC BY-SA 4.0",
+  "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Marschall22&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Marschall22 (page does not exist)\">Marschall22</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/32/Grzegorz_Braun_MEP_%282024%29.jpg/960px-Grzegorz_Braun_MEP_%282024%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 1.0,
+  "file": "File:Grzegorz Braun MEP (2024).jpg",
+  "licence": "European Parliament",
+  "author": "© European Union 2024 - Source : EP"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/a/a7/Grzegorz_Braun_%282014%29.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.601,
+  "file": "File:Grzegorz Braun (2014).JPG",
+  "licence": "CC BY 3.0",
+  "author": "ascotv"
+ }
+]

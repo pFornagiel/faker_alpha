@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/President_of_Poland_Andrzej_Duda_%28cropped%29.jpg/960px-President_of_Poland_Andrzej_Duda_%28cropped%29.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Andrzej_Duda",
+  "file": "President_of_Poland_Andrzej_Duda_(cropped).jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/da/U.S._Secretary_of_Defense_Pete_Hegseth_with_President_of_Poland_Andrzej_Duda%2C_February_2025.jpg/960px-U.S._Secretary_of_Defense_Pete_Hegseth_with_President_of_Poland_Andrzej_Duda%2C_February_2025.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.595,
+  "file": "File:U.S. Secretary of Defense Pete Hegseth with President of Poland Andrzej Duda, February 2025.jpg",
+  "licence": "Public domain",
+  "author": "U.S. Department of Defense"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/2/20/Andrzej_Duda_2025_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+  "sim_to_anchor": 0.615,
+  "file": "File:Andrzej Duda 2025 (cropped).jpg",
+  "licence": "Public domain",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/68842444@N03\">U.S. Secretary of Defense</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c4/President_Trump_Visits_with_the_President_of_Poland_%2850043757886%29.jpg/960px-President_Trump_Visits_with_the_President_of_Poland_%2850043757886%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.564,
+  "file": "File:President Trump Visits with the President of Poland (50043757886).jpg",
+  "licence": "Public domain",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/148748355@N05\">The White House</a> from Washington, DC"
+ }
+]

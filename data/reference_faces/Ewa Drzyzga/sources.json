@@ -1,0 +1,32 @@
+[
+ {
+  "img": "wiki_0.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/16/Marcin_Prokop%2C_Ewa_Drzyzga%2C_Sopot_Top_of_the_Top_Festival_2022%2C_dzie%C5%84_3_02_%28cropped%29.jpg/960px-Marcin_Prokop%2C_Ewa_Drzyzga%2C_Sopot_Top_of_the_Top_Festival_2022%2C_dzie%C5%84_3_02_%28cropped%29.jpg?utm_source=pl.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "page": "https://pl.wikipedia.org/wiki/Ewa_Drzyzga",
+  "file": "Marcin_Prokop,_Ewa_Drzyzga,_Sopot_Top_of_the_Top_Festival_2022,_dzień_3_02_(cropped).jpg"
+ },
+ {
+  "img": "commons_1.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e9/Ewa_Drzyzga.jpg/960px-Ewa_Drzyzga.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.494,
+  "file": "File:Ewa Drzyzga.jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Ja Fryta</a>"
+ },
+ {
+  "img": "commons_2.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/Ewa_Drzyzga_2_%2822267235788%29_%28cropped%29.jpg/960px-Ewa_Drzyzga_2_%2822267235788%29_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.575,
+  "file": "File:Ewa Drzyzga 2 (22267235788) (cropped).jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Fryta 73</a>"
+ },
+ {
+  "img": "commons_3.jpg",
+  "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/18/Ewa_Drzyzga_2_%2822267235788%29.jpg/960px-Ewa_Drzyzga_2_%2822267235788%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+  "sim_to_anchor": 0.575,
+  "file": "File:Ewa Drzyzga 2 (22267235788).jpg",
+  "licence": "CC BY-SA 2.0",
+  "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/96799800@N07\">Fryta 73</a>"
+ }
+]
