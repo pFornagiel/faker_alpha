@@ -259,6 +259,8 @@ export interface Features {
   notes: string[]
   dates: string[]
   elapsed_s: number | null
+  /** the five content views: can this material be compared on it, and what it holds */
+  views: { view: string; label: string; hint: string; available: boolean; detail: string | null }[]
 }
 
 export interface MaterialDetail extends MaterialSummary {
@@ -581,4 +583,41 @@ export const api = {
       headers: body instanceof FormData ? undefined : { "Content-Type": "application/json" },
       body: body instanceof FormData ? body : JSON.stringify(body ?? {}),
     }),
+}
+
+export interface Projection {
+  key: "mds" | "tsne"
+  label: string
+  hint: string
+  /** one [x, y] in [0, 1] per point, in `points` order */
+  xy: [number, number][]
+  /** MDS: share of the distance variance kept by the two axes */
+  fit: number | null
+}
+
+export interface ClusterMethod {
+  key: string
+  label: string
+  hint: string
+  /** cluster id per point (noise points get their own ids) */
+  cluster: number[]
+  /** colour slot per point, matched to the FakeTrace campaign it overlaps most; null = single / noise */
+  color: (number | null)[]
+  noise: boolean[]
+  n_clusters: number
+  n_singletons: number
+  n_noise: number
+  silhouette: number | null
+  ari_faketrace: number | null
+  ari_labels: number | null
+}
+
+export interface FeatureSpace {
+  points: MaterialSummary[]
+  projections: Partial<Record<"mds" | "tsne", Projection>>
+  methods: ClusterMethod[]
+  /** index pairs [i, j] of materials that share a counted identifier */
+  identifier_edges: [number, number][]
+  labels: { file: string; n: number } | null
+  campaign_cut: number
 }

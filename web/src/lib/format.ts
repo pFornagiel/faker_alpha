@@ -22,13 +22,6 @@ export function fmtP(p: number | null | undefined): string {
   return p.toFixed(2)
 }
 
-export function fmtDate(s: string | null | undefined): string {
-  if (!s) return "—"
-  const d = new Date(s.replace(" ", "T") + (s.length === 19 ? "Z" : ""))
-  if (Number.isNaN(d.getTime())) return s
-  return d.toLocaleString("pl-PL", { dateStyle: "medium", timeStyle: "short" })
-}
-
 export function seriesColor(slot: number | null | undefined): string {
   return slot === null || slot === undefined ? "var(--series-none)" : `var(--series-${slot + 1})`
 }

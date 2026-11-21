@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router"
 import { useQuery } from "@tanstack/react-query"
-import {
-  BarChart3, BookOpen, ChevronRight, Layers, LayoutGrid, Network, Plus, ScanSearch, Search,
-} from "lucide-react"
+import { BookOpen, ChartScatter, Grid3x3, Layers, LayoutGrid, Network, Plus, Search } from "lucide-react"
 
 import { api, type SearchResult } from "@/lib/api"
 import { matLabel } from "@/lib/format"
@@ -21,48 +19,12 @@ import {
 } from "@/components/ui/sidebar"
 
 const NAV = [
-  {
-    to: "/",
-    label: "Kampanie",
-    hint: "Co połączono i dlaczego",
-    icon: Layers,
-    match: (p: string) => p === "/" || p.startsWith("/campaigns"),
-  },
-  {
-    to: "/materials",
-    label: "Materiały",
-    hint: "Każda reklama i jej ślady",
-    icon: LayoutGrid,
-    match: (p: string) => p.startsWith("/materials") || p.startsWith("/trace"),
-  },
-  {
-    to: "/relations",
-    label: "Powiązania",
-    hint: "Graf, macierz i tabela par",
-    icon: Network,
-    match: (p: string) => p.startsWith("/relations") || p.startsWith("/graph") || p.startsWith("/matrix") || p.startsWith("/links") || p.startsWith("/pair"),
-  },
-  {
-    to: "/analyse",
-    label: "Analiza i skaner",
-    hint: "Nowy materiał, źródła, eksport",
-    icon: ScanSearch,
-    match: (p: string) => p.startsWith("/analyse") || p.startsWith("/scanner") || p.startsWith("/data"),
-  },
-  {
-    to: "/metrics",
-    label: "Metryki i metoda",
-    hint: "Dendrogram, jakość, progi",
-    icon: BarChart3,
-    match: (p: string) => p.startsWith("/metrics") || p.startsWith("/methodology"),
-  },
-  {
-    to: "/glossary",
-    label: "Słowniczek",
-    hint: "Co porównujemy i jakimi miarami",
-    icon: BookOpen,
-    match: (p: string) => p.startsWith("/glossary"),
-  },
+  { to: "/", label: "Kampanie", icon: Layers, match: (p: string) => p === "/" || p.startsWith("/campaigns") },
+  { to: "/space", label: "Przestrzeń cech", icon: ChartScatter, match: (p: string) => p.startsWith("/space") },
+  { to: "/graph", label: "Graf", icon: Network, match: (p: string) => p.startsWith("/graph") },
+  { to: "/matrix", label: "Macierz", icon: Grid3x3, match: (p: string) => p.startsWith("/matrix") || p.startsWith("/pair") },
+  { to: "/materials", label: "Materiały", icon: LayoutGrid, match: (p: string) => p.startsWith("/materials") || p.startsWith("/trace") },
+  { to: "/glossary", label: "Słowniczek", icon: BookOpen, match: (p: string) => p.startsWith("/glossary") },
 ]
 
 function AppSidebar() {
@@ -85,19 +47,10 @@ function AppSidebar() {
             <SidebarMenu className="gap-1">
               {NAV.map((it) => (
                 <SidebarMenuItem key={it.to}>
-                  <SidebarMenuButton
-                    asChild
-                    size="lg"
-                    tooltip={`${it.label} — ${it.hint}`}
-                    isActive={it.match(pathname)}
-                    className="h-auto py-2"
-                  >
+                  <SidebarMenuButton asChild tooltip={it.label} isActive={it.match(pathname)}>
                     <NavLink to={it.to} onClick={() => setOpenMobile(false)}>
-                      <it.icon className="size-[18px] shrink-0" />
-                      <div className="min-w-0 leading-tight">
-                        <div className="text-sm font-medium">{it.label}</div>
-                        <div className="text-xs text-muted-foreground">{it.hint}</div>
-                      </div>
+                      <it.icon className="size-4 shrink-0" />
+                      <span>{it.label}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -110,31 +63,6 @@ function AppSidebar() {
         <p className="text-xs text-muted-foreground">HackNation 2026 · NASK „Follow the Fake”</p>
       </SidebarFooter>
     </Sidebar>
-  )
-}
-
-function Breadcrumbs() {
-  const { pathname } = useLocation()
-  const crumbs: { label: string; to?: string }[] = []
-  if (pathname.startsWith("/campaigns/")) {
-    crumbs.push({ label: "Kampanie", to: "/" }, { label: `Kampania C${Number(pathname.split("/")[2]) + 1}` })
-  } else if (pathname.startsWith("/materials/")) {
-    crumbs.push({ label: "Materiały", to: "/materials" }, { label: `Materiał` })
-  } else if (pathname.startsWith("/pair/")) {
-    crumbs.push({ label: "Powiązania", to: "/relations" }, { label: "Porównanie pary" })
-  } else if (pathname.startsWith("/trace")) {
-    crumbs.push({ label: "Materiały", to: "/materials" }, { label: "Ślad" })
-  }
-  if (!crumbs.length) return null
-  return (
-    <nav aria-label="Ścieżka" className="hidden items-center gap-1.5 text-sm text-muted-foreground md:flex">
-      {crumbs.map((c, i) => (
-        <span key={i} className="inline-flex items-center gap-1.5">
-          {i > 0 && <ChevronRight className="size-3.5" />}
-          {c.to ? <Link to={c.to} className="hover:text-foreground hover:underline underline-offset-4">{c.label}</Link> : <span className="font-medium text-foreground">{c.label}</span>}
-        </span>
-      ))}
-    </nav>
   )
 }
 
@@ -236,12 +164,11 @@ export function AppLayout() {
         <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background px-5">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="h-5" />
-          <Breadcrumbs />
           <GlobalSearch />
           <Button asChild size="default" className="ml-auto shrink-0">
             <Link to="/analyse">
               <Plus className="size-4" />
-              <span className="hidden sm:inline">Analizuj nowy materiał</span>
+              <span className="hidden sm:inline">Analizuj materiał</span>
             </Link>
           </Button>
         </header>

@@ -73,8 +73,7 @@ export default function PairPage() {
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Section
           title="Podobieństwo treści w pięciu widokach"
-          description="Każdy widok porównuje inną warstwę materiału i daje wynik od 0 (nic wspólnego) do 1 (identyczne)."
-          howToRead="odległość treści d to 1 minus średnia z widoków dostępnych po obu stronach. „Brak danych” = jeden z materiałów nie ma tej warstwy, więc widok nie wchodzi do średniej."
+          description="Każdy widok porównuje inną warstwę materiału i daje wynik od 0 (nic wspólnego) do 1 (identyczne). Odległość treści d = 1 − średnia z widoków dostępnych po obu stronach; „brak danych” nie wchodzi do średniej."
         >
           <ViewBars views={viewsOfExplanation(d)} />
         </Section>

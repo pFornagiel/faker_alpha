@@ -669,7 +669,27 @@ def _indicator_groups(f: dict, corpus_df: Counter, items: dict, cl: dict) -> lis
             for g in sorted(by_group, key=_group_rank)]
 
 
-def material_features(f: dict, items: dict | None = None) -> dict:
+def view_status(f: dict, v: dict | None) -> list[dict]:
+    """Which of the five content views a material can be compared on, and what each one holds."""
+    from .similarity import _images, ocr_signature
+
+    v = v or {}
+    t = f.get("text") or {}
+    n_img = len(_images(f))
+    dom = v.get("dom")
+    sem = v.get("text")
+    have = {
+        "text": (t.get("minhash_masked") is not None, plural(t.get("n_chars", 0), "znak", "znaki", "znaków") + " tekstu strony"),
+        "ocr": (ocr_signature(f) is not None, plural(len(t.get("ocr_text") or ""), "znak", "znaki", "znaków") + " odczytanych z kreacji"),
+        "semantic": (sem is not None and len(sem) > 0, "wektor znaczenia tekstu (384 liczby)"),
+        "html": (dom is not None and len(dom) > 0, "szablon znaczników HTML strony"),
+        "images": (n_img > 0, plural(n_img, "odcisk obrazu", "odciski obrazów", "odcisków obrazów")),
+    }
+    return [{"view": k, "label": view_label(k), "hint": VIEW_HINT[k], "available": bool(have[k][0]),
+             "detail": have[k][1] if have[k][0] else None} for k in VIEWS]
+
+
+def material_features(f: dict, items: dict | None = None, vec: dict | None = None) -> dict:
     """Curated view of the extracted features (no raw minhash/vector dumps)."""
     items = items if items is not None else _items()
     cl = _cl()
@@ -711,6 +731,7 @@ def material_features(f: dict, items: dict | None = None) -> dict:
         "images": images, "assets": assets, "n_assets_total": len((f.get("_material") or {}).get("assets", [])),
         "ocr_links": sorted(set(f.get("indicators", {}).get("ocr_domain", [])) | {q for im in f.get("images", []) for q in im.get("qr", [])}),
         "notes": f.get("notes", []), "dates": f.get("dates", []), "elapsed_s": f.get("elapsed_s"),
+        "views": view_status(f, vec),
     }
 
 
@@ -725,7 +746,7 @@ def material_detail(mid: str):
     return {**mat_summary(mid, f, cl), "source_ref": m.get("source_ref"),
             "inputs": {"pages": [Path(p["path"]).name for p in m.get("pages", [])], "images": len(m.get("images", [])),
                        "videos": len(m.get("videos", [])), "assets": len(m.get("assets", [])), "urls": m.get("urls", [])},
-            "features": material_features(f, items),
+            "features": material_features(f, items, items[mid][1]),
             "links": [link_brief(l, items, cl, me=mid) for l in links if l.p >= 0.05][:12]}
 
 
@@ -978,6 +999,22 @@ def metrics_overview():
         "view_summary": view_summary,
         "dendrogram": _build_dendrogram(items, cl),
     }
+
+
+@app.get("/api/feature-space")
+def feature_space_view():
+    """2D projections of the content distance + alternative clusterings with their scores (ftf/explore.py)."""
+    from .explore import feature_space
+
+    items, cl = _items(), _cl()
+    if "_space" not in cl:
+        ids = [m for c in cl["campaigns"] for m in c]
+        sizes = {ci: len(c) for ci, c in enumerate(cl["campaigns"])}
+        res = feature_space(items, cl, ids, lambda ci: color_slot(ci, sizes.get(ci, 0))) if len(ids) >= 2 else \
+            {"projections": {}, "methods": [], "identifier_edges": [], "labels": None, "campaign_cut": config.CAMPAIGN_CUT}
+        res["points"] = [mat_summary(m, items[m][0], cl) for m in ids]
+        cl["_space"] = res
+    return cl["_space"]
 
 
 @app.get("/api/pair/{a}/{b}")
@@ -1325,7 +1362,7 @@ def _analysis_payload(res: dict, keep: bool, meta: dict) -> dict:
                         "material_name": near["name"]} if near else None,
             "closest": scores[0] if scores else None, "scores": scores, "links": links_out,
             "kept": keep and m.id in items, "material_id": m.id, "name": m.name, "input": meta,
-            "features": material_features({**f, "_material": m.to_dict()}, items), "thresholds": _thresholds()}
+            "features": material_features({**f, "_material": m.to_dict()}, items, res.get("vectors")), "thresholds": _thresholds()}
 
 
 @app.post("/api/analyse")

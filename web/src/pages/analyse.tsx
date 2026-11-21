@@ -5,15 +5,14 @@ import { Link, useSearchParams } from "react-router"
 
 import { api, type AnalysisResult, type Decision, type Job } from "@/lib/api"
 import { fmtP, matLabel, viewsOfExplanation } from "@/lib/format"
-import { CampaignFitChart } from "@/components/charts"
-import { CampaignBadge, HelpTip, MaterialRow, PageHeader, RelationBadge, Section, Strength, StrengthLegend } from "@/components/common"
+import { CampaignBadge, MaterialRow, PageHeader, RelationBadge, Section, Strength } from "@/components/common"
 import { Computation, IdentifierList, ViewBars } from "@/components/evidence"
 import { JobProgress, useJob } from "@/components/job"
-import { FeatureTabs } from "@/pages/material"
+import { FeatureSections } from "@/components/features"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -24,14 +23,12 @@ type Mode = "url" | "file" | "text"
 const MODE_PL: Record<Mode, string> = { url: "adres URL", file: "plik", text: "tekst" }
 const ACCEPT = "image/*,video/*,.html,.htm,.mhtml,.har,.zip,.json,.txt"
 
-export default function AnalysePage({ embedded = false }: { embedded?: boolean }) {
+export default function AnalysePage() {
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<Mode>(params.get("text") ? "text" : "url")
   const [url, setUrl] = useState(params.get("url") ?? "")
   const [text, setText] = useState(params.get("text") ?? "")
   const [file, setFile] = useState<File | null>(null)
-  const [render, setRender] = useState(true)
-  const [useLlm, setUseLlm] = useState(true)
   const [keep, setKeep] = useState(true)
   const jobId = params.get("job")
   const job = useJob<AnalysisResult>(jobId)
@@ -39,15 +36,13 @@ export default function AnalysePage({ embedded = false }: { embedded?: boolean }
 
   // reopening a ?job= link restores the inputs that produced the shown result
   useEffect(() => {
-    const m = job.data?.meta as { mode?: Mode; source?: string; use_llm?: boolean; keep?: boolean; render?: boolean } | undefined
+    const m = job.data?.meta as { mode?: Mode; source?: string; keep?: boolean } | undefined
     if (!m || !jobId || restored.current === jobId) return
     restored.current = jobId
     if (m.mode) setMode(m.mode)
     if (m.mode === "url") setUrl(m.source ?? "")
     if (m.mode === "text") setText(m.source ?? "")
-    if (typeof m.use_llm === "boolean") setUseLlm(m.use_llm)
     if (typeof m.keep === "boolean") setKeep(m.keep)
-    if (typeof m.render === "boolean") setRender(m.render)
   }, [job.data, jobId])
 
   const start = useMutation({
@@ -56,9 +51,9 @@ export default function AnalysePage({ embedded = false }: { embedded?: boolean }
       fd.set("mode", mode)
       fd.set("url", url)
       fd.set("text", text)
-      fd.set("render", String(render))
+      fd.set("render", "true")
       fd.set("keep", String(keep))
-      fd.set("use_llm", String(useLlm))
+      fd.set("use_llm", "true")
       if (file) fd.set("file", file)
       return api.post<Job>("/api/analyse", fd)
     },
@@ -74,20 +69,11 @@ export default function AnalysePage({ embedded = false }: { embedded?: boolean }
 
   return (
     <div className="space-y-6">
-      {!embedded && (
-        <PageHeader
-          title="Analizuj nowy materiał"
-          description="Nowa reklama, strona lub nagranie jest porównywane ze wszystkimi materiałami w bazie. Wynik: duplikat, znana kampania, propozycja scalenia dwóch kampanii albo nowy wzorzec — wraz z dowodami."
-        />
-      )}
+      <PageHeader
+        title="Analizuj materiał"
+        description="Nowa reklama, strona lub nagranie jest porównywane ze wszystkimi materiałami w bazie. Wynik to jedna z czterech decyzji: duplikat, znana kampania, propozycja scalenia dwóch kampanii albo nowy wzorzec — zawsze z dowodami."
+      />
       <Card>
-        <CardHeader>
-          <CardTitle>Co chcesz sprawdzić</CardTitle>
-          <CardDescription className="max-w-[80ch] text-pretty">
-            Materiał zostanie porównany ze wszystkimi materiałami w bazie. Wynik to jedna z czterech decyzji: duplikat, znana kampania,
-            propozycja scalenia dwóch kampanii albo nowy wzorzec — zawsze z dowodami.
-          </CardDescription>
-        </CardHeader>
         <CardContent className="space-y-5">
           <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)} className="gap-4">
             <TabsList>
@@ -99,11 +85,6 @@ export default function AnalysePage({ embedded = false }: { embedded?: boolean }
               <div className="space-y-1.5">
                 <Label htmlFor="url">Adres reklamy, strony docelowej lub pozycji w bibliotece reklam</Label>
                 <Input id="url" type="url" inputMode="url" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch id="render" checked={render} onCheckedChange={setRender} />
-                <Label htmlFor="render" className="font-normal">Otwórz stronę w przeglądarce — zapisuje ruch sieciowy i zrzut ekranu</Label>
-                <HelpTip label="Jak pobierana jest strona">Strona jest pobierana w 3 profilach (bot, komputer z Polski, aplikacja Facebook na Androidzie). Różna treść dla różnych profili oznacza cloaking — ukrywanie oszustwa przed moderacją.</HelpTip>
               </div>
             </TabsContent>
             <TabsContent value="file" className="space-y-2">
@@ -121,14 +102,8 @@ export default function AnalysePage({ embedded = false }: { embedded?: boolean }
           </Tabs>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t pt-4">
             <div className="flex items-center gap-2">
-              <Switch id="llm" checked={useLlm} onCheckedChange={setUseLlm} />
-              <Label htmlFor="llm" className="font-normal">Opisz materiał modelem językowym</Label>
-              <HelpTip label="Co daje model językowy">Rozpoznaje rodzaj oszustwa, nazwy produktów i platform oraz osoby i media, pod które podszywa się reklama. Analiza trwa dłużej. Bez modelu działają tylko reguły słownikowe, które nie rozpoznają nazw produktów.</HelpTip>
-            </div>
-            <div className="flex items-center gap-2">
               <Switch id="keep" checked={keep} onCheckedChange={setKeep} />
-              <Label htmlFor="keep" className="font-normal">Zapisz materiał w bazie</Label>
-              <HelpTip label="Co oznacza zapis">Zapisany materiał staje się częścią bazy i może zmienić kampanie (np. połączyć dwie w jedną). Wyłącz, aby tylko sprawdzić materiał bez zmieniania bazy.</HelpTip>
+              <Label htmlFor="keep" className="font-normal">Zapisz materiał w bazie (wyłącz, aby tylko sprawdzić)</Label>
             </div>
             <div className="ml-auto flex items-center gap-3">
               {missing && <span className="text-xs text-muted-foreground">{missing}</span>}
@@ -200,16 +175,7 @@ function Result({ r }: { r: AnalysisResult }) {
         </Alert>
       )}
 
-      <div className="grid items-start gap-4 lg:grid-cols-[1fr_1.3fr]">
-        <Section
-          title="Jak blisko każdej kampanii jest ten materiał"
-          description="Dla każdej kampanii: bliskość p do jej najbliższego materiału. Wspólny identyfikator daje p = 1 i przypisuje do kampanii niezależnie od treści."
-          howToRead="słupek, który przekracza grubszą kreskę, oznacza przypisanie do tej kampanii. Między kreskami — tylko podobna treść. Jeśli żaden słupek nie dochodzi do pierwszej kreski, materiał jest nowym wzorcem."
-        >
-          <CampaignFitChart scores={r.scores} linkThreshold={t.link} similarThreshold={t.similar} />
-        </Section>
-
-        <Section title="Najbliższe materiały w bazie" description="Rozwiń wiersz, aby zobaczyć wspólne identyfikatory, podobieństwo w każdym widoku treści i obliczenie." aside={<StrengthLegend />}>
+        <Section title="Najbliższe materiały w bazie" description="Rozwiń wiersz, aby zobaczyć wspólne identyfikatory, podobieństwo w każdym widoku treści i obliczenie.">
           {shown.length ? (
             <>
               {!anyLinked && <p className="mb-2 text-sm text-muted-foreground">Żaden materiał w bazie nie jest powiązany z tym: nie ma wspólnego identyfikatora, a odległość treści wszędzie przekracza {t.family_cut}.</p>}
@@ -221,7 +187,7 @@ function Result({ r }: { r: AnalysisResult }) {
                         <MaterialRow m={l.other} link={false} />
                         <div className="space-y-1">
                           <Strength p={l.p} distance={l.distance} />
-                          <RelationBadge relation={l.relation} plain />
+                          <RelationBadge relation={l.relation} />
                         </div>
                       </div>
                     </AccordionTrigger>
@@ -245,12 +211,8 @@ function Result({ r }: { r: AnalysisResult }) {
             <p className="text-sm text-muted-foreground">W bazie nie ma jeszcze materiałów, z którymi można porównać ten.</p>
           )}
         </Section>
-      </div>
 
-      <div className="space-y-2">
-        <h2 className="text-lg font-medium">Ślady wyciągnięte z tego materiału</h2>
-        <FeatureTabs f={r.features} />
-      </div>
+      <FeatureSections f={r.features} />
     </>
   )
 }

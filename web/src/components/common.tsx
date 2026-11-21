@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
-import { TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
 // ------------------------------------------------------------------ page scaffolding
@@ -39,55 +38,26 @@ export function PageHeader({ title, description, actions, children, docTitle }: 
   )
 }
 
-export function Section({ title, description, children, className, contentClassName, aside, howToRead }: {
+export function Section({ title, description, children, className, contentClassName, actions }: {
   title: ReactNode
   description?: ReactNode
   children: ReactNode
   className?: string
   contentClassName?: string
-  /** small secondary element shown under the description (e.g. a legend) — never squeezes the title */
-  aside?: ReactNode
-  /** one or two sentences telling the operator how to read the figure below */
-  howToRead?: ReactNode
+  /** small control at the right of the title (e.g. a link) */
+  actions?: ReactNode
 }) {
   return (
     <Card className={cn("min-w-0", className)}>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {description && <CardDescription className="max-w-[80ch] text-pretty">{description}</CardDescription>}
-        {howToRead && <ReadingNote className="pt-1">{howToRead}</ReadingNote>}
-        {aside && <div className="pt-1">{aside}</div>}
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-x-4 gap-y-1">
+        <div className="min-w-0 space-y-1.5">
+          <CardTitle>{title}</CardTitle>
+          {description && <CardDescription className="max-w-[80ch] text-pretty">{description}</CardDescription>}
+        </div>
+        {actions}
       </CardHeader>
       <CardContent className={cn("min-w-0", contentClassName)}>{children}</CardContent>
     </Card>
-  )
-}
-
-/** Page-level tabs: one underline style everywhere (pill tabs are reserved for small in-form mode switches). */
-export function PageTabsList({ children, label }: { children: ReactNode; label?: string }) {
-  return (
-    <TabsList variant="line" aria-label={label} className="h-auto w-full flex-wrap justify-start gap-x-6 gap-y-1 border-b p-0 group-data-horizontal/tabs:h-auto">
-      {children}
-    </TabsList>
-  )
-}
-
-export function PageTab({ value, children, count }: { value: string; children: ReactNode; count?: number }) {
-  return (
-    <TabsTrigger value={value} className="flex-none gap-2 px-0.5 pt-1 pb-2.5 text-sm group-data-horizontal/tabs:after:bottom-[-1px]">
-      {children}
-      {count !== undefined && <span className="font-normal text-muted-foreground tabular">{count}</span>}
-    </TabsTrigger>
-  )
-}
-
-/** "How to read this" line placed next to a figure: what a mark, an axis or a number means. */
-export function ReadingNote({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <p className={cn("max-w-[80ch] text-xs leading-relaxed text-pretty text-muted-foreground", className)}>
-      <span className="font-medium text-foreground">Jak czytać: </span>
-      {children}
-    </p>
   )
 }
 
@@ -179,12 +149,9 @@ export function CampaignBadge({ c, withName = false, link = true }: { c: Campaig
 /** Group of a shared trace. Identifier groups force the same campaign; images and descriptive traces never do. */
 export function GroupBadge({ label, linking }: { label: string; linking: boolean }) {
   return (
-    <InfoPop label={`Rodzaj śladu: ${label}`} trigger={<Badge variant={linking ? "default" : "outline"}>{label}</Badge>}>
-      <p className="mb-1 font-medium">{label}</p>
-      {linking
-        ? "Identyfikator: ta sama wartość w dwóch materiałach (jeśli nie jest zbyt popularna) wymusza tę samą kampanię."
-        : "Nie łączy samodzielnie — obrazy są porównywane w widoku treści „obrazy”, cechy opisowe są tylko wyświetlane."}
-    </InfoPop>
+    <Badge variant={linking ? "default" : "outline"} title={linking ? "Identyfikator: ta sama wartość w dwóch materiałach łączy je w kampanię" : "Nie łączy samodzielnie"}>
+      {label}
+    </Badge>
   )
 }
 
@@ -195,69 +162,33 @@ const REL_META: Record<Relation, { variant: "default" | "secondary" | "outline" 
   none: { variant: "ghost", label: "brak powiązania", hint: `Brak wspólnego identyfikatora i d > ${FAMILY_CUT}.` },
 }
 
-export function RelationBadge({ relation, plain = false }: { relation: Relation; plain?: boolean }) {
+export function RelationBadge({ relation }: { relation: Relation }) {
   const r = REL_META[relation]
-  if (plain) return <Badge variant={r.variant} title={r.hint} className={cn(relation === "none" && "text-muted-foreground")}>{r.label}</Badge>
-  return (
-    <InfoPop label={`Relacja: ${r.label}`} trigger={<Badge variant={r.variant} className={cn(relation === "none" && "text-muted-foreground")}>{r.label}</Badge>}>
-      <p className="mb-1 font-medium">Relacja: {r.label}</p>
-      {r.hint}
-    </InfoPop>
-  )
+  return <Badge variant={r.variant} title={r.hint} className={cn(relation === "none" && "text-muted-foreground")}>{r.label}</Badge>
 }
 
 // ------------------------------------------------------------------ closeness of a link
 const P_FILL = (p: number) => (p >= P_LINK ? "var(--seq-500)" : p >= P_SIMILAR ? "var(--seq-300)" : "var(--viz-neutral)")
 
 /**
- * Closeness p as a number + a thin meter with the two relation cuts marked.
- * Pass `distance` to print the content distance d under the meter: p = 1 with a large d is not a contradiction,
- * it means a shared identifier links the pair although the content differs — the caption says so.
+ * Closeness p as a number + a thin bar. With `distance`, the content distance d is printed underneath:
+ * p = 1 with a large d means a shared identifier links the pair although the content differs.
  */
 export function Strength({ p, distance, className }: { p: number; distance?: number; className?: string }) {
-  const pct = Math.max(0, Math.min(1, p)) * 100
   const byIdentifier = distance !== undefined && p >= 0.995 && distance > DUPLICATE_CUT
   return (
-    <div className={cn("min-w-0", className)}>
-      <div className="flex items-center gap-2" title={`Bliskość p = ${fmtP(p)}. 1 = wspólny identyfikator, w pozostałych przypadkach 1 − d. Progi: ${P_SIMILAR} podobna treść, ${P_LINK} ta sama kampania.`}>
+    <div className={cn("min-w-0", className)} title={`Bliskość p = ${fmtP(p)}: 1 przy wspólnym identyfikatorze, inaczej 1 − d.`}>
+      <div className="flex items-center gap-2">
         <span className="w-9 shrink-0 text-right text-sm font-medium tabular">{fmtP(p)}</span>
         <div className="relative h-1.5 w-full min-w-12 rounded-full bg-muted" role="meter" aria-label="bliskość pary p" aria-valuenow={p} aria-valuemin={0} aria-valuemax={1}>
-          <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pct}%`, background: P_FILL(p) }} />
-          <span className="absolute -top-1 h-3.5 w-px bg-foreground/45" style={{ left: `${P_SIMILAR * 100}%` }} />
-          <span className="absolute -top-1 h-3.5 w-px bg-foreground/80" style={{ left: `${P_LINK * 100}%` }} />
+          <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.max(0, Math.min(1, p)) * 100}%`, background: P_FILL(p) }} />
         </div>
       </div>
       {distance !== undefined && (
-        <p className="mt-1 pl-11 text-xs whitespace-nowrap text-muted-foreground tabular">
-          {byIdentifier ? "wspólny identyfikator · " : ""}treść d = {fmtP(distance)}
+        <p className="mt-1 pl-11 text-xs text-muted-foreground tabular">
+          {byIdentifier ? "identyfikator; " : ""}treść d = {fmtP(distance)}
         </p>
       )}
-    </div>
-  )
-}
-
-/** Explains the two numbers shown for every pair (p and d) and the zones of the meter. */
-export function StrengthLegend({ className }: { className?: string }) {
-  const zones = [
-    { color: "var(--seq-500)", label: `p ≥ ${P_LINK} — ta sama kampania` },
-    { color: "var(--seq-300)", label: `p od ${P_SIMILAR} do ${P_LINK} — podobna treść, osobne kampanie` },
-    { color: "var(--viz-neutral)", label: `p < ${P_SIMILAR} — brak powiązania` },
-  ]
-  return (
-    <div className={cn("max-w-[80ch] space-y-1.5 text-xs leading-relaxed text-muted-foreground", className)}>
-      <p className="text-pretty">
-        <span className="font-medium text-foreground">Jak czytać: </span>
-        <span className="font-medium text-foreground">d</span> to odległość treści (0 = identyczna, 1 = nic wspólnego).{" "}
-        <span className="font-medium text-foreground">p</span> to bliskość pary: 1, gdy materiały mają wspólny identyfikator (wtedy treść nie ma znaczenia), w pozostałych przypadkach 1 − d.
-      </p>
-      <ul className="flex flex-wrap gap-x-5 gap-y-1">
-        {zones.map((z) => (
-          <li key={z.label} className="inline-flex items-center gap-1.5">
-            <span className="h-1.5 w-4 rounded-full" style={{ background: z.color }} /> {z.label}
-          </li>
-        ))}
-        <li className="inline-flex items-center gap-1.5"><span className="h-3 w-px bg-foreground/80" /> kreski na pasku = progi {P_SIMILAR} i {P_LINK}</li>
-      </ul>
     </div>
   )
 }
@@ -328,32 +259,19 @@ export function Chips({ values, empty = "—", max = 12 }: { values: (string | n
   )
 }
 
-export interface SummaryItem {
-  label: string
-  value: ReactNode
-  /** plain-language definition of the number */
-  hint?: ReactNode
-  to?: string
-}
-
-/** Key counts of a view in one row. Each number carries its definition; linked ones go to the list they count. */
-export function SummaryStrip({ items }: { items: SummaryItem[] }) {
+/** A row of key numbers. */
+export function Stats({ items }: { items: { label: string; value: ReactNode; to?: string }[] }) {
   return (
-    <dl className="grid overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 sm:grid-cols-2 lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none">
+    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]">
       {items.map((it) => {
         const body = (
           <>
             <dt className="text-sm text-muted-foreground">{it.label}</dt>
-            <dd className="mt-0.5 text-2xl font-semibold">{it.value}</dd>
-            {it.hint && <dd className="mt-1 text-xs leading-snug text-pretty text-muted-foreground">{it.hint}</dd>}
+            <dd className="mt-0.5 text-2xl font-semibold tabular">{it.value}</dd>
           </>
         )
-        const cls = "block border-b px-5 py-4 last:border-b-0 lg:border-r lg:border-b-0 lg:last:border-r-0"
-        return it.to ? (
-          <Link key={it.label} to={it.to} className={cn(cls, "transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none")}>{body}</Link>
-        ) : (
-          <div key={it.label} className={cls}>{body}</div>
-        )
+        const cls = "block rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10"
+        return it.to ? <Link key={it.label} to={it.to} className={cn(cls, "hover:ring-foreground/30")}>{body}</Link> : <div key={it.label} className={cls}>{body}</div>
       })}
     </dl>
   )

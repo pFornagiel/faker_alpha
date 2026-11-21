@@ -10,7 +10,9 @@ const SECTIONS = [
   ["identyfikatory", "Co porównujemy: identyfikatory"],
   ["widoki", "Co porównujemy: treść"],
   ["miary", "Miary"],
-  ["wyniki", "Relacje i decyzje"],
+  ["wyniki", "Relacje pary"],
+  ["decyzje", "Decyzje"],
+  ["grupowanie", "Grupowanie i przestrzeń cech"],
   ["jakosc", "Testy jakości"],
 ] as const
 
@@ -28,7 +30,7 @@ export default function GlossaryPage() {
         title="Słowniczek"
         description={<>
           Krótkie definicje: co porównujemy między dwoma materiałami i jakimi miarami. Progi i listy są pobierane z bieżącej konfiguracji.
-          Pełny opis metody: <Link to="/metrics?tab=method" className="underline underline-offset-4">Metryki i metoda → Metoda krok po kroku</Link>.
+          Porównanie metod grupowania na tych samych danych: <Link to="/space" className="underline underline-offset-4">Przestrzeń cech</Link>.
         </>}
       />
 
@@ -115,19 +117,37 @@ export default function GlossaryPage() {
         <Term name="Najbliższy sąsiad (1-NN)">Nowy materiał bez wspólnego identyfikatora trafia do kampanii najbliższego znanego materiału, jeśli d ≤ {c.campaign_cut}. W przeciwnym razie to nowy wzorzec.</Term>
       </Group>
 
-      <Group id="wyniki" title="Relacje i decyzje" intro="Relacja opisuje parę materiałów. Decyzja opisuje nowy materiał analizowany względem bazy.">
+      <Group id="wyniki" title="Relacje pary" intro="Wynik porównania dwóch materiałów z bazy.">
         {m.relations.map((r) => <Term key={r.relation} name={<RelationBadge relation={r.relation} />}>{r.hint}</Term>)}
+      </Group>
+
+      <Group id="decyzje" title="Decyzje dla nowego materiału" intro="Wynik analizy nowego materiału względem całej bazy.">
         {m.decisions.map((d) => <Term key={d.decision} name={d.label}>{d.hint}</Term>)}
       </Group>
 
-      <Group id="jakosc" title="Testy jakości" intro={<>Wyniki są w zakładce <Link to="/metrics?tab=eval" className="underline underline-offset-4">Testy jakości</Link>.</>}>
+      <Group id="grupowanie" title="Grupowanie i przestrzeń cech" intro={<>Metody, które można porównać na stronie <Link to="/space" className="underline underline-offset-4">Przestrzeń cech</Link>. Kampanie w całym panelu wyznacza metoda FakeTrace; pozostałe są punktem odniesienia.</>}>
+        <Term name="FakeTrace (UPGMA z must-link)">
+          Materiały ze wspólnym identyfikatorem są sklejane na stałe (odległość D = 0), resztę łączy średnie wiązanie (UPGMA) na odległości treści d.
+          Drzewo jest cięte na wysokości {c.campaign_cut}: wszystko, co połączyło się niżej, to jedna kampania.
+        </Term>
+        <Term name="Sama treść">To samo średnie wiązanie i ten sam próg, ale bez identyfikatorów. Pokazuje, ile kampanii dałoby się znaleźć wyłącznie po treści.</Term>
+        <Term name="Pojedyncze wiązanie">Dwie grupy łączą się, gdy choć jedna para jest bliżej niż próg. Jeden materiał-łącznik potrafi skleić odległe grupy (efekt łańcucha).</Term>
+        <Term name="Pełne wiązanie">Dwie grupy łączą się dopiero, gdy każda para jest bliżej niż próg. Daje ciasne, ostrożne grupy.</Term>
+        <Term name="HDBSCAN">Szuka gęstych skupisk bez progu odległości. Materiały spoza gęstych skupisk oznacza jako szum zamiast na siłę przypisywać je do grupy.</Term>
+        <Term name="Louvain">Wykrywanie społeczności w grafie powiązań: dzieli graf tak, by krawędzi wewnątrz grup było dużo, a między grupami mało.</Term>
+        <Term name="MDS">Skalowanie wielowymiarowe: rozkłada materiały na płaszczyźnie tak, by odległości na rysunku jak najwierniej oddawały odległości d. Deterministyczne; dobrze zachowuje duże odległości.</Term>
+        <Term name="t-SNE">Rzut zachowujący sąsiedztwo: bliskie materiały lądują obok siebie, ale odległości między dalekimi grupami nic nie znaczą.</Term>
+        <Term name="Silhouette">Dla każdego materiału: o ile bliżej mu do własnej grupy niż do najbliższej obcej, od −1 do 1. Średnia mówi, czy grupy są zwarte i rozdzielone.</Term>
+        <Term name="ARI">Skorygowany indeks Randa: zgodność dwóch podziałów. 1 = identyczny podział, ok. 0 = jak losowy.</Term>
+      </Group>
+
+      <Group id="jakosc" title="Testy jakości" intro={<>Uruchamiane z wiersza poleceń: <code className="text-xs">python tools/evaluate.py --labels data/labels_dane.csv</code>.</>}>
         <Term name="Usuń i przypisz ponownie">Materiał usuwamy z bazy i analizujemy od nowa. Powinien wrócić do swojej kampanii, a materiał, który był w bazie sam, powinien zostać rozpoznany jako nowy wzorzec.</Term>
         <Term name="Sztuczny wariant">Zmieniona kopia materiału (przycięty zrzut, podmieniona domena, inne nazwisko…). Powinna trafić do kampanii materiału źródłowego.</Term>
         <Term name="F1 par">Dla każdej pary: czy decyzja „ta sama kampania / nie” zgadza się z etykietą. F1 łączy precyzję i kompletność tych decyzji (1 = wszystkie trafne).</Term>
         <Term name="B-cubed P / R">
           Liczone z perspektywy każdego materiału. Precyzja: jaka część jego kampanii naprawdę do niej należy. Kompletność: jaką część prawdziwej kampanii odnaleziono.
         </Term>
-        <Term name="ARI">Skorygowany indeks Randa: zgodność całego podziału z etykietami. 1 = identyczny podział, ok. 0 = jak losowy.</Term>
       </Group>
     </div>
   )

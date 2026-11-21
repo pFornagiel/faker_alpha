@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
 
-import type { CampaignViewProfile, DendrogramData, EvalSummary, MetricsOverview } from "@/lib/api"
+import type { CampaignViewProfile, DendrogramData, MetricsOverview } from "@/lib/api"
 import { fmtP, seriesColor } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -127,22 +127,14 @@ function niceStep(max: number): number {
 }
 
 // ------------------------------------------------------------------ 1. distance histogram
-const HIST_SERIES = [
-  { key: "must_link", label: "wspólny identyfikator — łączy niezależnie od treści", color: "var(--seq-700)" },
-  { key: "same_campaign", label: "bliska treść — ta sama kampania", color: "var(--seq-500)" },
-  { key: "similar", label: "podobna treść — ta sama rodzina", color: "var(--seq-200)" },
-  { key: "none", label: "brak powiązania", color: "var(--viz-neutral)" },
-] as const
-
 /**
- * How far apart every pair of materials is (content distance d), with the three cuts drawn at their real
- * position on the axis. Each column is one 0.1-wide bin, stacked by what the pair ended up as.
+ * How far apart every pair of materials is (content distance d), with the cuts drawn at their real position.
+ * Dark part of a column = pairs that share an identifier (linked whatever their content), light = the rest.
  */
-export function DistanceHistogramChart({ data, campaignCut, familyCut, duplicateCut, height = 190 }: {
+export function DistanceHistogramChart({ data, campaignCut, familyCut, height = 180 }: {
   data: MetricsOverview["distance_histogram"]
   campaignCut: number
   familyCut: number
-  duplicateCut?: number
   height?: number
 }) {
   if (!data.length) return <Empty>W bazie nie ma jeszcze żadnej pary materiałów.</Empty>
@@ -150,72 +142,48 @@ export function DistanceHistogramChart({ data, campaignCut, familyCut, duplicate
   const step = niceStep(max)
   const yTicks: number[] = []
   for (let v = 0; v <= max; v += step) yTicks.push(v)
-  // 22px of headroom so the count above the tallest column stays inside the plot
   const h = (v: number) => (v / max) * (height - 22)
   const cuts = [
-    ...(duplicateCut !== undefined ? [{ at: duplicateCut, label: `duplikat ≤ ${duplicateCut}`, row: 0, side: "right" as const }] : []),
-    { at: campaignCut, label: `ta sama kampania ≤ ${campaignCut}`, row: 1, side: "left" as const },
-    { at: familyCut, label: `rodzina ≤ ${familyCut}`, row: 0, side: "left" as const },
+    { at: campaignCut, label: `kampania ≤ ${campaignCut}` },
+    { at: familyCut, label: `rodzina ≤ ${familyCut}` },
   ]
   return (
-    <figure className="space-y-3">
-      <ChartLegend items={HIST_SERIES.map((s) => ({ label: s.label, color: s.color }))} />
+    <figure className="space-y-2">
       <div className="grid grid-cols-[2rem_minmax(0,1fr)] gap-x-2">
-        {/* threshold labels, two rows so neighbours never collide */}
-        <span className="self-end pb-1 text-[11px] whitespace-nowrap text-muted-foreground">liczba par</span>
-        <div className="relative h-10 text-[11px] text-foreground">
+        <span />
+        <div className="relative h-5 text-[11px] text-foreground">
           {cuts.map((c) => (
-            <span
-              key={c.label}
-              className={cn("absolute whitespace-nowrap", c.side === "left" ? "-translate-x-full pr-1.5" : "pl-1.5")}
-              style={{ left: `${c.at * 100}%`, top: c.row === 0 ? 0 : "1.15rem" }}
-            >
-              {c.label}
-            </span>
+            <span key={c.label} className="absolute -translate-x-full pr-1.5 whitespace-nowrap" style={{ left: `${c.at * 100}%` }}>{c.label}</span>
           ))}
         </div>
-
-        {/* y ticks */}
         <div className="relative text-[11px] text-muted-foreground tabular" style={{ height }}>
           {yTicks.map((v) => (
             <span key={v} className="absolute right-0 translate-y-1/2" style={{ bottom: h(v) }}>{v}</span>
           ))}
         </div>
-
-        {/* plot */}
         <div className="relative border-b border-[var(--axis)]" style={{ height }}>
           {yTicks.slice(1).map((v) => (
             <span key={v} className="absolute inset-x-0 border-t border-[var(--grid)]" style={{ bottom: h(v) }} />
           ))}
           {cuts.map((c) => (
-            <span key={c.label} className="absolute -top-10 bottom-0 border-l border-dashed border-foreground/70" style={{ left: `${c.at * 100}%` }} />
+            <span key={c.label} className="absolute -top-5 bottom-0 border-l border-dashed border-foreground/70" style={{ left: `${c.at * 100}%` }} />
           ))}
           {data.map((b) => {
-            const parts = HIST_SERIES.map((s) => ({ ...s, n: b[s.key] })).filter((s) => s.n > 0)
-            const tip = `d ${b.range}: ${b.total} par` + parts.map((s) => `\n${s.n} × ${s.label}`).join("")
+            const rest = b.total - b.must_link
             return (
               <div
                 key={b.range}
                 className="absolute bottom-0 flex flex-col-reverse items-stretch gap-0.5 px-[3px]"
                 style={{ left: `${b.lo * 100}%`, width: `${(b.hi - b.lo) * 100}%` }}
-                title={tip}
+                title={`d ${b.range}: ${b.total} par, w tym ${b.must_link} ze wspólnym identyfikatorem`}
               >
-                {parts.map((s, i) => (
-                  <span
-                    key={s.key}
-                    className={cn("block", i === parts.length - 1 && "rounded-t-[3px]")}
-                    style={{ height: Math.max(3, h(s.n) - 2), background: s.color }}
-                  />
-                ))}
-                {b.total > 0 && (
-                  <span className="mb-0.5 self-center rounded-sm bg-card px-1 text-[11px] leading-4 font-medium text-foreground tabular">{b.total}</span>
-                )}
+                {b.must_link > 0 && <span className="block rounded-t-[3px]" style={{ height: Math.max(3, h(b.must_link) - 2), background: "var(--seq-700)" }} />}
+                {rest > 0 && <span className="block rounded-t-[3px]" style={{ height: Math.max(3, h(rest) - 2), background: "var(--seq-200)" }} />}
+                {b.total > 0 && <span className="mb-0.5 self-center px-1 text-[11px] leading-4 font-medium text-foreground tabular">{b.total}</span>}
               </div>
             )
           })}
         </div>
-
-        {/* x axis */}
         <span />
         <div className="relative h-5 text-[11px] text-muted-foreground tabular">
           {[0, 0.2, 0.4, 0.6, 0.8, 1].map((v) => (
@@ -224,9 +192,9 @@ export function DistanceHistogramChart({ data, campaignCut, familyCut, duplicate
         </div>
         <span />
         <figcaption className="flex justify-between gap-3 text-xs text-muted-foreground">
-          <span className="whitespace-nowrap">← identyczna</span>
-          <span className="text-center font-medium text-foreground">odległość treści d</span>
-          <span className="whitespace-nowrap">nic wspólnego →</span>
+          <span>← identyczna treść</span>
+          <span className="font-medium text-foreground">odległość treści d</span>
+          <span>nic wspólnego →</span>
         </figcaption>
       </div>
     </figure>
@@ -305,184 +273,6 @@ export function CampaignViewProfileChart({ profile }: { profile: CampaignViewPro
       insideLabel="pary wewnątrz tej kampanii"
       outsideLabel="pary z materiałami spoza kampanii"
     />
-  )
-}
-
-// ------------------------------------------------------------------ 4. feature coverage
-export function FeatureCoverageChart({ data }: { data: MetricsOverview["feature_coverage"] }) {
-  if (!data.length) return <Empty>Brak danych o pokryciu.</Empty>
-  return (
-    <BarList
-      head={["Warstwa danych", "materiałów"]}
-      max={100}
-      valueWidth="6rem"
-      labelWidth="15rem"
-      ticks={[{ at: 0, label: "0%" }, { at: 50, label: "50%" }, { at: 100, label: "100%" }]}
-      rows={data.map((d) => ({
-        key: d.key,
-        label: d.label,
-        value: d.pct,
-        display: <>{d.count} z {d.total} <span className="font-normal text-muted-foreground">· {Math.round(d.pct)}%</span></>,
-        title: `${d.label}: ${d.count} z ${d.total} materiałów (${d.pct}%)`,
-      }))}
-    />
-  )
-}
-
-// ------------------------------------------------------------------ 5. simple counts
-export function CategoryCountChart({ data, head }: { data: { label: string; count: number }[]; head: [string, string] }) {
-  if (!data.length) return <Empty>Brak danych.</Empty>
-  const max = Math.max(...data.map((d) => d.count))
-  return (
-    <BarList
-      head={head}
-      max={max}
-      rows={data.map((d) => ({ key: d.label, label: d.label, value: d.count, title: `${d.label}: ${d.count}` }))}
-    />
-  )
-}
-
-// ------------------------------------------------------------------ 6. fit of a new material to each campaign
-export function CampaignFitChart({ scores, linkThreshold, similarThreshold }: {
-  scores: { code: string; name: string; score: number; distance: number }[]
-  linkThreshold: number
-  similarThreshold: number
-}) {
-  if (!scores.length) return <Empty>Baza jest pusta — nie ma kampanii, z którymi można porównać materiał.</Empty>
-  return (
-    <figure className="space-y-3">
-      <BarList
-        head={["Kampania", "bliskość p"]}
-        max={1}
-        labelWidth="14rem"
-        markers={[
-          { at: similarThreshold, label: `${similarThreshold}` },
-          { at: linkThreshold, label: `${linkThreshold}`, strong: true },
-        ]}
-        ticks={[{ at: 0, label: "0" }, { at: 1, label: "1" }]}
-        rows={scores.map((s) => ({
-          key: s.code,
-          label: <><span className="font-medium">{s.code}</span> <span className="text-muted-foreground">{s.name}</span></>,
-          value: s.score,
-          display: fmtP(s.score),
-          color: s.score >= linkThreshold ? "var(--seq-500)" : s.score >= similarThreshold ? "var(--seq-300)" : "var(--viz-neutral)",
-          title: `${s.code} · ${s.name}: bliskość p = ${fmtP(s.score)}, odległość treści d = ${fmtP(s.distance)}`,
-        }))}
-      />
-      <ChartLegend
-        items={[
-          { label: `p ≥ ${linkThreshold} — przypisanie do kampanii`, color: "var(--seq-500)" },
-          { label: `p od ${similarThreshold} do ${linkThreshold} — podobna treść (rodzina)`, color: "var(--seq-300)" },
-          { label: `p < ${similarThreshold} — brak powiązania`, color: "var(--viz-neutral)" },
-        ]}
-      />
-    </figure>
-  )
-}
-
-// ------------------------------------------------------------------ 7. evaluation
-const VARIANT_LABELS: Record<string, string> = {
-  creative_only: "Tylko kreacja (bez strony docelowej)",
-  landing_only: "Tylko strona docelowa (bez kreacji)",
-  domain_swap: "Podmieniona domena",
-  person_swap: "Podmieniona osoba",
-  recompressed: "Zrzut po ponownej kompresji",
-}
-
-const pctTicks = [{ at: 0, label: "0%" }, { at: 50, label: "50%" }, { at: 100, label: "100%" }]
-
-function EvalBlock({ title, description, howToRead, children, className }: { title: string; description: string; howToRead: ReactNode; children: ReactNode; className?: string }) {
-  return (
-    <section className={cn("space-y-3 rounded-xl bg-card p-5 ring-1 ring-foreground/10", className)}>
-      <div className="space-y-1">
-        <h3 className="text-base font-medium">{title}</h3>
-        <p className="max-w-[80ch] text-sm text-pretty text-muted-foreground">{description}</p>
-        <p className="max-w-[80ch] text-xs leading-relaxed text-pretty text-muted-foreground">
-          <span className="font-medium text-foreground">Jak czytać: </span>{howToRead}
-        </p>
-      </div>
-      {children}
-    </section>
-  )
-}
-
-export function EvalSummaryCharts({ loo, variants, labels }: {
-  loo: Record<string, EvalSummary> | null
-  variants: Record<string, EvalSummary> | null
-  labels: Record<string, number> | null
-}) {
-  const share = (v: EvalSummary) => ({
-    value: Math.round(v.acc * 100),
-    display: <>{v.ok} z {v.n} <span className="font-normal text-muted-foreground">· {Math.round(v.acc * 100)}%</span></>,
-  })
-  const pctRow = (key: string, label: string, v: number | undefined, color?: string): BarRow => ({
-    key,
-    label,
-    value: v === undefined ? null : Math.round(v * 100),
-    display: v === undefined ? undefined : `${Math.round(v * 100)}%`,
-    color,
-  })
-  const labelRows: BarRow[] = labels
-    ? [
-        pctRow("f1", "Pary: F1 (trafność i kompletność łącznie)", labels.pairwise_f1),
-        pctRow("bp", "B-cubed: precyzja (kampanie nie mieszają różnych sprawców)", labels.bcubed_precision),
-        pctRow("br", "B-cubed: kompletność (kampania nie jest rozbita na kilka)", labels.bcubed_recall),
-        pctRow("ari", "ARI — FakeTrace", labels.ARI),
-        ...(labels.ARI_hdbscan_baseline !== undefined ? [pctRow("ari0", "ARI — HDBSCAN (punkt odniesienia)", labels.ARI_hdbscan_baseline, "var(--viz-neutral)")] : []),
-      ]
-    : []
-  const LOO_LABEL: Record<string, string> = {
-    known_campaign: "Materiał ze znanej kampanii wraca do swojej kampanii",
-    new_campaign: "Materiał bez kampanii zostaje uznany za nowy wzorzec",
-  }
-
-  return (
-    <div className="grid items-start gap-6 lg:grid-cols-2">
-      {labelRows.length > 0 && (
-        <EvalBlock
-          title="Zgodność kampanii z ręcznymi etykietami"
-          description="Podział na kampanie porównany z podziałem wykonanym ręcznie przez analityka."
-          howToRead="100% = podział identyczny z ręcznym. ARI mierzy zgodność całego podziału z poprawką na przypadek; szary słupek to ten sam pomiar dla standardowego algorytmu HDBSCAN."
-        >
-          <BarList head={["Miara", "wynik"]} max={100} labelWidth="17rem" valueWidth="3.5rem" ticks={pctTicks} rows={labelRows} />
-        </EvalBlock>
-      )}
-
-      {variants && Object.keys(variants).length > 0 && (
-        <EvalBlock
-          title="Odporność na zmienione materiały"
-          description="Każdy materiał jest celowo zubożany lub modyfikowany, a potem analizowany jak nowy."
-          howToRead="słupek = w ilu przypadkach zmieniony materiał nadal trafił do właściwej kampanii. Niski wynik pokazuje, bez której warstwy danych przypisanie zawodzi."
-        >
-          <BarList
-            head={["Wariant", "poprawnych"]}
-            max={100}
-            labelWidth="17rem"
-            valueWidth="6.5rem"
-            ticks={pctTicks}
-            rows={Object.entries(variants).map(([k, v]) => ({ key: k, label: VARIANT_LABELS[k] ?? k, ...share(v) }))}
-          />
-        </EvalBlock>
-      )}
-
-      {loo && Object.keys(loo).length > 0 && (
-        <EvalBlock
-          className="lg:col-span-2"
-          title="Test „usuń jeden materiał” (leave-one-out)"
-          description="Każdy materiał jest po kolei usuwany z bazy i analizowany tak, jakby był nowy."
-          howToRead="pierwszy wiersz sprawdza, czy system rozpoznaje znane kampanie; drugi — czy nie dopisuje na siłę materiału, który do żadnej kampanii nie należy (decyzja „nowy wzorzec”)."
-        >
-          <BarList
-            head={["Sprawdzian", "poprawnych"]}
-            max={100}
-            labelWidth="24rem"
-            valueWidth="6.5rem"
-            ticks={pctTicks}
-            rows={Object.entries(loo).map(([k, v]) => ({ key: k, label: LOO_LABEL[k] ?? k, ...share(v) }))}
-          />
-        </EvalBlock>
-      )}
-    </div>
   )
 }
 
@@ -593,14 +383,6 @@ export function DendrogramChart({ data }: { data: DendrogramData | null }) {
           })}
         </svg>
       </div>
-      <ChartLegend
-        items={[
-          { label: "materiał w kampanii wielomateriałowej (kolor = kampania)", color: "var(--series-1)", shape: "dot" },
-          { label: "pojedynczy materiał", color: NEUTRAL, shape: "ring" },
-          { label: "gałąź łącząca podobne kampanie (rodzina)", color: "#52514e" },
-          { label: "próg cięcia", color: INK, shape: "line" },
-        ]}
-      />
     </figure>
   )
 }

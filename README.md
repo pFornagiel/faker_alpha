@@ -46,14 +46,18 @@ Tryb deweloperski UI: `uvicorn ftf.api:app --reload --port 8765` + `cd web && np
 ### Panel analityka — co gdzie jest
 | Strona | Do czego służy |
 |---|---|
-| **Przegląd kampanii** `/` | kampanie wielomateriałowe z najmocniejszymi wspólnymi śladami, pojedyncze materiały, przykłady „od czego zacząć” |
-| **Kampania** `/campaigns/:id` | macierz „który ślad łączy które materiały”, pary z relacją i odległością, najbliższe materiały spoza kampanii, rodzina |
-| **Materiał** `/materials/:id` | podsumowanie, najbardziej podobne materiały, ślady techniczne, infrastruktura domen, treść/atrybuty LLM, kreacje z OCR i twarzami |
-| **Powiązanie** `/pair/:a/:b` | relacja, wspólne identyfikatory z `df/N` (także pominięte jako zbyt popularne), podobieństwo każdego widoku i odległość `d` |
-| **Ślad** `/trace?type=&value=` | wszystkie materiały z daną wartością (piksel, domena, osoba…) i jej częstość `df/N` |
-| **Powiązania / Graf / Macierz** | te same pary jako tabela, sieć (kampanie jako ramki) i mapa cieplna uporządkowana wg kampanii |
-| **Analizuj nowy materiał** | URL / plik / tekst → decyzja open-set z dowodami (opcjonalnie bez zapisu w bazie) |
-| **Skaner źródeł** · **Dane i eksport** · **Metodyka** | CERT PL + biblioteki reklam; import zbioru, przeliczenie, eksport JSON/CSV/Cypher; metoda z bieżącymi progami i przykładem |
+| **Kampanie** `/` | kluczowe liczby, karty kampanii z najmocniejszymi wspólnymi śladami, rozkład odległości par, co łączy pary, pojedyncze materiały |
+| **Kampania** `/campaigns/:id` | materiały, macierz „który ślad łączy które materiały”, profil podobieństwa w 5 widokach treści, łańcuch najsilniejszych par, najbliższe materiały spoza kampanii |
+| **Przestrzeń cech** `/space` | materiały na płaszczyźnie (MDS / t-SNE z odległości treści `d`), kolor wg metody grupowania: FakeTrace, sama treść, pojedyncze / pełne wiązanie, HDBSCAN, Louvain; tabela silhouette i ARI (vs FakeTrace i vs `data/labels_dane.csv`), dendrogram UPGMA, które cechy odróżniają kampanie |
+| **Graf** `/graph` | sieć: kampanie jako ramki, materiały jako kółka; klik pokazuje dowody pary |
+| **Macierz** `/matrix` | mapa cieplna bliskości `p` uporządkowana wg kampanii; klik otwiera porównanie pary |
+| **Materiały** `/materials`, `/materials/:id` | lista z jednym polem wyszukiwania; strona materiału: podgląd, najbliższe materiały, identyfikatory z `df`, 5 widoków treści z wyjaśnieniem, opis (nie łączy) |
+| **Para** `/pair/:a/:b` · **Ślad** `/trace` | relacja, wspólne identyfikatory, podobieństwo w każdym widoku i obliczenie `d`; wszystkie materiały z daną wartością |
+| **Słowniczek** `/glossary` | pojęcia, identyfikatory, widoki, miary, metody grupowania i rzuty |
+| **Analizuj materiał** `/analyse` | URL / plik / tekst → decyzja open-set z dowodami (opcjonalnie bez zapisu w bazie) |
+
+Skaner źródeł (CERT Polska, biblioteki reklam) działa tylko z wiersza poleceń: `python -m ftf.scheduler --once [--analyse] [--watch]`
+albo cyklicznie `--every N`. Import i eksport danych: `python -m ftf.cli ingest <folder>` / `python -m ftf.cli export`.
 
 Wyszukiwarka w nagłówku (`/` lub `Ctrl+K`) znajduje domeny, identyfikatory, osoby, produkty i kampanie.
 Poprzedni demonstrator Streamlit (`app.py`) pozostaje w repo jako wersja historyczna.
