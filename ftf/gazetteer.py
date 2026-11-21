@@ -138,6 +138,52 @@ def fold(text: str) -> str:
     return re.sub(r"[​-‏⁠﻿]", "", t)
 
 
+# Common Polish first names (folded stems) that should NOT trigger "Robert Lewandowski"
+# when paired with the very common surname "Lewandowski".
+_OTHER_FIRST_NAME_RX = re.compile(
+    r"^(?:tomasz|jan|piotr|marek|mark|andrzej|krzysztof|pawel|pawl|michal|marcin|lukasz|"
+    r"adam|jakub|kamil|dawid|mateusz|wojciech|maciej|grzegorz|rafal|sebastian|daniel|szymon|"
+    r"anna|ann|agnieszk|zofi|katarzyn|magdalen|malgorzat|ew|mari|joann|barbar)\w*$"
+)
+_ROBERT_LEW_FULL_RX = re.compile(r"\brobert\w*\s+lewandowsk\w*\b")
+_MASC_LEW_RX = re.compile(r"\blewandowski(?:ego|emu|m)?\b")
+
+
+def _alias_regex(alias: str) -> re.Pattern:
+    """Compile a word-boundary regex for an alias (supporting inflected multi-word Polish names)."""
+    parts = alias.strip().split()
+    if len(parts) == 1:
+        return re.compile(r"\b" + re.escape(parts[0]) + r"\w*")
+    # Allow Polish declension suffix on each token (e.g. 'andrzej dud' matches 'andrzeju dudzie')
+    return re.compile(r"\b" + r"\w*\s+".join(re.escape(p) for p in parts) + r"\w*")
+
+
+def _matches_robert_lewandowski(folded: str) -> bool:
+    """Match 'Robert Lewandowski' (inflected) or standalone masculine 'Lewandowski(ego|emu|m)',
+    avoiding feminine 'Lewandowska' and other first names like 'Tomasz Lewandowski'."""
+    if _ROBERT_LEW_FULL_RX.search(folded):
+        return True
+    for m in _MASC_LEW_RX.finditer(folded):
+        prefix = folded[: m.start()].rstrip()
+        prev_word = prefix.rsplit(None, 1)[-1] if prefix else ""
+        if not _OTHER_FIRST_NAME_RX.match(prev_word):
+            return True
+    return False
+
+
+_PERSON_RX: dict[str, list[re.Pattern]] = {
+    pname: [_alias_regex(a) for a in aliases]
+    for pname, (_, aliases) in PERSONS.items()
+    if pname != "Robert Lewandowski"
+}
+
+_MASK_FIRST_NAMES = re.compile(
+    r"\b(slawomir|krzysztof|tomasz|rafal|monik|adam|andrzej|donald|robert|anna|karol|piotr|marcin|ewa|"
+    r"dorot|jerzy|pawel|michal|grzegorz|sebastian|kamil|wojciech|bogdan|izabel|szymon|"
+    r"mateusz|daniel|agnieszk|juli|malgorzat|danut|anit|leszek|roman|stanislaw|elon|mark|cristiano)\w*"
+)
+
+
 def _find(folded: str, table: dict) -> list[str]:
     out = []
     padded = f" {folded} "
@@ -149,7 +195,17 @@ def _find(folded: str, table: dict) -> list[str]:
 
 
 def find_persons(text: str) -> list[str]:
-    return _find(fold(text), PERSONS)
+    f = fold(text)
+    if not f:
+        return []
+    out = []
+    for name in PERSONS:
+        if name == "Robert Lewandowski":
+            if _matches_robert_lewandowski(f):
+                out.append(name)
+        elif any(rx.search(f) for rx in _PERSON_RX[name]):
+            out.append(name)
+    return out
 
 
 def find_brands(text: str) -> list[str]:
@@ -172,15 +228,15 @@ def best_label(text: str, lex: dict[str, list[str]], min_hits: int = 2) -> str |
 
 
 def mask_entities(text: str) -> str:
-    """Replace known person names (all alias stems) by <PER> - used to detect 'same template,
-    swapped celebrity' variants (e.g. 'Brutalna napaść na Krzysztofa Stanowskiego' vs '... Tomasza Sekielskiego')."""
+    """Replace known person names (all alias stems, including short surnames like Tusk/Duda and
+    Polish inflected first+last names) by <per> - used to detect 'same template, swapped celebrity'."""
     f = fold(text)
     for _, (_, aliases) in PERSONS.items():
         for a in aliases:
-            if len(a) >= 5:
-                f = re.sub(re.escape(a) + r"\w*", " <per> ", f)
-    # generic capitalised first-name + surname pattern (Polish declension endings)
-    f = re.sub(r"\b(krzysztof|tomasz|rafal|monik|adam|andrzej|donald|robert|anna|karol|piotr|marcin|ewa|"
-               r"dorot|jerzy|pawel|michal|grzegorz|sebastian|kamil|wojciech|bogdan|izabel|szymon|"
-               r"mateusz|daniel|agnieszk|juli|malgorzat|danut|anit|leszek|roman)\w*", " <per> ", f)
+            rx = _alias_regex(a)
+            f = rx.sub(" <per> ", f)
+    # Also mask inflected 'Duda' (duda/dudy/dudzie/dude/dudo) when appearing without 'Andrzej'
+    f = re.sub(r"\bdud(?:a|y|zie|e|o)\b", " <per> ", f)
+    # Generic Polish first names (with declension endings)
+    f = _MASK_FIRST_NAMES.sub(" <per> ", f)
     return re.sub(r"(\s*<per>\s*)+", " <per> ", f)

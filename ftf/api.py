@@ -57,13 +57,13 @@ app = FastAPI(title="FakeTrace API", version="1.0", lifespan=_lifespan)
 _ENGINE: Engine | None = None
 _ENGINE_LOCK = threading.Lock()
 
-# literals used by the engine outside config.py (kept here so the methodology page can show them)
-CORE_S_MIN = 0.6           # cluster.build: operator-level link that forms a campaign core
-STRONG_MERGE = 0.85        # cluster.agglomerate: a single link this strong merges campaigns
-SINGLE_ASSIGN = 0.75       # cluster.assign: a single link this strong assigns a new material
-CONFLICT_FACTOR = 0.6      # similarity.pair: contradicting scam types
-PLAYBOOK_MIN = 0.45        # similarity.pair: 'similar' via playbook score
-FAMILY_MERGE = 0.40        # cluster.build: playbook families
+# engine constants imported from config.py (single source of truth)
+CORE_S_MIN = config.CORE_S_MIN
+STRONG_MERGE = config.STRONG_MERGE
+SINGLE_ASSIGN = config.SINGLE_ASSIGN
+CONFLICT_FACTOR = config.CONFLICT_FACTOR
+PLAYBOOK_MIN = config.PLAYBOOK_MIN
+FAMILY_MERGE = config.FAMILY_MERGE
 
 BACKEND_PL = {"claude_cli": "Claude (Claude Code CLI)", "gemini": "Gemini", "rules": "reguły słownikowe (bez modelu językowego)",
               "none": "wyłączone", "auto": "automatycznie: Claude CLI → Gemini → reguły słownikowe"}

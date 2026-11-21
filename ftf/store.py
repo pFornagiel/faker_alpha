@@ -72,7 +72,8 @@ class Store:
             self._cache = None
 
     def has(self, mid: str) -> bool:
-        return self.db.execute("SELECT 1 FROM materials WHERE id=?", (mid,)).fetchone() is not None
+        with _LOCK:
+            return self.db.execute("SELECT 1 FROM materials WHERE id=?", (mid,)).fetchone() is not None
 
     def all(self) -> dict[str, tuple[dict, dict]]:
         """id -> (features (with material + label), vectors)"""
@@ -93,7 +94,8 @@ class Store:
             return out
 
     def count(self) -> int:
-        return self.db.execute("SELECT COUNT(*) FROM materials").fetchone()[0]
+        with _LOCK:
+            return self.db.execute("SELECT COUNT(*) FROM materials").fetchone()[0]
 
     # ------------------------------------------------------------------ kv / events
     def put(self, key: str, value) -> None:
@@ -102,8 +104,9 @@ class Store:
             self.db.commit()
 
     def get(self, key: str, default=None):
-        row = self.db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
-        return json.loads(row[0]) if row else default
+        with _LOCK:
+            row = self.db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+            return json.loads(row[0]) if row else default
 
     def log(self, kind: str, payload) -> None:
         with _LOCK:
@@ -111,5 +114,6 @@ class Store:
             self.db.commit()
 
     def events(self, limit: int = 200) -> list[dict]:
-        return [{"ts": ts, "kind": k, "payload": json.loads(p)} for ts, k, p in
-                self.db.execute("SELECT ts, kind, payload FROM events ORDER BY rowid DESC LIMIT ?", (limit,))]
+        with _LOCK:
+            return [{"ts": ts, "kind": k, "payload": json.loads(p)} for ts, k, p in
+                    self.db.execute("SELECT ts, kind, payload FROM events ORDER BY rowid DESC LIMIT ?", (limit,))]

@@ -6,7 +6,10 @@ wyciąga wspólne ślady — tekstowe, wizualne, osobowe, infrastrukturalne — 
 pokazując **uzasadnienie każdego powiązania**. Nowy materiał jest przypisywany do znanej kampanii albo
 oznaczany jako **nowy wzorzec** (open-set).
 
-* Metodyka: [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md)
+* Metodyka (skrót PL): [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md)
+* Przebieg pipeline'u krok po kroku i audyt decyzji: [`docs/PIPELINE_WALKTHROUGH.md`](docs/PIPELINE_WALKTHROUGH.md)
+* Metodyka pobierania web, cloakingu i OSINT: [`docs/WEB_FETCHING_METHODOLOGY.md`](docs/WEB_FETCHING_METHODOLOGY.md)
+* Metodyka cech, modeli ML, podobieństwa i klastrowania: [`docs/FEATURES_AND_ML_METHODOLOGY.md`](docs/FEATURES_AND_ML_METHODOLOGY.md)
 * Research (źródła danych, modele, prior art): [`research/`](research/)
 * Wyniki na zbiorze przykładowym: [`docs/RESULTS.md`](docs/RESULTS.md)
 * Rozwiązanie zagadki CTF ze strony z zajawką: [`docs/CTF_SOLUTION.md`](docs/CTF_SOLUTION.md)

@@ -3,6 +3,11 @@
 > Cel: z chaosu pojedynczych podejrzanych reklam wydobyć **wspólne ślady** i połączyć materiały w
 > **kampanie**, wskazując dla każdego powiązania **przesłanki** i ich **wiarygodność**.
 > Nie budujemy detektora pojedynczej fałszywej reklamy — budujemy metodę łączenia.
+>
+> **Szczegółowa dokumentacja techniczna (EN):**
+> - [`docs/PIPELINE_WALKTHROUGH.md`](PIPELINE_WALKTHROUGH.md) — pełny przebieg pipeline'u krok po kroku + audyt decyzji i ograniczeń
+> - [`docs/WEB_FETCHING_METHODOLOGY.md`](WEB_FETCHING_METHODOLOGY.md) — ochrona SSRF, 3-profilowe pobieranie, semantyczna klasyfikacja cloakingu, OSINT i źródła
+> - [`docs/FEATURES_AND_ML_METHODOLOGY.md`](FEATURES_AND_ML_METHODOLOGY.md) — taksonomia cech, modele ONNX, centrowanie odwrotnie ważone gęstością, noisy-OR i klastrowanie
 
 ## 1. Model danych
 
@@ -21,12 +26,12 @@
 | Źródło | Co daje | Status |
 |---|---|---|
 | Zbiór organizatora / upload | HTML, HAR, MHTML, zrzuty, wideo, info.json | ✅ |
-| Przechwycenie URL (`ftf/capture.py`) | łańcuch przekierowań w 3 profilach klienta (bot / desktop PL / **FB in-app Android + Referer l.facebook.com**) → wykrywanie **cloakingu**; render Playwright (HAR + DOM + screenshot) | ✅ |
-| Lista ostrzeżeń **CERT Polska** (`hole.cert.pl/domains/v2/domains.json`) | ~600–900 nowych domen/dzień; delta po `RegisterPositionId` + filtr słów kluczowych | ✅ live |
+| Przechwycenie URL (`ftf/capture.py`, `ftf/net.py`) | ochrona SSRF + łańcuch przekierowań w 3 profilach klienta (`bot` / `desktop_pl` / **`fb_mobile` + syntetyczny `fbclid` + `Referer: l.facebook.com`**) → **semantyczno-strukturalna klasyfikacja cloakingu** (5 werdyktów); opcjonalny sandboksowany render Playwright (HAR + DOM + screenshot) | ✅ |
+| Lista ostrzeżeń **CERT Polska** (`hole.cert.pl/domains/v2/domains.json`) | ~600–900 nowych domen/dzień; cache ETag, delta po `RegisterPositionId` + filtr słów kluczowych | ✅ live |
 | **Microsoft Ad Library API** (bez klucza) | reklamy EOG, `DestinationUrl`, PL=`151` | ✅ live |
-| **Google Ads Transparency Center** (RPC) | pivot: reklamodawca/domena → kreacje, PL=`2616` | ✅ live |
+| **Google Ads Transparency Center** (RPC) | pivot: reklamodawca/domena → kreacje, PL=`2616` | ⚠️ rate-limit `429` z IP serwerowych |
 | **Meta Ad Library** | API `ads_archive` (token, instrukcja w README); kreacje po ID reklamy przez **yt-dlp `facebook:ads`** — dokładnie tak organizator pozyskał przypadek 5 | ✅ (token opcjonalny) |
-| LinkedIn Ad Library | wyszukiwanie po słowie kluczowym (HTML) | ✅ |
+| LinkedIn Ad Library | wyszukiwanie po słowie kluczowym (HTML) | ⚠️ blokowane (`403`) |
 
 Szczegóły, endpointy i weryfikacja „na żywo”: `research/01_ad_libraries_and_platform_scraping.md`,
 `research/02_web_infrastructure_osint.md`.
@@ -51,25 +56,24 @@ Z URL-i (w tym `saved from url=` w zapisanych stronach, `page_url` w manifestach
 * **szablon DOM**: MinHash 5-gramów sekwencji tagów;
 * domeny: docelowa, w łańcuchu przekierowań, hosty TDS; IP serwerów z HAR **z odfiltrowaniem CDN**
   (Cloudflare, Meta, Google, Akamai…), nagłówki `server`.
-* **metadane domen online** (`ftf/enrich.py`, cache 7 dni, `FTF_ENRICH=0` offline): RDAP
-  (rejestrator, data utworzenia, NS), DNS (A/NS/MX), crt.sh (pierwszy certyfikat, SAN), obecność na
-  liście CERT Polska. Wskaźniki: **para NS** (dla Cloudflare przypisywana per konto; domyślne NS
+* **metadane domen online** (`ftf/enrich.py`, cache 7 dni / 15 min dla błędów przejściowych, `FTF_ENRICH=0` offline): RDAP
+  przez bootstrap IANA RFC 9224 (rejestrator, data utworzenia, NS), DNS (A/NS/MX), crt.sh (pierwszy certyfikat, SAN), obecność na
+  liście CERT Polska (z dopasowaniem domeny nadrzędnej). Wskaźniki: **para NS** (dla Cloudflare przypisywana per konto; domyślne NS
   rejestratorów są pomijane jako generyczne) oraz **seria rejestracji** `rejestrator | para NS | dzień
-  utworzenia` — domeny jednego operatora rejestrowane hurtem (np. `civicdaybook.live` i
+  utworzenia` (również tylko dla niegenerycznych NS) — domeny jednego operatora rejestrowane hurtem (np. `civicdaybook.live` i
   `healthlinkq.pro` utworzone 2026-10-08, dzień przed reklamą).
 
 ### 3.2 Warstwa wizualna (`ftf/vision.py`)
 Zrzuty kreacji i klatki wideo (8 równomiernie, z odrzuceniem czarnych klatek — technika omijania
 moderacji opisana przez CSIRT KNF):
-* **pHash / dHash / colorhash** (duplikaty, rekompresja) po przycięciu jednolitych ramek i **wycięciu kreacji
-  ze zrzutu feedu** (najwyższy pas wierszy „obrazkowych” — usuwa interfejs aplikacji, który dominował CLIP/DINO);
-* zrzuty **interfejsu platformy** (szczegóły reklamy w bibliotece, komentarze) są rozpoznawane po OCR i wyłączane
-  z podobieństwa wizualnego (zostają: OCR, ID reklamy z „Identyfikator biblioteki”, reklamodawca nad „Sponsorowane”);
-* **CLIP ViT-B/32** (ONNX int8) — „wygląd” reklamy; **DINOv2-small** — układ/szablon graficzny;
-* **OCR** RapidOCR PP-OCRv6 (polskie znaki) z pozycjami linii → tekst kreacji + **sygnatura
-  layoutu** (siatka 4×4 obecności tekstu i twarzy = szablon produkcji);
-* QR (OpenCV), domeny widoczne na kreacji (`ocr_domain` ↔ domena docelowa innego materiału);
-* **obrazy osadzone na stronach** (`_files/`, `resources/`, obrazy z HAR) → pHash jako wskaźnik
+* **pHash** (duplikaty, rekompresja) po przycięciu jednolitych ramek i **wycięciu kreacji
+  z pionowego zrzutu feedu** (`H/W > 1.35`, min. 35% pola — usuwa interfejs aplikacji bez przycinania klatek wideo);
+* zrzuty **interfejsu platformy** (szczegóły reklamy w bibliotece reklam) są rozpoznawane po OCR i wyłączane
+  z podobieństwa wizualnego (zostają: OCR, kanoniczne ID reklamy z „Identyfikator biblioteki”, reklamodawca nad „Sponsorowane”);
+* **CLIP ViT-B/32** (ONNX int8) — „wygląd” reklamy; **DINOv2-small** (L2-znormalizowany CLS + średnia patchów) — układ/szablon graficzny;
+* **OCR** RapidOCR PP-OCRv6 (polskie znaki) z pozycjami linii → tekst kreacji;
+* QR (OpenCV), domeny widoczne na kreacji (`ocr_domain` z filtrem domen-przynęt ↔ domena docelowa innego materiału);
+* **obrazy osadzone na stronach** (`_files/`, `resources/`, obrazy z HAR — deduplikowane po SHA-256) → pHash jako wskaźnik
   „ten sam obraz na dwóch stronach”.
 
 ### 3.3 Osoby (`ftf/faces.py`)
@@ -86,7 +90,7 @@ moderacji opisana przez CSIRT KNF):
   (np. „Brutalna napaść na Krzysztofa Stanowskiego…” ↔ „…na Tomasza Sekielskiego…”);
 * **szablon tytułu** (osoby, liczby, nazwy mediów zamaskowane) + podobieństwo 3-gramów;
 * **multilingual-e5-small** (ONNX int8) — podobieństwo narracji semantycznej; embeddingi są **centrowane średnią
-  korpusu** (korekta anizotropii: surowe cos dla niepowiązanych polskich stron scamowych wynosiły 0.89–0.93);
+  korpusu ważoną odwrotnością gęstości** (korekta anizotropii odporna na dominującą kampanię, wymagająca ≥ 5 efektywnych reprezentantów: surowe cos dla niepowiązanych polskich stron scamowych wynosiły 0.89–0.93);
   opcjonalnie **EmbeddingGemma-2** (`FTF_GEMMA=1`, lepszy na polskim STS, wolniejszy);
 * YAKE (słowa kluczowe), kwoty (`zł`, `PLN`), gazetteer osób / marek / mediów (NFKC + usunięcie
   diakrytyków i znaków zero-width = odporność na homoglify).
@@ -131,9 +135,9 @@ Dla pary materiałów zbieramy **dowody** (sygnał, wartość, waga, opis PL), p
 | `hosting` | W | ten sam adres IP spoza CDN |
 
 **Wskaźniki dyskretne**: waga = `prior(typ) × (0.35 + 0.65·rzadkość)`, gdzie
-`rzadkość = log(N/df) / log(N/2)` (intuicja Fellegi–Sunter: zgodność na wartości występującej w 2 z
-1000 reklam jest mocna, na wartości z połowy korpusu — szumem). Wartości obecne w >50% materiałów
-(i ≥6) to **huby** — są ignorowane i *raportowane jako pominięte* (np. Cloudflare, popularny
+`rzadkość = clip(log((N+1)/(df+1)) / log((N+1)/2), 0.15, 1.0)` (intuicja Fellegi–Sunter: zgodność na wartości występującej w 2 z
+1000 reklam jest mocna, na wartości z połowy korpusu — słabsza). Wartości obecne w >50% materiałów
+(i ≥6, przy `N ≥ 15`, z wyłączeniem rodzin operatorskich tier S dla `N < 30`) to **huby** — są ignorowane i *raportowane jako pominięte* (np. popularny
 celebryta).
 
 **Sygnały ciągłe** → dowód przez rampę liniową `[lo, hi] → [0, w_max]` (progi w `ftf/config.py`;
@@ -169,9 +173,9 @@ wskaźnikach (z pominięciem hubów) + kNN po embeddingach tekstu i CLIP (`candi
 
 ## 6. Nowy materiał — przypisanie otwarte (open-set) (`cluster.assign`)
 Cechy → porównanie z całym zbiorem → wynik kampanii = średnia z 2 najlepszych porównywalnych `p`
-(lub pojedynczy dowód ≥ 0.85) →
+(lub pojedynczy dowód ≥ 0.75) →
 `duplicate` · `known_campaign` (≥ 0.55) · `merge_proposal` (dwie kampanie ≥ 0.55) ·
-`candidate_review` (0.30–0.55) · **`new_campaign`** (< 0.30). Wynik zawiera listę najbardziej
+`candidate_review` (0.40–0.55 z dowodem spoza słabych rodzin ≥ 0.30) · **`new_campaign`** (< 0.40 lub wyłącznie słabe dowody). Wynik zawiera listę najbardziej
 podobnych incydentów z uzasadnieniem.
 
 ## 7. Reprezentacja powiązań (`ftf/graph.py`)

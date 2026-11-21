@@ -160,15 +160,25 @@ def _gemini(text: str) -> dict | None:
         return None
 
 
+_CTA_STOP = {"pobierz", "sprawdz", "kliknij", "zobacz", "dowiedz", "zarejestruj", "otworz", "wiecej", "tutaj", "teraz"}
+_ENUM_BY_FIELD = {"scam_type": set(SCAM_TYPES), "narrative_template": set(NARRATIVES), "creative_format": set(FORMATS)}
+
+
 def rules(text: str) -> dict:
     """Deterministic fallback using the gazetteer/lexicons (always available)."""
     f = fold(text)
     persons = find_persons(text)
     title = text.split("\n", 1)[0][:200]
     product = None
-    m = re.search(r"(?:produkt|preparat|kapsułki|aplikacj[aęi]|platform[aęy])\s+[„\"']?([A-ZŁŚŻŹĆ][\w-]{3,30}(?:\s[A-Z][\w-]+)?)", text)
-    if m:
-        product = m.group(1)
+    for m in re.finditer(
+        r"(?i:\b(?:produkt|preparat|kapsułki|aplikacj[aęi]|platform[aęy]))\s+[„\"']?([A-ZŁŚŻŹĆ][\w-]{3,30}(?:\s[A-ZŁŚŻŹĆ][\w-]+)?)",
+        text,
+    ):
+        cand = m.group(1).strip()
+        first_word = fold(cand.split()[0])
+        if first_word not in _CTA_STOP:
+            product = cand
+            break
     fmt = "other"
     if any(k in f for k in ("app store", "google play", "pobierz aplikacj")):
         fmt = "fake_app_store_page"
@@ -223,7 +233,7 @@ def normalise(a: dict) -> dict:
         canon = find_brands(b) + find_media(b)
         brands.extend(canon or [b.strip()])
     a["impersonated_brands"] = sorted(set(brands))
-    for k in ("scam_type", "narrative_template", "creative_format"):
-        if a.get(k) not in SCAM_TYPES + NARRATIVES + FORMATS:
+    for k, allowed in _ENUM_BY_FIELD.items():
+        if a.get(k) not in allowed:
             a[k] = "other"
     return a

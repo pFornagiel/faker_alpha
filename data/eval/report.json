@@ -26,7 +26,7 @@
     "soft_ok": true,
     "best": [
      [
-      0.151,
+      0.132,
       0
      ],
      [
@@ -55,7 +55,7 @@
    {
     "material": "2",
     "expected": "known_campaign",
-    "decision": "known_campaign",
+    "decision": "merge_proposal",
     "ok": true,
     "soft_ok": true,
     "best": [
@@ -64,7 +64,7 @@
       0
      ],
      [
-      0.151,
+      1.0,
       5
      ]
     ]
@@ -81,8 +81,8 @@
       0
      ],
      [
-      0.151,
-      5
+      0.15,
+      3
      ]
     ]
    },
@@ -94,11 +94,11 @@
     "soft_ok": true,
     "best": [
      [
-      0.228,
+      0.219,
       0
      ],
      [
-      0.11,
+      0.097,
       3
      ]
     ]
@@ -166,7 +166,7 @@
       0
      ],
      [
-      0.306,
+      0.288,
       3
      ]
     ]

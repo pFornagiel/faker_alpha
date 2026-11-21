@@ -2,7 +2,7 @@
 
 Implemented directly on onnxruntime (no `insightface` package / Cython build needed).
 Model weights: InsightFace buffalo_l — non-commercial research licence (fine for the hackathon POC).
-Face quality: we weight matches by a simple quality proxy (detector score x face size x sharpness),
+Face quality: we gate matches by a simple quality proxy (detector score x face size x sharpness),
 in the spirit of MagFace/eDifFIQA suggested by the organisers.
 """
 from __future__ import annotations
@@ -21,13 +21,49 @@ from .vision import _session
 
 log = logging.getLogger(__name__)
 
-ARC_TEMPLATE = np.array([[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366],
-                         [41.5493, 92.3655], [70.7299, 92.2041]], dtype=np.float32)
+ARC_TEMPLATE = np.array(
+    [[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366],
+     [41.5493, 92.3655], [70.7299, 92.2041]],
+    dtype=np.float32,
+)
+
+
+def _umeyama_2d(src: np.ndarray, dst: np.ndarray) -> np.ndarray | None:
+    """Closed-form deterministic 2D similarity transform (Umeyama 1991) mapping src (N,2) -> dst (N,2).
+
+    Returns a (2, 3) float32 affine matrix for cv2.warpAffine, or None if degenerate.
+    """
+    src = np.asarray(src, dtype=np.float64)
+    dst = np.asarray(dst, dtype=np.float64)
+    n = src.shape[0]
+    if n < 2 or src.shape != dst.shape:
+        return None
+    src_mean = src.mean(axis=0)
+    dst_mean = dst.mean(axis=0)
+    src_demean = src - src_mean
+    dst_demean = dst - dst_mean
+    var_src = float(np.sum(src_demean ** 2) / n)
+    if var_src < 1e-12:
+        return None
+    cov = (dst_demean.T @ src_demean) / n
+    U, S, Vt = np.linalg.svd(cov)
+    d = np.ones(2, dtype=np.float64)
+    if np.linalg.det(cov) < 0:
+        d[1] = -1.0
+    R = U @ np.diag(d) @ Vt
+    if np.linalg.det(R) < 0:
+        d[1] *= -1.0
+        R = U @ np.diag(d) @ Vt
+    scale = float(np.sum(S * d) / var_src)
+    t = dst_mean - scale * (R @ src_mean)
+    return np.hstack([scale * R, t[:, None]]).astype(np.float32)
 
 
 def _distance2bbox(points, distance):
-    return np.stack([points[:, 0] - distance[:, 0], points[:, 1] - distance[:, 1],
-                     points[:, 0] + distance[:, 2], points[:, 1] + distance[:, 3]], axis=-1)
+    return np.stack([
+        points[:, 0] - distance[:, 0], points[:, 1] - distance[:, 1],
+        points[:, 0] + distance[:, 2], points[:, 1] + distance[:, 3],
+    ], axis=-1)
 
 
 def _distance2kps(points, distance):
@@ -89,11 +125,11 @@ def detect(img_bgr: np.ndarray, thresh: float = config.FACE_DET_THRESHOLD, size:
     return [(dets[i, :4], float(dets[i, 4]), kpss[i]) for i in keep]
 
 
-def embed(img_bgr: np.ndarray, kps: np.ndarray) -> np.ndarray | None:
+def embed(img_bgr: np.ndarray, kps: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
     p = config.MODELS / "faces" / "w600k_r50.onnx"
     if not p.exists():
         return None
-    M, _ = cv2.estimateAffinePartial2D(kps.astype(np.float32), ARC_TEMPLATE, method=cv2.LMEDS)
+    M = _umeyama_2d(kps.astype(np.float32), ARC_TEMPLATE)
     if M is None:
         return None
     crop = cv2.warpAffine(img_bgr, M, (112, 112), borderValue=0.0)
@@ -118,25 +154,41 @@ def faces_in_image(im: Image.Image, min_side: int = 36) -> list[dict]:
         vec, crop = r
         sharp = float(cv2.Laplacian(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var())
         quality = float(np.clip(score, 0, 1) * np.clip(side / 112, 0.2, 1.0) * np.clip(sharp / 150, 0.3, 1.0))
-        out.append({"box": [float(v) for v in box], "box_rel": [float(x0 / W), float(y0 / H), float(x1 / W), float(y1 / H)],
-                    "det_score": round(score, 3), "side": round(float(side), 1), "quality": round(quality, 3),
-                    "embedding": vec, "crop": crop})
+        out.append({
+            "box": [float(v) for v in box],
+            "box_rel": [float(x0 / W), float(y0 / H), float(x1 / W), float(y1 / H)],
+            "det_score": round(score, 3),
+            "side": round(float(side), 1),
+            "quality": round(quality, 3),
+            "embedding": vec,
+            "crop": crop,
+        })
     return out
 
 
 # ----------------------------------------------------------------------------- reference gallery
 @lru_cache(maxsize=1)
 def gallery() -> tuple[list[str], np.ndarray, dict]:
-    """Reference DB: data/reference_faces/<Person Name>/*.jpg -> mean ArcFace embedding per person."""
+    """Reference DB: data/reference_faces/<Person Name>/*.jpg -> mean ArcFace embedding per person.
+
+    Cached safely as numeric .npz (allow_pickle=False) + JSON metadata sidecar (with mtime/size sig).
+    """
     names, vecs, meta = [], [], {}
     root = config.REFERENCE_FACES
-    cache = root / "_gallery_cache.npz"
+    cache_npz = root / "_gallery_cache.npz"
+    cache_json = root / "_gallery_cache.json"
     files = sorted(p for p in root.glob("*/*") if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"))
-    sig = str([(str(p), p.stat().st_size) for p in files])
-    if cache.exists():
-        d = np.load(cache, allow_pickle=True)
-        if str(d["sig"]) == sig:
-            return list(d["names"]), d["vecs"], json.loads(str(d["meta"]))
+    sig = [[str(p.relative_to(root)), p.stat().st_size, int(p.stat().st_mtime_ns)] for p in files]
+
+    if cache_npz.exists() and cache_json.exists():
+        try:
+            j = json.loads(cache_json.read_text(encoding="utf-8"))
+            if j.get("sig") == sig:
+                with np.load(cache_npz, allow_pickle=False) as d:
+                    return list(j["names"]), d["vecs"].astype(np.float32), j.get("meta", {})
+        except Exception as exc:
+            log.debug("rebuilding face gallery cache: %s", exc)
+
     by_person: dict[str, list[np.ndarray]] = {}
     for p in files:
         im = Image.open(p).convert("RGB")
@@ -148,18 +200,37 @@ def gallery() -> tuple[list[str], np.ndarray, dict]:
     for name, vs in sorted(by_person.items()):
         m = np.mean(vs, axis=0)
         names.append(name)
-        vecs.append(m / np.linalg.norm(m))
+        vecs.append((m / (np.linalg.norm(m) + 1e-9)).astype(np.float32))
         meta[name] = {"n_images": len(vs)}
     arr = np.stack(vecs) if vecs else np.zeros((0, 512), np.float32)
     if files:
-        np.savez(cache, names=np.array(names, dtype=object), vecs=arr, meta=json.dumps(meta), sig=sig)
+        np.savez(cache_npz, vecs=arr)
+        cache_json.write_text(
+            json.dumps({"names": names, "meta": meta, "sig": sig}, ensure_ascii=False, indent=1),
+            encoding="utf-8",
+        )
     return names, arr, meta
 
 
-def identify(vec: np.ndarray, thresh: float = config.FACE_MATCH_THRESHOLD) -> tuple[str | None, float]:
+def identify(
+    vec: np.ndarray,
+    quality: float = 1.0,
+    thresh: float = config.FACE_MATCH_THRESHOLD,
+    margin: float = config.FACE_MARGIN_MIN,
+) -> tuple[str | None, float]:
+    """Identify a face embedding against the reference gallery with quality and top-1/top-2 margin guards."""
+    if quality < config.FACE_QUALITY_MIN:
+        return None, 0.0
     names, vecs, _ = gallery()
     if len(names) == 0:
         return None, 0.0
     sims = vecs @ vec
-    i = int(np.argmax(sims))
-    return (names[i] if sims[i] >= thresh else None), float(sims[i])
+    if len(names) == 1:
+        best = float(sims[0])
+        return (names[0] if best >= thresh else None), best
+    order = np.argsort(sims)[::-1]
+    best = float(sims[order[0]])
+    second = float(sims[order[1]])
+    if best >= thresh and (best - second) >= margin:
+        return names[int(order[0])], best
+    return None, best

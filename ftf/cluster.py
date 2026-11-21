@@ -47,7 +47,7 @@ def _avg_link(c1, c2, P, C):
     return (float(np.mean(vals)) if vals else 0.0), mx
 
 
-def agglomerate(clusters: list[list[str]], P: dict, C: dict, thr: float, strong: float = 0.85) -> list[list[str]]:
+def agglomerate(clusters: list[list[str]], P: dict, C: dict, thr: float, strong: float = config.STRONG_MERGE) -> list[list[str]]:
     clusters = [list(c) for c in clusters]
     while True:
         best, bi, bj = 0.0, -1, -1
@@ -79,10 +79,10 @@ def build(items: dict[str, tuple[dict, dict]], links: list[Link] | None = None) 
     uf1 = UF(ids)
     for l in links:
         s_tier = max([v for f, v in l.families.items() if config.FAMILY_TIER.get(f) == "S"] or [0])
-        if l.relation == "duplicate" or (s_tier >= 0.6 and l.p >= config.LINK_THRESHOLD):
+        if l.relation == "duplicate" or (s_tier >= config.CORE_S_MIN and l.p >= config.LINK_THRESHOLD):
             uf1.union(l.a, l.b)
     cores = uf1.groups()
-    campaigns = agglomerate(cores, P, C, config.LINK_THRESHOLD)
+    campaigns = agglomerate(cores, P, C, config.LINK_THRESHOLD, strong=config.STRONG_MERGE)
     campaigns.sort(key=lambda c: (-len(c), min(c)))
     camp_of = {m: i for i, c in enumerate(campaigns) for m in c}
     # L1.5 message variants inside a campaign: same narrative (near-duplicate text / template / same creative)
@@ -96,7 +96,7 @@ def build(items: dict[str, tuple[dict, dict]], links: list[Link] | None = None) 
     for g in ufv.groups():
         variants.setdefault(camp_of[g[0]], []).append(sorted(g))
     # L2 families (playbooks)
-    fams = agglomerate([list(c) for c in campaigns], PB, C, 0.40, strong=0.75)
+    fams = agglomerate([list(c) for c in campaigns], PB, C, config.FAMILY_MERGE, strong=config.SINGLE_ASSIGN)
     fams.sort(key=lambda c: (-len(c), min(c)))
     fam_of = {m: i for i, c in enumerate(fams) for m in c}
     return {"links": links, "duplicates": dup_groups, "campaigns": campaigns, "campaign_of": camp_of, "variants": variants,
@@ -178,9 +178,9 @@ def assign(new_id: str, new_f: dict, new_v: dict, items: dict, clustering: dict)
         comp = sorted([l.p for l in ls if l.comparable], reverse=True)
         top = comp[:2] if comp else [0.0]
         mx = max(l.p for l in ls)
-        # strong single link (>= 0.75) = variant of that member -> known campaign;
-        # a single moderate link (0.55-0.75) to one member of a multi-narrative campaign -> at least 'candidate'
-        score = max(float(np.mean(top)), mx if mx >= 0.75 else 0,
+        # strong single link (>= SINGLE_ASSIGN) = variant of that member -> known campaign;
+        # a single moderate link (ASSIGN_THRESHOLD..SINGLE_ASSIGN) to one member of a multi-narrative campaign -> at least 'candidate'
+        score = max(float(np.mean(top)), mx if mx >= config.SINGLE_ASSIGN else 0,
                     min(mx, config.ASSIGN_THRESHOLD - 0.01) if mx >= config.ASSIGN_THRESHOLD else 0)
         scores.append((score, c, ls))
     scores.sort(key=lambda t: -t[0])
@@ -200,7 +200,6 @@ def assign(new_id: str, new_f: dict, new_v: dict, items: dict, clustering: dict)
             decision, camp = "candidate_review", scores[0][1]
         else:
             decision, camp = "new_campaign", None
-            playbook_of = scores[0][1]
     if dups:
         decision = "duplicate" if decision != "merge_proposal" else decision
     similar_playbook = None

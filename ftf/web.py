@@ -19,26 +19,43 @@ from urllib.parse import parse_qsl, unquote, urljoin, urlparse
 import tldextract
 from bs4 import BeautifulSoup, Comment
 
-_TLD = tldextract.TLDExtract(suffix_list_urls=())   # bundled PSL snapshot, works offline
+# Bundled PSL snapshot (works offline) with private suffixes enabled so
+# a.pages.dev != b.pages.dev and a.netlify.app != b.netlify.app.
+_TLD = tldextract.TLDExtract(suffix_list_urls=(), include_psl_private_domains=True)
 
-# Hosts/libraries that are shared by half the internet: never a linking signal on their own.
+# Hosts/libraries shared by half the internet: never a linking signal on their own.
 GENERIC_DOMAINS = {
-    "google.com", "googleapis.com", "gstatic.com", "googletagmanager.com", "google-analytics.com",
-    "doubleclick.net", "googlesyndication.com", "googleadservices.com", "youtube.com", "ytimg.com",
-    "facebook.com", "facebook.net", "fbcdn.net", "instagram.com", "cdninstagram.com", "fb.com",
-    "jquery.com", "jsdelivr.net", "cloudflare.com", "cdnjs.cloudflare.com", "unpkg.com", "bootstrapcdn.com",
-    "fontawesome.com", "fonts.net", "typekit.net", "gravatar.com", "wp.com", "wordpress.org", "w3.org",
-    "schema.org", "apple.com", "microsoft.com", "bing.com", "clarity.ms", "hotjar.com", "yandex.ru",
-    "tiktok.com", "twitter.com", "x.com", "linkedin.com", "cookiebot.com", "onetrust.com", "sentry.io",
-    "cloudflareinsights.com", "jsdelivr.com", "github.io", "githubusercontent.com", "vimeo.com",
-    "delivered", "localhost", "wikipedia.org", "wikimedia.org", "pinterest.com", "whatsapp.com",
-    "telegram.org", "t.me", "shopify.com", "amazonaws.com", "cloudfront.net", "akamaihd.net",
+    "google.com", "googleapis.com", "translate.googleapis.com", "gstatic.com", "googletagmanager.com",
+    "google-analytics.com", "doubleclick.net", "googlesyndication.com", "googleadservices.com",
+    "youtube.com", "ytimg.com", "facebook.com", "facebook.net", "fbcdn.net", "instagram.com",
+    "cdninstagram.com", "fb.com", "jquery.com", "jsdelivr.net", "cloudflare.com",
+    "cdnjs.cloudflare.com", "challenges.cloudflare.com", "cloudflareinsights.com", "unpkg.com",
+    "bootstrapcdn.com", "fontawesome.com", "fonts.net", "typekit.net", "gravatar.com", "wp.com",
+    "wordpress.org", "w3.org", "schema.org", "apple.com", "microsoft.com", "bing.com", "clarity.ms",
+    "hotjar.com", "yandex.ru", "tiktok.com", "twitter.com", "x.com", "linkedin.com", "cookiebot.com",
+    "onetrust.com", "sentry.io", "github.io", "githubusercontent.com", "vimeo.com", "localhost",
+    "wikipedia.org", "wikimedia.org", "pinterest.com", "whatsapp.com", "telegram.org", "t.me",
+    "shopify.com", "amazonaws.com", "cloudfront.net", "akamaihd.net", "unsplash.com", "er-api.com",
+    "b-cdn.net", "polyfill.io", "hcaptcha.com",
 }
+_GOOGLE_CC_RX = re.compile(r"^(?:[\w-]+\.)*google(?:\.[a-z]{2,3}){1,2}$", re.I)
+
+# Domains frequently shown as decoys/spoofed news/platforms in ad creatives (filter from ocr_domain).
+OCR_DECOY_DOMAINS = {
+    "amazon.com", "fb.me", "interia.pl", "onet.pl", "wp.pl", "gazeta.pl", "tvn24.pl", "polsatnews.pl",
+    "allegro.pl", "olx.pl", "youtube.com", "youtu.be", "bit.ly", "tinyurl.com", "t.co",
+}
+
 GENERIC_SCRIPT_NAMES = re.compile(
     r"^(jquery|bootstrap|popper|swiper|slick|lazysizes|sweetalert|shaka-player|video|hls|vue|react|"
     r"lodash|moment|axios|gtag|analytics|fbevents|sdk|main|app|index|script|scripts|common|vendor|"
     r"runtime|polyfills?|chunk|bundle|core|min|jquery-\d|wp-|wp_|wpembed|wp-emoji|style|styles|"
     r"normalize|reset|fonts?|icons?|all|libs?)([-._]|\d|$)", re.I)
+
+GENERIC_CSS_NAMES = re.compile(
+    r"^(css|comments|header|footer|custom|theme|style|styles|main|app|index|fonts?|reset|normalize|"
+    r"bootstrap|tailwind|common|vendor|all|base|layout|global|default|print|grid|responsive|"
+    r"animate|slick|swiper|icons?)([-._]|\d|$)", re.I)
 
 TRACKER_RX = {
     "ga": r"\b(?:UA-\d{4,10}-\d{1,4}|G-[A-Z0-9]{8,12})\b",
@@ -61,21 +78,29 @@ CONTACT_RX = {
     "phone": r"(?<![\d/=.-])((?:\+48|0048)[ -]?\d{3}[ -]?\d{3}[ -]?\d{3}|\+\d{2}[ -]?\d{2,3}[ -]?\d{3}[ -]?\d{2,3}[ -]?\d{2,3})(?![\d])",
     "wallet": r"\b(bc1[ac-hj-np-z02-9]{25,60}|0x[a-fA-F0-9]{40}|T[1-9A-HJ-NP-Za-km-z]{33})\b",
 }
-EMAIL_IGNORE = re.compile(r"(example\.|sentry|wixpress|@2x|\.png|\.jpg|\.webp|\.svg|\.gif|domain\.com|email\.com|"
-                          r"yourmail|twojmail|test@|user@|name@)", re.I)
+EMAIL_IGNORE = re.compile(
+    r"(example\.|sentry|wixpress|@2x|\.png|\.jpg|\.webp|\.svg|\.gif|domain\.com|email\.com|"
+    r"yourmail|twojmail|test@|user@|name@)", re.I)
 
 UUID_RX = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
+
 # URL query parameters that carry operator/affiliate/campaign identity (value is an indicator)
 ID_PARAMS = {
     "fb_pixel": {"pxl", "fbpx", "pixel", "pixel_id", "fb_pixel", "fbp_id", "px", "fbpixel"},
     "ad_id": {"ad_id", "adid", "fb_ad_id", "utm_content_id"},
     "adset": {"adset_name", "adset", "adset_id", "ad_name", "campaign_name"},
-    "affiliate": {"acc", "aff", "aff_id", "affid", "affiliate", "affiliate_id", "partner", "sub_id", "subid",
-                  "sub1", "webmaster", "webmaster_id", "wm", "pid", "source_id", "offer_id", "offer", "lpkey",
-                  "land_id", "_camp_id", "camp_id", "trafficsource", "flow", "stream", "user_id"},
+    "affiliate": {
+        "acc", "aff", "aff_id", "affid", "affiliate", "affiliate_id", "partner", "sub_id", "subid",
+        "sub1", "webmaster", "webmaster_id", "wm", "pid", "source_id", "offer_id", "offer", "lpkey",
+        "land_id", "_camp_id", "camp_id", "trafficsource", "flow", "stream", "user_id",
+    },
 }
-VOLATILE_PARAMS = {"fbclid", "gclid", "clickid", "click_id", "utm_visit", "access_token", "_trk", "key",
-                   "ttclid", "msclkid", "t", "ts", "v", "_", "cb", "rnd", "nocache"}
+VOLATILE_PARAMS = {
+    "fbclid", "gclid", "clickid", "click_id", "utm_visit", "access_token", "_trk", "key",
+    "ttclid", "msclkid", "wbraid", "gbraid", "yclid", "t", "ts", "v", "_", "cb", "rnd", "nocache",
+}
+SESSION_PARAM_HINTS = ("utm_visit", "clickid", "click_id", "session", "visit")
+GENERIC_FAVICON_HASHES = {"0", "-1", "116323821"}  # empty/blank/default favicon hashes
 
 
 def registrable_domain(url_or_host: str) -> str:
@@ -84,14 +109,39 @@ def registrable_domain(url_or_host: str) -> str:
     host = urlparse(url_or_host).hostname if "://" in url_or_host else url_or_host.split("/")[0]
     if not host:
         return ""
+    host = host.strip().lower().rstrip(".")
     ext = _TLD(host)
     if not ext.suffix:
-        return host.lower()
+        return host if "." in host else ""
+    if not ext.domain:
+        return host
     return f"{ext.domain}.{ext.suffix}".lower()
 
 
 def is_generic(domain: str) -> bool:
-    return domain in GENERIC_DOMAINS or any(domain.endswith("." + g) for g in GENERIC_DOMAINS)
+    d = (domain or "").strip().lower().rstrip(".")
+    if not d or "." not in d:
+        return True
+    if _GOOGLE_CC_RX.match(d):
+        return True
+    return d in GENERIC_DOMAINS or any(d.endswith("." + g) for g in GENERIC_DOMAINS)
+
+
+def is_decoy_or_generic_domain(dom: str) -> bool:
+    """True for generic infrastructure/CDNs and spoofed media/platform decoy domains (e.g. interia.pl, fb.me)."""
+    d = (dom or "").strip().lower().rstrip(".")
+    if is_generic(d):
+        return True
+    reg = registrable_domain(d)
+    return d in OCR_DECOY_DOMAINS or reg in OCR_DECOY_DOMAINS
+
+
+def _clean_asset_filename(raw_name: str) -> str:
+    """Strip URL-encoding, Chrome '(1)' duplicate suffix, and browser '.pobrane/.pobierz' suffix."""
+    name = unquote(raw_name or "").strip()
+    name = re.sub(r"\.(?:pobrane|pobierz)$", "", name, flags=re.I)
+    name = re.sub(r"\s*\(\d+\)(?=\.[^.]+$)", "", name)
+    return name
 
 
 def value_shape(v: str) -> str:
@@ -106,33 +156,52 @@ def value_shape(v: str) -> str:
 
 
 def url_indicators(url: str) -> dict:
-    """Indicators carried by a URL: domain, param-name signature, ID-bearing params, path template."""
+    """Indicators carried by a URL: domain, canonical param signature, ID-bearing params, path template."""
     if not url or not url.startswith(("http://", "https://")):
         return {}
     p = urlparse(url)
+    host = (p.hostname or "").lower()
+    dom = registrable_domain(url)
     q = parse_qsl(p.query, keep_blank_values=True)
-    names = [k for k, _ in q]
-    out: dict[str, set] = {"landing_domain": {registrable_domain(url)}, "page_host": {(p.hostname or "").lower()}}
-    if names:
-        sig = "&".join(f"{k}={value_shape(v)}" for k, v in q if k not in {"fbclid", "access_token"})
-        out["param_signature"] = {sig}
+    out: dict[str, set[str]] = {}
+    if dom and not is_generic(dom):
+        out["landing_domain"] = {dom}
+    if host and not is_generic(dom or host):
+        out["page_host"] = {host}
+
+    # Canonical parameter signature: exclude volatile click/visit/token params and sort by name.
+    sig_pairs = sorted((k, value_shape(v)) for k, v in q if k.lower() not in VOLATILE_PARAMS)
+    if sig_pairs:
+        out["param_signature"] = {"&".join(f"{k}={sh}" for k, sh in sig_pairs)}
+
     for kind, keys in ID_PARAMS.items():
         for k, v in q:
-            if k.lower() in keys and v and len(v) >= 3 and k.lower() not in VOLATILE_PARAMS:
-                if kind == "fb_pixel" and not re.fullmatch(r"\d{14,17}", v):
-                    continue
-                out.setdefault(kind, set()).add(f"{k.lower()}={unquote(v)[:120]}")
-    for k, v in q:   # numeric utm_campaign / utm_id are Meta campaign IDs (18 digits)
+            kl = k.lower()
+            if kl in keys and v and len(v) >= 3 and kl not in VOLATILE_PARAMS:
+                val = unquote(v).strip()[:120]
+                if kind == "fb_pixel":
+                    if not re.fullmatch(r"\d{14,17}", val):
+                        continue
+                    out.setdefault("fb_pixel", set()).add(val)  # bare numeric ID
+                elif kind == "ad_id":
+                    out.setdefault("ad_id", set()).add(val)     # bare ad ID
+                else:
+                    out.setdefault(kind, set()).add(f"{kl}={val}")
+
+    for k, v in q:  # numeric utm_campaign / utm_id are Meta campaign IDs (15-20 digits)
         if k in ("utm_campaign", "utm_id", "utm_term", "utm_content") and re.fullmatch(r"\d{15,20}", v):
             out.setdefault("campaign_param", set()).add(v)
-    tenants = set(UUID_RX.findall(p.path))
-    if tenants:
-        out["tenant_uuid"] = {t.lower() for t in tenants}
+
+    if dom and not is_generic(dom):
+        tenants = set(UUID_RX.findall(p.path))
+        if tenants:
+            out["tenant_uuid"] = {t.lower() for t in tenants}
+
     tmpl = UUID_RX.sub("{uuid}", p.path)
     tmpl = re.sub(r"/[0-9a-f]{16,}", "/{hex}", tmpl)
     tmpl = re.sub(r"\d+", "{n}", tmpl)
     if tmpl not in ("", "/"):
-        out["path_template"] = {f"{tmpl}"}
+        out["path_template"] = {tmpl}
     return {k: v for k, v in out.items() if v and v != {""}}
 
 
@@ -151,7 +220,7 @@ def merge_ind(dst: dict, src: dict) -> dict:
 
 
 def regex_indicators(text: str) -> dict:
-    out: dict[str, set] = {}
+    out: dict[str, set[str]] = {}
     if not text:
         return out
     for kind, rx in {**TRACKER_RX, **CONTACT_RX}.items():
@@ -163,9 +232,32 @@ def regex_indicators(text: str) -> dict:
                     continue
                 if kind == "phone":
                     g = re.sub(r"[ -]", "", g)
-                    if len(set(g[-9:])) <= 2:
+                    if g.startswith("0048"):
+                        g = "+48" + g[4:]
+                    if len(set(g[-9:])) <= 2 or re.search(r"55501\d{2}$", g):
                         continue
                 out.setdefault(kind, set()).add(g)
+    return out
+
+
+def extract_script_indicators(path: Path) -> dict[str, set[str]]:
+    """Scan a local saved JS asset (.js, .js.pobrane, .js.pobierz) for trackers, script name, and hash."""
+    out: dict[str, set[str]] = {}
+    p = Path(path)
+    try:
+        body = p.read_text(encoding="utf-8", errors="replace")[:1_000_000]
+    except Exception:
+        return out
+    if not body.strip():
+        return out
+    raw_ind = regex_indicators(body)
+    merge_ind(out, {k: v for k, v in raw_ind.items() if k not in ("email", "phone")})
+    name = _clean_asset_filename(p.name)
+    name_norm = re.sub(r"[._-][0-9a-f]{6,}(?=\.)", "", name)
+    if name_norm.lower().endswith(".js") and not GENERIC_SCRIPT_NAMES.match(name_norm) and len(name_norm) > 4:
+        out.setdefault("script_name", set()).add(name_norm.lower())
+        if len(body) > 500:
+            out.setdefault("script_hash", set()).add(hashlib.sha1(body.encode("utf-8", "replace")).hexdigest()[:16])
     return out
 
 
@@ -184,16 +276,21 @@ def extract_html(html: str, base_url: str = "") -> dict:
         k = m.get("name") or m.get("property") or m.get("http-equiv")
         if k and m.get("content"):
             metas[k.lower()] = m["content"][:300]
-    comments = [c.strip()[:200] for c in soup.find_all(string=lambda s: isinstance(s, Comment))
-                if c.strip() and not c.strip().startswith("saved from url")][:20]
+    comments = [
+        c.strip()[:200] for c in soup.find_all(string=lambda s: isinstance(s, Comment))
+        if c.strip() and not c.strip().startswith("saved from url")
+    ][:20]
     scripts = [s.get("src") for s in soup.find_all("script") if s.get("src")]
     inline_js = "\n".join(s.get_text() for s in soup.find_all("script") if not s.get("src"))[:400_000]
     css = [l.get("href") for l in soup.find_all("link") if l.get("href") and "stylesheet" in (l.get("rel") or [])]
     icons = [l.get("href") for l in soup.find_all("link") if l.get("href") and any("icon" in r for r in (l.get("rel") or []))]
     forms = []
     for f in soup.find_all("form"):
-        forms.append({"action": f.get("action") or "", "method": (f.get("method") or "get").lower(),
-                      "inputs": sorted({i.get("name") for i in f.find_all(["input", "select", "textarea"]) if i.get("name")})})
+        forms.append({
+            "action": f.get("action") or "",
+            "method": (f.get("method") or "get").lower(),
+            "inputs": sorted({i.get("name") for i in f.find_all(["input", "select", "textarea"]) if i.get("name")}),
+        })
     links = [a.get("href") for a in soup.find_all("a") if a.get("href")]
     imgs = [i.get("src") or i.get("data-src") for i in soup.find_all("img") if (i.get("src") or i.get("data-src"))]
     tags = [t.name for t in soup.find_all(True)]
@@ -202,28 +299,36 @@ def extract_html(html: str, base_url: str = "") -> dict:
         t.decompose()
     text = re.sub(r"\s+", " ", soup.get_text(" ")).strip()
 
-    ind: dict[str, set] = {}
+    ind: dict[str, set[str]] = {}
     merge_ind(ind, regex_indicators(html))
     for u in [saved_url, canon.get("href") if canon else "", og_url.get("content") if og_url else ""]:
         if u and u.startswith("http"):
             merge_ind(ind, url_indicators(u))
     for s in scripts:
-        name = urlparse(s).path.rsplit("/", 1)[-1]
+        name = _clean_asset_filename(urlparse(s).path.rsplit("/", 1)[-1])
         name_norm = re.sub(r"[._-][0-9a-f]{6,}(?=\.)", "", name)
-        if name and name.endswith(".js") and not GENERIC_SCRIPT_NAMES.match(name_norm) and len(name_norm) > 4:
+        if name_norm.lower().endswith(".js") and not GENERIC_SCRIPT_NAMES.match(name_norm) and len(name_norm) > 4:
             ind.setdefault("script_name", set()).add(name_norm.lower())
     for c in css:
-        name = urlparse(c).path.rsplit("/", 1)[-1]
-        if name.endswith(".css") and not GENERIC_SCRIPT_NAMES.match(name) and len(name) > 6:
-            ind.setdefault("css_name", set()).add(name.lower())
+        name = _clean_asset_filename(urlparse(c).path.rsplit("/", 1)[-1])
+        name_norm = re.sub(r"[._-][0-9a-f]{6,}(?=\.)", "", name)
+        if (name_norm.lower().endswith(".css")
+                and not GENERIC_SCRIPT_NAMES.match(name_norm)
+                and not GENERIC_CSS_NAMES.match(name_norm)
+                and len(name_norm) > 6):
+            ind.setdefault("css_name", set()).add(name_norm.lower())
     for f in forms:
         act = f["action"]
         if act and not act.startswith(("#", "javascript")):
             full = urljoin(base, act) if base else act
             pr = urlparse(full)
-            ep = f"{(pr.hostname or '').lower()}{pr.path}" if pr.hostname else pr.path
-            if ep and ep not in ("/", ""):
-                ind.setdefault("form_endpoint", set()).add(ep)
+            ep_dom = registrable_domain(pr.hostname or "")
+            if pr.hostname and is_generic(ep_dom or pr.hostname):
+                pass
+            else:
+                ep = f"{(pr.hostname or '').lower()}{pr.path}" if pr.hostname else pr.path
+                if ep and ep not in ("/", ""):
+                    ind.setdefault("form_endpoint", set()).add(ep)
         if f["inputs"]:
             ind.setdefault("form_fields", set()).add(",".join(f["inputs"]))
     out_domains = set()
@@ -278,89 +383,156 @@ def _body_bytes(content: dict) -> bytes:
     return txt.encode("utf-8", "replace")
 
 
+def _pick_landing_url(full_reqs: list[dict], pages: list[str]) -> str:
+    """Select the primary landing document from HAR requests (skipping POST 404s and generic trackers)."""
+    for r in full_reqs:
+        if r["method"] == "GET" and 200 <= r["status"] < 400 and not is_generic(r["domain"]):
+            if "html" in r["mime"] or 300 <= r["status"] < 400:
+                return r["url"]
+    for p in pages:
+        if p and p.startswith("http") and not is_generic(registrable_domain(p)):
+            return p
+    for r in full_reqs:
+        if r["method"] == "GET" and 200 <= r["status"] < 400 and not is_generic(r["domain"]):
+            return r["url"]
+    return next((r["url"] for r in full_reqs if r["method"] == "GET"), "")
+
+
 def parse_har(path: str | Path, keep_images: bool = True) -> dict:
     data = json.loads(Path(path).read_text(encoding="utf-8", errors="replace"))
     log = data.get("log", {})
     entries = log.get("entries", [])
     pages = [p.get("title", "") for p in log.get("pages", [])]
-    requests_, ips, hosts, posts, redirects, docs = [], Counter(), Counter(), [], [], []
-    server_hdrs = Counter()
-    ind: dict[str, set] = {}
+    full_reqs, requests_summary = [], []
+    ips, hosts, server_hdrs = Counter(), Counter(), Counter()
+    posts_summary, redirects_full, docs = [], [], []
+    ind: dict[str, set[str]] = {}
+    session_uuids: set[str] = set()
     script_hashes, images = set(), []
+
     for e in entries:
         rq, rs = e.get("request", {}), e.get("response", {})
-        url, method, status = rq.get("url", ""), rq.get("method", "GET"), rs.get("status", 0)
+        url = rq.get("url", "")
+        method = (rq.get("method") or "GET").upper()
+        status = rs.get("status", 0) or 0
         if not url.startswith("http"):
             continue
-        host = (urlparse(url).hostname or "").lower()
+        pr = urlparse(url)
+        host = (pr.hostname or "").lower()
+        dom = registrable_domain(url)
         hosts[host] += 1
-        ip = e.get("serverIPAddress") or ""
+        ip = (e.get("serverIPAddress") or "").strip("[]")
         if ip:
-            ips[ip.strip("[]")] += 1
+            ips[ip] += 1
         mime = (rs.get("content", {}).get("mimeType") or "").lower()
-        requests_.append({"method": method, "url": url[:500], "status": status, "ip": ip, "mime": mime})
+        full_reqs.append({"method": method, "url": url, "status": status, "ip": ip, "mime": mime, "domain": dom})
+        requests_summary.append({"method": method, "url": url[:500], "status": status, "ip": ip, "mime": mime})
+
         hdrs = {h["name"].lower(): h["value"] for h in rs.get("headers", []) if "name" in h}
         for hk in ("server", "x-powered-by", "x-generator", "x-cache", "via"):
             if hk in hdrs:
                 server_hdrs[f"{hk}:{hdrs[hk][:60]}"] += 1
+
         if 300 <= status < 400:
             loc = rs.get("redirectURL") or hdrs.get("location", "")
-            redirects.append((url[:400], urljoin(url, loc)[:400] if loc else ""))
-        if "html" in mime and status == 200:
+            redirects_full.append((url, urljoin(url, loc) if loc else ""))
+        if method == "GET" and "html" in mime and status == 200:
             docs.append(url)
+
+        # Record per-visit session UUIDs (query params + /trigger/ or session POST paths) to exclude from tenant_uuid
+        for qk, qv in parse_qsl(pr.query, keep_blank_values=True):
+            qkl = qk.lower()
+            if any(h in qkl for h in SESSION_PARAM_HINTS):
+                session_uuids.update(u.lower() for u in UUID_RX.findall(qv))
+
         merge_ind(ind, regex_indicators(url))
-        pr = urlparse(url)
-        d = registrable_domain(url)
+
         if method == "POST":
-            posts.append(url[:300])
-            if not is_generic(d):
+            posts_summary.append(url[:300])
+            if "/trigger/" in pr.path.lower() or "session" in pr.path.lower():
+                session_uuids.update(u.lower() for u in UUID_RX.findall(pr.path))
+            if not is_generic(dom):
                 tmpl = template_path(pr.path)
                 ind.setdefault("form_endpoint", set()).add(f"{host}{tmpl}")
                 if tmpl.count("/") >= 2:
                     ind.setdefault("api_template", set()).add(f"POST {tmpl}")
-        elif not is_generic(d) and any(x in mime for x in ("image", "javascript", "css", "font")):
-            for u in UUID_RX.findall(pr.path):     # tenant / workspace IDs of landing builders
+        elif not is_generic(dom) and any(x in mime for x in ("image", "javascript", "css", "font")):
+            for u in UUID_RX.findall(pr.path):  # tenant / workspace IDs of landing builders
                 ind.setdefault("tenant_uuid", set()).add(u.lower())
+
         body = _body(rs.get("content", {}))
         if body and any(m in mime for m in TEXT_MIME):
             merge_ind(ind, {k: v for k, v in regex_indicators(body).items() if k not in ("email", "phone")})
-            if "javascript" in mime and not is_generic(registrable_domain(url)):
-                name = urlparse(url).path.rsplit("/", 1)[-1]
+            if "javascript" in mime and not is_generic(dom):
+                name = _clean_asset_filename(pr.path.rsplit("/", 1)[-1])
                 if len(body) > 500 and not GENERIC_SCRIPT_NAMES.match(name):
                     script_hashes.add(hashlib.sha1(body.encode("utf-8", "replace")).hexdigest()[:16])
+
+        # Favicon mmh3 hash
+        is_fav = (
+            status == 200 and not is_generic(dom)
+            and ("favicon" in pr.path.lower() or "image/x-icon" in mime or "vnd.microsoft.icon" in mime)
+        )
+        if is_fav:
+            raw_fav = _body_bytes(rs.get("content", {}))
+            if len(raw_fav) >= 100:
+                try:
+                    fh = str(favicon_hash(raw_fav))
+                    if fh not in GENERIC_FAVICON_HASHES:
+                        ind.setdefault("favicon", set()).add(fh)
+                except Exception:
+                    pass
+
         if keep_images and mime.startswith("image/") and status == 200:
             raw = _body_bytes(rs.get("content", {}))
             if len(raw) > 4000:
                 images.append((url, raw))
+
     if script_hashes:
         ind["script_hash"] = script_hashes
-    # first document URL = landing URL; following 3xx gives the redirect chain
-    first = next((r["url"] for r in requests_ if "html" in r["mime"] or r["status"] in (301, 302, 303, 307, 308)), "")
-    chain = [first] if first else []
-    rmap = dict(redirects)
+
+    # First landing GET document -> follow 3xx using FULL URLs in memory
+    first = _pick_landing_url(full_reqs, pages)
+    chain_full = [first] if first else []
+    rmap = dict(redirects_full)
     cur = first
     for _ in range(15):
         nxt = rmap.get(cur)
-        if not nxt:
+        if not nxt or nxt in chain_full:
             break
-        chain.append(nxt)
+        chain_full.append(nxt)
         cur = nxt
-    for u in chain:
+
+    for u in chain_full:
         merge_ind(ind, url_indicators(u))
     for u in docs[:10]:
         d = registrable_domain(u)
         if d and not is_generic(d):
-            ind.setdefault("redirect_domain" if u not in chain[:1] else "landing_domain", set()).add(d)
+            ind.setdefault("redirect_domain" if u not in chain_full[:1] else "landing_domain", set()).add(d)
     for h in hosts:
         d = registrable_domain(h)
-        if d and not is_generic(d) and h not in ("delivered",):
+        if d and not is_generic(d):
             ind.setdefault("page_host", set()).add(h)
             if any(t in h for t in ("click", "track", "trk", "redirect", "go.", "lnk", "keitaro", "binom")):
                 ind.setdefault("tds_host", set()).add(h)
+
+    if session_uuids and "tenant_uuid" in ind:
+        ind["tenant_uuid"] -= session_uuids
+        if not ind["tenant_uuid"]:
+            del ind["tenant_uuid"]
+
     return {
-        "pages": pages, "n_requests": len(requests_), "requests": requests_[:400], "hosts": dict(hosts),
-        "ips": dict(ips), "redirect_chain": chain, "posts": posts[:50], "server_headers": dict(server_hdrs),
-        "documents": docs[:20], "indicators": ind, "images": images,
+        "pages": pages,
+        "n_requests": len(full_reqs),
+        "requests": requests_summary[:400],
+        "hosts": dict(hosts),
+        "ips": dict(ips),
+        "redirect_chain": [u[:500] for u in chain_full],
+        "posts": posts_summary[:50],
+        "server_headers": dict(server_hdrs),
+        "documents": [u[:500] for u in docs[:20]],
+        "indicators": ind,
+        "images": images,
     }
 
 
@@ -375,7 +547,7 @@ def parse_mhtml(path: str | Path) -> tuple[str, str]:
             try:
                 html = part.get_content()
             except Exception:
-                html = part.get_payload(decode=True).decode("utf-8", "replace")
+                html = (part.get_payload(decode=True) or b"").decode("utf-8", "replace")
             return html, part.get("Content-Location", loc) or loc
     return "", loc
 

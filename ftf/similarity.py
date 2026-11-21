@@ -2,18 +2,17 @@
 
 For a pair of materials we collect *evidence items* (signal, shared value / similarity, weight,
 human-readable reason). Each item belongs to an evidence *family* (infra IDs, tracking, domain,
-kit, assets, visual, narrative, persons, concept, advertiser, hosting, duplicate).
+kit, assets, visual, narrative, offer, persons, concept, advertiser, hosting, duplicate).
 
   * Discrete indicators (pixel IDs, TDS tenant UUIDs, form endpoints, domains, script names...) are
-    weighted by a prior (config.INDICATOR_WEIGHT) times a *rarity* factor estimated from the corpus
-    (Fellegi–Sunter intuition: agreement on a value seen in 2 of 1000 ads is strong, agreement on a
-    value seen in half of the corpus is noise). Hubs (Cloudflare, famous faces, generic CDNs) are
-    discounted automatically and reported as ignored.
+    weighted by a prior (config.INDICATOR_WEIGHT) times a smooth *rarity* factor estimated from the
+    corpus (Fellegi-Sunter intuition). True hubs are dropped only once the corpus is large enough
+    (config.HUB_MIN_CORPUS), with S-tier operator IDs exempt on small corpora (< 30).
   * Continuous similarities (text MinHash, entity-masked MinHash, e5, CLIP, DINOv2, pHash, DOM
     template, unknown-face ArcFace) are mapped to evidence with calibrated piecewise-linear ramps.
   * Within a family: noisy-OR of items; across families: noisy-OR, then guards:
       - weak-only evidence (persons/concept/hosting) is capped (a famous face alone links nothing),
-      - contradicting scam types reduce the score unless operator-level (S) evidence exists.
+      - contradicting scam types reduce the score (config.CONFLICT_FACTOR) unless S-tier evidence exists.
 The list of evidence items *is* the explanation shown on every graph edge.
 """
 from __future__ import annotations
@@ -24,7 +23,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import config
+from . import config, web
 from .text import char_ngram_sim, jaccard_sig
 
 PL_SIGNAL = {
@@ -40,18 +39,19 @@ PL_SIGNAL = {
     "css_name": "nazwa arkusza CSS", "favicon": "favicon", "param_signature": "sygnatura parametrów URL (TDS)",
     "path_template": "szablon ścieżki URL", "asset_phash": "ten sam obraz na stronie", "advertiser_id": "ID reklamodawcy",
     "advertiser_name": "nazwa reklamodawcy", "ip": "adres IP (nie-CDN)", "product": "nazwa produktu/platformy",
-    "platform_name": "nazwa platformy", "phrase": "charakterystyczna fraza", "form_fields": "zestaw pól formularza",
+    "phrase": "charakterystyczna fraza", "form_fields": "zestaw pól formularza",
     "ns_pair": "para serwerów NS", "reg_burst": "seria rejestracji (rejestrator+NS+dzień)",
 }
-FAMILY_PL = {"duplicate": "duplikat", "infra_ids": "identyfikatory operatora", "tracking": "śledzenie/TDS",
-             "domain": "domeny", "kit": "szablon/kit strony", "assets": "wspólne obrazy", "visual": "wizualne",
-             "narrative": "narracja/tekst", "persons": "osoby", "concept": "koncepcja (LLM)",
-             "advertiser": "reklamodawca", "hosting": "hosting", "offer": "oferta/produkt"}
+FAMILY_PL = {
+    "duplicate": "duplikat", "infra_ids": "identyfikatory operatora", "tracking": "śledzenie/TDS",
+    "domain": "domeny", "kit": "szablon/kit strony", "assets": "wspólne obrazy", "visual": "wizualne",
+    "narrative": "narracja/tekst", "persons": "osoby", "concept": "koncepcja (LLM)",
+    "advertiser": "reklamodawca", "hosting": "hosting", "offer": "oferta/produkt",
+}
 
-config.INDICATOR_WEIGHT.setdefault("form_fields", 0.35)
-config.INDICATOR_FAMILY.setdefault("form_fields", "kit")
-config.INDICATOR_FAMILY["product"] = "offer"
-config.FAMILY_TIER.setdefault("offer", "M")
+# Density-deduplication cosine thresholds for background-mean estimation (anisotropy correction)
+_CENTRE_CLUSTER_THR = {"text": 0.95, "text_gemma": 0.95, "clip": 0.75, "dino": 0.75}
+_CENTRE_MIN_REPS = 5.0
 
 
 @dataclass
@@ -64,8 +64,10 @@ class Evidence:
     ignored: bool = False
 
     def as_dict(self):
-        return {"family": self.family, "signal": self.signal, "detail": self.detail, "weight": round(self.weight, 3),
-                "value": self.value, "ignored": self.ignored}
+        return {
+            "family": self.family, "signal": self.signal, "detail": self.detail,
+            "weight": round(self.weight, 3), "value": self.value, "ignored": self.ignored,
+        }
 
 
 @dataclass
@@ -84,9 +86,12 @@ class Link:
         return "; ".join(f"{e.detail} [+{e.weight:.2f}]" for e in items)
 
     def as_dict(self):
-        return {"a": self.a, "b": self.b, "p": round(self.p, 3), "relation": self.relation, "playbook": round(self.playbook, 3),
-                "families": {k: round(v, 3) for k, v in self.families.items()},
-                "evidence": [e.as_dict() for e in self.evidence], "comparable": self.comparable}
+        return {
+            "a": self.a, "b": self.b, "p": round(self.p, 3), "relation": self.relation,
+            "playbook": round(self.playbook, 3),
+            "families": {k: round(v, 3) for k, v in self.families.items()},
+            "evidence": [e.as_dict() for e in self.evidence], "comparable": self.comparable,
+        }
 
 
 def ramp(x: float | None, lo: float, hi: float) -> float:
@@ -114,7 +119,7 @@ def _hex_ham(a: str, b: str) -> int:
 
 
 class Corpus:
-    """Document-frequency statistics for rarity weighting."""
+    """Document-frequency statistics for rarity weighting and cluster-balanced embedding centering."""
 
     def __init__(self, items: dict[str, tuple[dict, dict]]):
         self.items = items
@@ -131,40 +136,69 @@ class Corpus:
             for k, v in ((f.get("llm") or {}).get("extra") or {}).items():
                 if v and str(v).lower() not in ("unknown", "null", "none", "brak"):
                     self.df[("extra", k, str(v).lower())] += 1
-        # anisotropy correction: centre embeddings on the corpus mean (removes the common
-        # "Polish scam landing page" / "phone screenshot UI" component shared by all materials)
-        self.mean = {}
+
+        # Anisotropy correction: estimate the background mean with inverse-density weighting so a
+        # dominant campaign (e.g. 5/10 items) only contributes ~1 representative instead of pulling
+        # the corpus mean into itself. Requires >= 5 effective distinct representatives.
+        self.mean: dict[str, np.ndarray] = {}
         self.centred: dict[tuple[str, str], np.ndarray] = {}
-        for kind in ("text", "text_gemma", "clip", "dino"):
+        for kind, thr in _CENTRE_CLUSTER_THR.items():
             vs = [np.atleast_2d(v[kind]).mean(0) for _, v in items.values() if kind in v and len(v[kind])]
-            if len(vs) >= 3:
-                self.mean[kind] = np.mean(vs, axis=0)
+            if len(vs) < int(_CENTRE_MIN_REPS):
+                continue
+            M = np.stack(vs).astype(np.float64)
+            M = M / (np.linalg.norm(M, axis=1, keepdims=True) + 1e-9)
+            S = M @ M.T
+            deg = (S >= thr).sum(axis=1).astype(np.float64)
+            w = 1.0 / np.maximum(deg, 1.0)
+            eff_reps = float(w.sum())
+            if eff_reps >= _CENTRE_MIN_REPS:
+                self.mean[kind] = ((M * w[:, None]).sum(axis=0) / eff_reps).astype(np.float32)
 
     def centre(self, mid: str, kind: str, V):
         if V is None or len(V) == 0:
             return None
         if kind not in self.mean:
-            return np.atleast_2d(V)
+            # Too few distinct clusters to estimate a reliable background mean for anisotropic embeddings
+            return None
         key = (mid, kind)
         if key not in self.centred:
             A = np.atleast_2d(V) - self.mean[kind]
             self.centred[key] = A / (np.linalg.norm(A, axis=1, keepdims=True) + 1e-9)
         return self.centred[key]
 
-    def rarity(self, key, df: int | None = None) -> float:
+    def is_hub(self, key, df: int | None = None) -> bool:
+        """True only when corpus is large enough (HUB_MIN_CORPUS) and value exceeds hub thresholds."""
+        if self.N < config.HUB_MIN_CORPUS:
+            return False
         n = df if df is not None else self.df.get(key, 2)
-        n = max(2, n)
-        frac = n / self.N
-        if n >= config.HUB_MIN_COUNT and frac > config.HUB_FRACTION:
+        if n < config.HUB_MIN_COUNT or (n / self.N) <= config.HUB_FRACTION:
+            return False
+        if self.N < 30 and isinstance(key, tuple) and len(key) >= 1:
+            fam = config.INDICATOR_FAMILY.get(key[0])
+            if fam in config.HUB_EXEMPT_FAMILIES:
+                return False
+        return True
+
+    def rarity(self, key, df: int | None = None) -> float:
+        """Smooth IDF-like rarity in [0.15, 1.0] for non-hubs, and 0.0 ONLY when is_hub() is True."""
+        if self.is_hub(key, df):
             return 0.0
+        n = max(2, df if df is not None else self.df.get(key, 2))
         if self.N <= 3:
             return 1.0
-        return max(0.0, min(1.0, math.log(1 / frac) / math.log(self.N / 2)))
+        denom = math.log((self.N + 1) / 2)
+        if denom <= 0:
+            return 1.0
+        r = math.log((self.N + 1) / (n + 1)) / denom
+        return max(0.15, min(1.0, r))
 
 
-GENERIC_PHRASES = {"dowiedz sie wiecej", "kliknij tutaj", "zarejestruj sie", "zamow teraz", "kup teraz", "sprawdz teraz",
-                   "wiecej informacji", "czytaj wiecej", "learn more", "sign up", "zobacz wiecej", "nie przegap",
-                   "tylko dzis", "ograniczona oferta", "dolacz teraz", "zacznij zarabiac"}
+GENERIC_PHRASES = {
+    "dowiedz sie wiecej", "kliknij tutaj", "zarejestruj sie", "zamow teraz", "kup teraz", "sprawdz teraz",
+    "wiecej informacji", "czytaj wiecej", "learn more", "sign up", "zobacz wiecej", "nie przegap",
+    "tylko dzis", "ograniczona oferta", "dolacz teraz", "zacznij zarabiac",
+}
 
 
 def _generic_phrase(v: str) -> bool:
@@ -202,10 +236,20 @@ def _indicator_evidence(fa, fb, corpus: Corpus) -> list[Evidence]:
                 continue
             w = config.INDICATOR_WEIGHT[t] * (0.35 + 0.65 * r)
             ev.append(Evidence(fam, t, f"wspólny {name}: „{v[:60]}” ({df}/{corpus.N})", w, v))
-    # domain shown on a creative == landing domain of the other material
+
+    # Domain shown on a creative == landing domain of the other material (decoy-filtered & rarity-weighted)
+    seen_cross: set[str] = set()
     for x, y in ((A, B), (B, A)):
-        for d in set(x.get("ocr_domain", [])) & set(y.get("landing_domain", [])):
-            ev.append(Evidence("domain", "ocr_domain", f"domena z kreacji = domena docelowa: {d}", 0.85, d))
+        for d in sorted(set(x.get("ocr_domain", [])) & set(y.get("landing_domain", []))):
+            if d in seen_cross or web.is_decoy_or_generic_domain(d):
+                continue
+            seen_cross.add(d)
+            r = corpus.rarity(("ocr_domain", d))
+            if r == 0.0:
+                ev.append(Evidence("domain", "ocr_domain", f"pominięto hub: domena z kreacji „{d}”", 0.0, d, True))
+                continue
+            w = config.INDICATOR_WEIGHT["ocr_domain"] * (0.35 + 0.65 * r)
+            ev.append(Evidence("domain", "ocr_domain", f"domena z kreacji = domena docelowa: {d}", w, d))
     return ev
 
 
@@ -225,7 +269,12 @@ def pair(ida: str, fa: dict, va: dict, idb: str, fb: dict, vb: dict, corpus: Cor
     ocr_j = jaccard_sig(ta.get("minhash_ocr"), tb.get("minhash_ocr"))
     if ocr_j is not None and (sims["text_minhash"] is None or ocr_j > sims["text_minhash"]):
         sims["text_minhash"] = ocr_j
-    tt = [char_ngram_sim(x, y) for x in ta.get("title_templates", []) for y in tb.get("title_templates", []) if len(x) > 15 and len(y) > 15]
+    tt = [
+        char_ngram_sim(x, y)
+        for x in ta.get("title_templates", [])
+        for y in tb.get("title_templates", [])
+        if len(x) > 15 and len(y) > 15
+    ]
     sims["title_template"] = max(tt) if tt else None
     sims["text_embedding"] = _max_cos(corpus.centre(ida, "text", va.get("text")), corpus.centre(idb, "text", vb.get("text")))
     g = _max_cos(corpus.centre(ida, "text_gemma", va.get("text_gemma")), corpus.centre(idb, "text_gemma", vb.get("text_gemma")))
@@ -234,9 +283,13 @@ def pair(ida: str, fa: dict, va: dict, idb: str, fb: dict, vb: dict, corpus: Cor
     # ---------------------------------------------------------------- visual
     sims["clip"] = _max_cos(corpus.centre(ida, "clip", va.get("clip")), corpus.centre(idb, "clip", vb.get("clip")))
     sims["dinov2"] = _max_cos(corpus.centre(ida, "dino", va.get("dino")), corpus.centre(idb, "dino", vb.get("dino")))
-    ph = [1 - _hex_ham(x["phash"], y["phash"]) / 64 for x in fa.get("images", []) for y in fb.get("images", [])
-          if x.get("phash") and y.get("phash") and "ui" not in (x.get("kind", ""), y.get("kind", "")) and
-          x.get("kind") != "ui_screenshot" and y.get("kind") != "ui_screenshot"]
+    ph = [
+        1 - _hex_ham(x["phash"], y["phash"]) / 64
+        for x in fa.get("images", [])
+        for y in fb.get("images", [])
+        if x.get("phash") and y.get("phash")
+        and x.get("kind") != "ui_screenshot" and y.get("kind") != "ui_screenshot"
+    ]
     sims["phash"] = max(ph) if ph else None
     # ---------------------------------------------------------------- DOM template
     da, db = va.get("dom"), vb.get("dom")
@@ -247,28 +300,48 @@ def pair(ida: str, fa: dict, va: dict, idb: str, fb: dict, vb: dict, corpus: Cor
     Fa, Fb = va.get("faces"), vb.get("faces")
     if Fa is not None and Fb is not None and len(Fa) and len(Fb) and len(fa_f) == len(Fa) and len(fb_f) == len(Fb):
         S = np.atleast_2d(Fa) @ np.atleast_2d(Fb).T
-        unk = [S[i, j] for i in range(len(fa_f)) for j in range(len(fb_f))
-               if not fa_f[i].get("identity") and not fb_f[j].get("identity")
-               and fa_f[i].get("quality", 0) >= 0.25 and fb_f[j].get("quality", 0) >= 0.25]
+        qmin = config.FACE_QUALITY_MIN
+        unk = [
+            S[i, j] for i in range(len(fa_f)) for j in range(len(fb_f))
+            if not fa_f[i].get("identity") and not fb_f[j].get("identity")
+            and fa_f[i].get("quality", 0) >= qmin and fb_f[j].get("quality", 0) >= qmin
+        ]
         sims["face_unknown"] = float(max(unk)) if unk else None
-        if S.max() >= 0.80:
-            ev.append(Evidence("visual", "same_face_image", f"ten sam kadr/zdjęcie twarzy (ArcFace cos={S.max():.2f})", 0.45))
+        hi_q = [
+            S[i, j] for i in range(len(fa_f)) for j in range(len(fb_f))
+            if fa_f[i].get("quality", 0) >= qmin and fb_f[j].get("quality", 0) >= qmin
+        ]
+        if hi_q and float(max(hi_q)) >= 0.80:
+            mx_f = float(max(hi_q))
+            ev.append(Evidence("visual", "same_face_image", f"ten sam kadr/zdjęcie twarzy (ArcFace cos={mx_f:.2f})", 0.45))
+
     for name, val in sims.items():
         if val is None or name not in config.CONTINUOUS:
             continue
         lo, hi, wmax, fam = config.CONTINUOUS[name]
         w = ramp(val, lo, hi) * wmax
         if w > 0.01:
-            label = {"text_minhash": "tekst prawie identyczny (MinHash)", "masked_minhash": "ten sam szablon tekstu po zamaskowaniu osób",
-                     "title_template": "ten sam szablon tytułu", "text_embedding": "podobna narracja (e5)",
-                     "clip": "podobny wygląd kreacji (CLIP)", "dinov2": "podobny układ/szablon graficzny (DINOv2)",
-                     "phash": "prawie identyczny obraz (pHash)", "dom_template": "ten sam szablon HTML (DOM)",
-                     "face_unknown": "ta sama nieznana twarz (persona)"}[name]
+            label = {
+                "text_minhash": "tekst prawie identyczny (MinHash)",
+                "masked_minhash": "ten sam szablon tekstu po zamaskowaniu osób",
+                "title_template": "ten sam szablon tytułu",
+                "text_embedding": "podobna narracja (e5)",
+                "clip": "podobny wygląd kreacji (CLIP)",
+                "dinov2": "podobny układ/szablon graficzny (DINOv2)",
+                "phash": "prawie identyczny obraz (pHash)",
+                "dom_template": "ten sam szablon HTML (DOM)",
+                "face_unknown": "ta sama nieznana twarz (persona)",
+            }[name]
             ev.append(Evidence(fam, name, f"{label}: {val:.2f}", w, f"{val:.3f}"))
-    # near-duplicate content (same text and same picture)
-    if (sims.get("text_minhash") or 0) >= 0.93 and ((sims.get("phash") or 0) >= 0.95 or sims.get("phash") is None) \
-            and set(fa.get("indicators", {}).get("landing_domain", [])) & set(fb.get("indicators", {}).get("landing_domain", [])):
+
+    # Near-duplicate content (same text and same picture and same landing domain)
+    if (
+        (sims.get("text_minhash") or 0) >= 0.93
+        and ((sims.get("phash") or 0) >= 0.95 or sims.get("phash") is None)
+        and set(fa.get("indicators", {}).get("landing_domain", [])) & set(fb.get("indicators", {}).get("landing_domain", []))
+    ):
         ev.append(Evidence("duplicate", "near_duplicate", "ta sama treść i ta sama domena (near-duplicate)", 0.97))
+
     # ---------------------------------------------------------------- persons
     for pname in sorted(set(fa.get("persons_visual", [])) & set(fb.get("persons_visual", []))):
         r = corpus.rarity(("person_visual", pname))
@@ -278,6 +351,7 @@ def pair(ida: str, fa: dict, va: dict, idb: str, fb: dict, vb: dict, corpus: Cor
         r = corpus.rarity(("person_named", pname))
         w = 0.22 * (0.35 + 0.65 * r)
         ev.append(Evidence("persons", "person_named", f"ta sama osoba w treści: {pname}", w, pname, r == 0))
+
     # ---------------------------------------------------------------- concept (LLM)
     la, lb = fa.get("llm", {}), fb.get("llm", {})
     conflict = False
@@ -297,6 +371,7 @@ def pair(ida: str, fa: dict, va: dict, idb: str, fb: dict, vb: dict, corpus: Cor
                 ev.append(Evidence("concept", f"llm_extra:{k}", f"atrybut odkryty przez LLM {k} = „{va_}”", 0.25 * (0.35 + 0.65 * r), va_))
     if la.get("spoofed_media_outlet") and la.get("spoofed_media_outlet") == lb.get("spoofed_media_outlet"):
         ev.append(Evidence("concept", "media", f"podszycie pod to samo medium: {la['spoofed_media_outlet']}", 0.2))
+
     # ---------------------------------------------------------------- combine
     fam_w: dict[str, list[float]] = defaultdict(list)
     for e in ev:
@@ -309,9 +384,13 @@ def pair(ida: str, fa: dict, va: dict, idb: str, fb: dict, vb: dict, corpus: Cor
         p = min(p, config.WEAK_ONLY_CAP)
     s_tier = max([v for f, v in families.items() if config.FAMILY_TIER.get(f) == "S"] or [0])
     if conflict and s_tier < 0.5:
-        p *= 0.6
-        ev.append(Evidence("concept", "conflict", f"różny typ oszustwa: {la.get('scam_type')} vs {lb.get('scam_type')} (kara ×0.6)", 0.0, "", True))
-    # comparability: did the two materials have at least one modality in common?
+        p *= config.CONFLICT_FACTOR
+        ev.append(Evidence(
+            "concept", "conflict",
+            f"różny typ oszustwa: {la.get('scam_type')} vs {lb.get('scam_type')} (kara ×{config.CONFLICT_FACTOR})",
+            0.0, "", True,
+        ))
+
     comparable = any(v is not None for v in sims.values()) or bool(set(fa.get("indicators", {})) & set(fb.get("indicators", {})))
     playbook = noisy_or([families.get(f, 0) for f in ("narrative", "concept", "visual", "persons", "offer")])
     dup = families.get("duplicate", 0)
@@ -320,7 +399,7 @@ def pair(ida: str, fa: dict, va: dict, idb: str, fb: dict, vb: dict, corpus: Cor
         rel = "duplicate"
     elif p >= config.LINK_THRESHOLD and (s_tier >= 0.5 or strong >= 0.7 or n_fam >= 2):
         rel = "same_campaign"
-    elif p >= config.SIMILAR_THRESHOLD or playbook >= 0.45:
+    elif p >= config.SIMILAR_THRESHOLD or playbook >= config.PLAYBOOK_MIN:
         rel = "similar"
     else:
         rel = "none"
@@ -338,7 +417,7 @@ def candidate_pairs(items: dict[str, tuple[dict, dict]], max_full: int = 400, k:
         for t, vals in f.get("indicators", {}).items():
             for v in vals:
                 inv[(t, v)].append(mid)
-    for key, mids in inv.items():
+    for _, mids in inv.items():
         if 1 < len(mids) <= max(50, len(ids) * 0.02):
             for i in range(len(mids)):
                 for j in range(i + 1, len(mids)):

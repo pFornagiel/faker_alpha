@@ -12,6 +12,7 @@ data/exports/
 data/*.log
 data/reference_faces/**/*.jpg
 data/reference_faces/_gallery_cache.npz
+data/reference_faces/_gallery_cache.json
 .env
 data/eval/variants/
 data/eval_variants.log

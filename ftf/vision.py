@@ -23,8 +23,9 @@ Image.MAX_IMAGE_PIXELS = 200_000_000
 logging.getLogger("RapidOCR").setLevel(logging.WARNING)
 
 URL_RX = re.compile(r"\b((?:https?://)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,24})(?:/[^\s\"'<>]*)?)", re.I)
-TLD_HINT = re.compile(r"\.(com|pl|net|org|info|online|site|top|xyz|live|click|pro|shop|store|icu|sbs|cfd|life|"
-                      r"io|co|eu|biz|app|club|fun|website|space|today|news|ink|digital|rest|bond|cyou|vip|me|tv)$", re.I)
+TLD_HINT = re.compile(
+    r"\.(com|pl|net|org|info|online|site|top|xyz|live|click|pro|shop|store|icu|sbs|cfd|life|"
+    r"io|co|eu|biz|app|club|fun|website|space|today|news|ink|digital|rest|bond|cyou|vip|me|tv)$", re.I)
 
 
 def load_rgb(src) -> Image.Image | None:
@@ -59,8 +60,7 @@ def file_sha(path_or_bytes) -> str:
 
 
 def hashes(im: Image.Image) -> dict:
-    return {"phash": str(imagehash.phash(im)), "dhash": str(imagehash.dhash(im)),
-            "colorhash": str(imagehash.colorhash(im, binbits=3))}
+    return {"phash": str(imagehash.phash(im))}
 
 
 def hamming_hex(a: str, b: str) -> int:
@@ -80,21 +80,20 @@ def crop_content(im: Image.Image) -> Image.Image:
     return im.crop((cols[0], rows[0], cols[-1] + 1, rows[-1] + 1))
 
 
-def creative_crop(im: Image.Image, min_frac: float = 0.15) -> Image.Image:
-    """Isolate the ad creative inside a phone/desktop feed screenshot: the tallest band of rows that look
-    like a picture (many non-background pixels, high variance). Removes app UI chrome (status bar,
-    buttons, comment boxes) which otherwise dominates CLIP/DINO similarity between unrelated screenshots."""
+def creative_crop(im: Image.Image, min_frac: float = 0.15, min_area_frac: float = 0.35) -> Image.Image:
+    """Isolate the ad creative inside a portrait phone/feed screenshot: the tallest band of rows that look
+    like a picture (many non-background pixels, high variance). Only runs on portrait screenshots
+    (H/W > 1.35) and never crops down below 35% of the original area."""
     a = np.asarray(im.convert("L"), dtype=np.float32)
     H, W = a.shape
-    if H < 200 or W < 200:
+    if H < 200 or W < 200 or (H / W) <= 1.35:
         return im
     rgb = np.asarray(im, dtype=np.float32)
-    sat = (rgb.max(2) - rgb.min(2))
+    sat = rgb.max(2) - rgb.min(2)
     nonbg = (np.abs(a - np.median(a)) > 25) | (sat > 40)
     row_fill = nonbg.mean(1)
     row_std = a.std(1)
     pic = (row_fill > 0.55) & (row_std > 18)
-    # close small gaps (1 % of height)
     gap = max(2, H // 100)
     best, cur_start, last_true = (0, 0, 0), None, -10 ** 9
     for y in range(H):
@@ -108,8 +107,11 @@ def creative_crop(im: Image.Image, min_frac: float = 0.15) -> Image.Image:
     if length < min_frac * H:
         return im
     cols = np.where(nonbg[y0:y1 + 1].mean(0) > 0.3)[0]
-    x0, x1 = (cols[0], cols[-1]) if len(cols) > W * 0.3 else (0, W - 1)
-    return im.crop((int(x0), int(y0), int(x1) + 1, int(y1) + 1))
+    x0, x1 = (int(cols[0]), int(cols[-1])) if len(cols) > W * 0.3 else (0, W - 1)
+    area = (x1 - x0 + 1) * (y1 - y0 + 1)
+    if area < min_area_frac * W * H:
+        return im
+    return im.crop((x0, int(y0), x1 + 1, int(y1) + 1))
 
 
 # ----------------------------------------------------------------------------- ONNX embedders
@@ -153,7 +155,10 @@ def dino_embed(im: Image.Image) -> np.ndarray | None:
         return None
     x = _prep(im, (0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     h = _session(str(p)).run(["last_hidden_state"], {"pixel_values": x})[0][0]
-    v = np.concatenate([h[0], h[1:].mean(0)])            # CLS (semantics) + mean patch (layout/texture)
+    cls_tok = h[0] / (np.linalg.norm(h[0]) + 1e-9)
+    patch_tok = h[1:].mean(0)
+    patch_tok = patch_tok / (np.linalg.norm(patch_tok) + 1e-9)
+    v = np.concatenate([cls_tok, patch_tok])
     return (v / (np.linalg.norm(v) + 1e-9)).astype(np.float32)
 
 
@@ -216,61 +221,53 @@ def urls_in_text(text: str) -> list[str]:
 
 
 # ----------------------------------------------------------------------------- video
+def _is_nonblack_frame(path: Path) -> bool:
+    """Reject tiny or near-black padding frames (CSIRT KNF: black-frame padding evasion)."""
+    if not path.exists() or path.stat().st_size <= 2000:
+        return False
+    try:
+        with Image.open(path) as im:
+            a = np.asarray(im.convert("L"))
+        return bool(a.mean() > 12 and a.std() > 8)
+    except Exception:
+        return False
+
+
 def video_keyframes(path: str | Path, out_dir: Path, n: int = config.MAX_VIDEO_KEYFRAMES) -> list[Path]:
     """Evenly spaced keyframes (robust for screen recordings and padded ads)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     existing = sorted(out_dir.glob("kf_*.jpg"))
-    if len(existing) >= min(n, 2):
-        return existing
+    if existing:
+        valid = []
+        for f in existing:
+            if _is_nonblack_frame(f):
+                valid.append(f)
+            else:
+                f.unlink(missing_ok=True)
+        if len(valid) >= min(n, 2):
+            return valid
     try:
-        dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
-                                    "default=nw=1:nk=1", str(path)], capture_output=True, text=True, timeout=60).stdout.strip() or 0)
+        dur = float(
+            subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)],
+                capture_output=True, text=True, timeout=60,
+            ).stdout.strip() or 0
+        )
     except Exception:
         dur = 0
     if dur <= 0:
         return []
-    frames = []
+    keep = []
     for i in range(n):
         t = dur * (i + 0.5) / n
         dst = out_dir / f"kf_{i:02d}.jpg"
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", str(path), "-frames:v", "1",
-                        "-vf", "scale='min(960,iw)':-2", "-q:v", "3", str(dst)], capture_output=True, timeout=120)
-        if dst.exists() and dst.stat().st_size > 2000:
-            frames.append(dst)
-    # drop near-black padding frames (CSIRT KNF: black-frame padding evasion)
-    keep = []
-    for f in frames:
-        a = np.asarray(Image.open(f).convert("L"))
-        if a.mean() > 12 and a.std() > 8:
-            keep.append(f)
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", str(path), "-frames:v", "1",
+             "-vf", "scale='min(960,iw)':-2", "-q:v", "3", str(dst)],
+            capture_output=True, timeout=120,
+        )
+        if _is_nonblack_frame(dst):
+            keep.append(dst)
+        else:
+            dst.unlink(missing_ok=True)
     return keep
-
-
-def video_meta(path: str | Path) -> dict:
-    try:
-        r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
-                            "-of", "json", str(path)], capture_output=True, text=True, timeout=60)
-        import json
-
-        d = json.loads(r.stdout or "{}")
-        v = next((s for s in d.get("streams", []) if s.get("codec_type") == "video"), {})
-        return {"duration": float(d.get("format", {}).get("duration", 0) or 0), "width": v.get("width"),
-                "height": v.get("height"), "has_audio": any(s.get("codec_type") == "audio" for s in d.get("streams", []))}
-    except Exception:
-        return {}
-
-
-def layout_signature(lines: list[dict], faces: list[dict], grid: int = 4) -> np.ndarray:
-    """Production-template descriptor: where text and faces sit on the creative (grid occupancy)."""
-    v = np.zeros((2, grid, grid), np.float32)
-    for l in lines:
-        x0, y0, x1, y1 = l["box"]
-        cx, cy = min(grid - 1, int((x0 + x1) / 2 * grid)), min(grid - 1, int((y0 + y1) / 2 * grid))
-        v[0, cy, cx] += (x1 - x0) * (y1 - y0) * 10
-    for f in faces:
-        x0, y0, x1, y1 = f["box_rel"]
-        cx, cy = min(grid - 1, int((x0 + x1) / 2 * grid)), min(grid - 1, int((y0 + y1) / 2 * grid))
-        v[1, cy, cx] += 1
-    v = v.flatten()
-    n = np.linalg.norm(v)
-    return v / n if n else v

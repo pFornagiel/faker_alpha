@@ -94,16 +94,26 @@ def embed_text(text: str) -> np.ndarray | None:
         return None
     from .vision import _session
 
-    # embed up to 3 windows (title+lead, middle, end) and average -> robust for long landing pages
+    # Sample up to 3 windows (lead, middle, end) for long landing pages,
+    # L2-normalising each window before averaging so every region has equal weight.
     words = text.split()
-    chunks = [" ".join(words[i:i + 220]) for i in range(0, min(len(words), 660), 220)] or [text]
+    win = 220
+    if len(words) <= win:
+        chunks = [" ".join(words)] if words else [text]
+    elif len(words) <= 2 * win:
+        chunks = [" ".join(words[:win]), " ".join(words[-win:])]
+    else:
+        mid = max(win, (len(words) - win) // 2)
+        chunks = [" ".join(words[:win]), " ".join(words[mid:mid + win]), " ".join(words[-win:])]
+
     enc = _tok().encode_batch([f"query: {c}" for c in chunks])
     ids = np.array([e.ids for e in enc], dtype=np.int64)
     mask = np.array([e.attention_mask for e in enc], dtype=np.int64)
     sess = _session(str(p))
     h = sess.run(["last_hidden_state"], {"input_ids": ids, "attention_mask": mask,
                                           "token_type_ids": np.zeros_like(ids)})[0]
-    v = (h * mask[..., None]).sum(1) / mask.sum(1, keepdims=True)
+    v = (h * mask[..., None]).sum(1) / np.maximum(mask.sum(1, keepdims=True), 1)
+    v = v / (np.linalg.norm(v, axis=1, keepdims=True) + 1e-9)
     v = v.mean(0)
     return (v / (np.linalg.norm(v) + 1e-9)).astype(np.float32)
 
