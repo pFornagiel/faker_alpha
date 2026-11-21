@@ -1,11 +1,9 @@
-import { ArrowLeftRight } from "lucide-react"
 import { Link, useParams } from "react-router"
 
 import type { MaterialSummary, PairDetail } from "@/lib/api"
-import { fmtP, useApi, viewsOfExplanation } from "@/lib/format"
-import { CampaignBadge, ErrorState, Loading, PageHeader, RelationBadge, Section, Strength, StrengthLegend, Thumb } from "@/components/common"
+import { fmtP, matLabel, useApi, viewsOfExplanation } from "@/lib/format"
+import { CampaignBadge, ErrorState, Loading, PageHeader, RelationBadge, Section, Strength, Thumb } from "@/components/common"
 import { Computation, IdentifierList, NotComparable, ViewBars } from "@/components/evidence"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 
 export default function PairPage() {
@@ -15,63 +13,72 @@ export default function PairPage() {
   if (error || !d) return <ErrorState error={error} />
   const sameCampaign = d.a.campaign && d.b.campaign && d.a.campaign.id === d.b.campaign.id
 
+  const nIds = d.identifiers.reduce((acc, g) => acc + g.items.length, 0)
+
   return (
     <>
       <PageHeader
-        title={`Powiązanie: materiał ${d.a.name} ↔ materiał ${d.b.name}`}
-        description="Co łączy te dwa materiały: wspólne identyfikatory (wymuszają tę samą kampanię) i podobieństwo treści w każdym widoku, z którego liczona jest odległość d."
+        title={`Materiał ${matLabel(d.a)} ↔ Materiał ${matLabel(d.b)}`}
+        description="Dlaczego ta para jest albo nie jest połączona: wspólne identyfikatory, podobieństwo treści w pięciu widokach i reguła, która rozstrzygnęła."
       />
 
-      <div className="grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr]">
-        <MaterialSide m={d.a} />
-        <Card className="justify-center md:w-64">
-          <CardContent className="space-y-3 text-center">
-            <ArrowLeftRight className="mx-auto size-5 text-muted-foreground" />
-            <div>
-              <div className="text-xs text-muted-foreground">odległość treści</div>
-              <div className="text-4xl font-semibold tabular">d = {fmtP(d.distance)}</div>
-              {d.must_link && <div className="mt-1 text-xs text-muted-foreground">wspólny identyfikator → p = 1</div>}
-            </div>
-            <RelationBadge relation={d.relation} />
-            <Strength p={d.p} />
-            <StrengthLegend />
-          </CardContent>
-        </Card>
-        <MaterialSide m={d.b} />
-      </div>
-
-      <Card size="sm" className="bg-muted/40">
-        <CardContent className="space-y-1 text-sm">
-          <p className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">Werdykt: {d.relation_label}.</span>
-            <span className="text-muted-foreground">Podstawa:</span> <Badge variant="outline">{d.basis}</Badge>
-          </p>
-          <p>{d.rule}</p>
-          {sameCampaign && d.relation !== "same_campaign" && d.relation !== "duplicate" && (
-            <p className="text-muted-foreground">
-              Oba materiały są jednak w tej samej kampanii {d.a.campaign!.code} — łączą je inne materiały tej kampanii (powiązanie pośrednie).{" "}
-              <Link to={`/campaigns/${d.a.campaign!.id}`} className="underline underline-offset-4">Zobacz kampanię</Link>.
-            </p>
-          )}
-          {!sameCampaign && d.a.campaign && d.b.campaign && (
-            <p className="text-muted-foreground">
-              Materiały należą do różnych kampanii ({d.a.campaign.code} i {d.b.campaign.code}).
-            </p>
-          )}
+      <Card>
+        <CardContent className="grid gap-x-10 gap-y-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-2">
+            <h2 className="flex flex-wrap items-center gap-2.5 text-lg font-medium">
+              Relacja pary: <RelationBadge relation={d.relation} />
+            </h2>
+            <p className="max-w-[70ch] text-pretty">{d.rule}</p>
+            {sameCampaign && d.relation !== "same_campaign" && d.relation !== "duplicate" && (
+              <p className="max-w-[70ch] text-pretty text-muted-foreground">
+                Oba materiały są mimo to w kampanii {d.a.campaign!.code}: łączą je inne materiały tej kampanii (połączenie pośrednie).{" "}
+                <Link to={`/campaigns/${d.a.campaign!.id}`} className="underline">Otwórz kampanię</Link>.
+              </p>
+            )}
+            {!sameCampaign && d.a.campaign && d.b.campaign && (
+              <p className="text-muted-foreground">Materiały należą do różnych kampanii: {d.a.campaign.code} i {d.b.campaign.code}.</p>
+            )}
+          </div>
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-5 gap-y-2.5 text-sm">
+            <dt className="text-muted-foreground">Wspólne identyfikatory</dt>
+            <dd className="font-medium">{d.must_link ? `${nIds} — łączą parę niezależnie od treści` : "brak — decyduje treść"}</dd>
+            <dt className="text-muted-foreground">Odległość treści d</dt>
+            <dd>
+              <span className="font-medium tabular">{fmtP(d.distance)}</span>{" "}
+              <span className="text-muted-foreground">{d.comparable ? "(0 = identyczna, 1 = nic wspólnego)" : "(brak danych do porównania)"}</span>
+            </dd>
+            <dt className="text-muted-foreground">Bliskość pary p</dt>
+            <dd>
+              <Strength p={d.p} className="max-w-56" />
+              <span className="mt-1 block text-xs text-muted-foreground">{d.must_link ? "1, bo para ma wspólny identyfikator" : `1 − d = ${fmtP(d.p)}`}</span>
+            </dd>
+          </dl>
         </CardContent>
       </Card>
 
+      <div className="grid gap-4 md:grid-cols-2">
+        <MaterialSide m={d.a} />
+        <MaterialSide m={d.b} />
+      </div>
+
       {!d.comparable && <NotComparable />}
 
-      <Section title="Wspólne identyfikatory" description="Ta sama wartość w obu materiałach (obecna w co najwyżej połowie bazy) wymusza tę samą kampanię.">
+      <Section
+        title="Wspólne identyfikatory"
+        description="Wartości znalezione w obu materiałach. Jedna taka wartość wystarczy, by połączyć materiały w kampanię — pod warunkiem, że nie jest zbyt popularna (występuje w najwyżej połowie bazy)."
+      >
         <IdentifierList e={d} />
       </Section>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        <Section title="Podobieństwo treści" description="Każdy widok ma jedną standardową miarę podobieństwa w [0, 1]. „Brak danych” — widok niedostępny po jednej ze stron, pomijany w średniej.">
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <Section
+          title="Podobieństwo treści w pięciu widokach"
+          description="Każdy widok porównuje inną warstwę materiału i daje wynik od 0 (nic wspólnego) do 1 (identyczne)."
+          howToRead="odległość treści d to 1 minus średnia z widoków dostępnych po obu stronach. „Brak danych” = jeden z materiałów nie ma tej warstwy, więc widok nie wchodzi do średniej."
+        >
           <ViewBars views={viewsOfExplanation(d)} />
         </Section>
-        <Section title="Jak powstaje wynik">
+        <Section title="Obliczenie krok po kroku" description="Trzy kroki w kolejności, w jakiej system je wykonuje.">
           <Computation e={d} />
         </Section>
       </div>
@@ -80,14 +87,15 @@ export default function PairPage() {
 }
 
 function MaterialSide({ m }: { m: MaterialSummary }) {
+  const lbl = matLabel(m)
   return (
     <Card>
-      <CardContent className="flex gap-3">
-        <Thumb src={m.thumb} alt={`Materiał ${m.name}`} className="h-28 w-20 shrink-0" />
+      <CardContent className="flex gap-4">
+        <Thumb src={m.thumb} alt={`Materiał ${lbl}`} className="h-28 w-22 shrink-0 ring-1 ring-border" />
         <div className="min-w-0 space-y-1.5">
-          <Link to={`/materials/${m.id}`} className="font-semibold hover:underline underline-offset-4">Materiał {m.name}</Link>
+          <Link to={`/materials/${m.id}`} className="block truncate text-base font-medium hover:underline" title={m.name}>Materiał {lbl}</Link>
           <div><CampaignBadge c={m.campaign} withName /></div>
-          <p className="line-clamp-2 text-xs text-muted-foreground">{m.title}</p>
+          <p className="line-clamp-2 text-sm text-muted-foreground">{m.title}</p>
           <p className="font-mono text-xs break-all text-muted-foreground">{m.domains.join(", ") || m.source_label}</p>
         </div>
       </CardContent>

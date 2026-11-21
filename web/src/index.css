@@ -49,7 +49,7 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
+    --background: oklch(0.985 0.002 95);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
     --card-foreground: oklch(0.145 0 0);
@@ -60,7 +60,7 @@
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
+    --muted-foreground: oklch(0.49 0 0);
     --accent: oklch(0.97 0 0);
     --accent-foreground: oklch(0.205 0 0);
     --destructive: oklch(0.577 0.245 27.325);
@@ -126,6 +126,27 @@
     }
   html {
     @apply font-sans;
+    scrollbar-color: var(--axis) transparent;
+    }
+  /* browser surfaces: selection, caret, focus and headings follow the palette instead of UA defaults */
+  ::selection {
+    background: var(--seq-100);
+    color: var(--foreground);
+    }
+  input, textarea {
+    caret-color: var(--seq-500);
+    }
+  :focus-visible {
+    outline-color: var(--seq-500);
+    }
+  h1, h2, h3 {
+    text-wrap: balance;
+    }
+  a {
+    text-underline-offset: 3px;
+    }
+  table {
+    font-variant-numeric: tabular-nums;
     }
 }
 /* ---------------------------------------------------------------- data-viz tokens
@@ -140,6 +161,10 @@
   --seq-500: #256abf; --seq-600: #184f95; --seq-700: #0d366b;
   --status-good: #0ca30c; --status-warning: #fab219; --status-serious: #ec835a; --status-critical: #d03b3b;
   --grid: #e1e0d9; --axis: #c3c2b7;
+  /* neutral mark for "no link / rest of the base" — dark enough to read on white, never used for text */
+  --viz-neutral: #b4b3a9;
+  /* the single hue for plain magnitude bars */
+  --viz-bar: var(--seq-500);
 }
 
 @theme inline {

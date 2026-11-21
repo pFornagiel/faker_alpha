@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 
-export default function DataPage() {
+export default function DataPage({ embedded = false }: { embedded?: boolean }) {
   const { data, error, isLoading } = useApi<DataStatus>("/api/data")
   const qc = useQueryClient()
   const [path, setPath] = useState("")
@@ -53,18 +53,18 @@ export default function DataPage() {
   const busy = load.isPending || job.data?.status === "running" || job.data?.status === "queued"
 
   return (
-    <>
-      <PageHeader title="Dane i eksport" description="Stan bazy, wczytywanie zbioru przypadków, przeliczanie kampanii i eksport wyników do dalszej analizy." />
+    <div className="space-y-6">
+      {!embedded && <PageHeader title="Dane i eksport" description="Stan bazy, wczytywanie zbioru przypadków, przeliczanie kampanii i eksport wyników do dalszej analizy." />}
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Section title="Stan bazy">
           <dl className="divide-y">
             <KV label="Materiały">{data.n_materials}</KV>
-            <KV label="Kampanie">{data.n_campaigns} <span className="text-muted-foreground">({data.n_multi} wielomateriałowe)</span></KV>
-            <KV label="Według źródła">
+            <KV label="Kampanie">{data.n_campaigns} <span className="text-muted-foreground">(w tym {data.n_multi} z co najmniej dwoma materiałami)</span></KV>
+            <KV label="Materiały według źródła">
               <div className="flex flex-wrap gap-1">{Object.entries(data.by_source).map(([k, v]) => <Badge key={k} variant="secondary">{k}: {v}</Badge>)}</div>
             </KV>
-            <KV label="Ostatnio dodany">{fmtDate(data.last_added)}</KV>
+            <KV label="Ostatnio dodany materiał">{fmtDate(data.last_added)}</KV>
             <KV label="Plik bazy"><span className="font-mono text-xs break-all">{data.store}</span></KV>
             <KV label="Model językowy" hint="Kolejność prób: Claude (Claude Code CLI) → Gemini (wymaga klucza GEMINI_API_KEY) → reguły słownikowe (zawsze dostępne). Zmiana przez zmienną FTF_LLM.">
               {data.llm_backend_label}
@@ -82,11 +82,11 @@ export default function DataPage() {
               <Input id="path" value={path} onChange={(e) => setPath(e.target.value)} className="font-mono text-xs" />
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
-              <div className="flex items-center gap-2"><Switch id="dllm" checked={useLlm} onCheckedChange={setUseLlm} /><Label htmlFor="dllm" className="font-normal">Model językowy</Label></div>
-              <div className="flex items-center gap-2"><Switch id="force" checked={force} onCheckedChange={setForce} /><Label htmlFor="force" className="font-normal">Przetwórz ponownie przypadki już w bazie</Label></div>
+              <div className="flex items-center gap-2"><Switch id="dllm" checked={useLlm} onCheckedChange={setUseLlm} /><Label htmlFor="dllm" className="font-normal">Opisz materiały modelem językowym</Label></div>
+              <div className="flex items-center gap-2"><Switch id="force" checked={force} onCheckedChange={setForce} /><Label htmlFor="force" className="font-normal">Przetwórz ponownie także przypadki, które już są w bazie</Label></div>
             </div>
-            <p className="text-xs text-muted-foreground">Ekstrakcja trwa ok. 0,5–3 min na przypadek na CPU. Po imporcie kampanie są przeliczane automatycznie.</p>
-            <Button onClick={() => load.mutate()} disabled={busy || !path.trim()}><FolderInput /> {busy ? "Wczytuję…" : "Wczytaj"}</Button>
+            <p className="text-xs text-muted-foreground">Przetworzenie jednego przypadku trwa od 30 sekund do 3 minut (na CPU). Po wczytaniu kampanie przeliczają się automatycznie.</p>
+            <Button onClick={() => load.mutate()} disabled={busy || !path.trim()}><FolderInput /> {busy ? "Wczytuję zbiór…" : "Wczytaj zbiór"}</Button>
             {jobId && <JobProgress job={job.data} error={job.error} />}
             {job.data?.status === "done" && job.data.result && <p className="text-sm">Przetworzono {job.data.result.n} przypadków → {job.data.result.campaigns} kampanii.</p>}
           </div>
@@ -94,16 +94,16 @@ export default function DataPage() {
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
-        <Section title="Przelicz kampanie" description="Ponownie porównuje wszystkie pary i grupuje materiały — np. po zmianie wag w ftf/config.py. Kody kampanii (C1, C2…) mogą się zmienić.">
+        <Section title="Przelicz kampanie" description="Porównuje od nowa wszystkie pary materiałów i układa kampanie. Potrzebne np. po zmianie progów w ftf/config.py. Kody kampanii (C1, C2…) mogą się po tym zmienić.">
           <Button
             variant="outline"
             disabled={recluster.isPending}
             onClick={() => { if (window.confirm("Przeliczyć kampanie? Kody kampanii (C1, C2…) mogą się zmienić.")) recluster.mutate() }}
           >
-            <RefreshCw className={recluster.isPending ? "animate-spin" : ""} /> Przelicz
+            <RefreshCw className={recluster.isPending ? "animate-spin" : ""} /> {recluster.isPending ? "Przeliczam…" : "Przelicz kampanie"}
           </Button>
         </Section>
-        <Section title="Eksport" description="Pliki do dalszej analizy: lista kampanii, lista par z uzasadnieniem, graf dla bazy Neo4j.">
+        <Section title="Eksport wyników" description="Pliki do dalszej pracy poza panelem: lista kampanii, lista par z uzasadnieniem i graf do wczytania w bazie Neo4j.">
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline"><a href="/api/export/campaigns.json"><Download /> Kampanie (JSON)</a></Button>
             <Button asChild variant="outline"><a href="/api/export/links.csv"><Download /> Pary z uzasadnieniem (CSV)</a></Button>
@@ -114,7 +114,7 @@ export default function DataPage() {
         </Section>
       </div>
 
-      <EventLog title="Ostatnie zdarzenia" events={data.recent} empty="Brak zdarzeń — import zbioru, analizy i skany pojawią się tutaj." />
-    </>
+      <EventLog title="Ostatnie zdarzenia" events={data.recent} empty="Nic się jeszcze nie wydarzyło. Pojawią się tu wczytania zbiorów, analizy i skany." />
+    </div>
   )
 }

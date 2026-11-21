@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 
 const SOURCES = "lista ostrzeżeń CERT Polska, Microsoft Ad Library, Google Ads Transparency i Meta Ad Library"
 
-export default function ScannerPage() {
+export default function ScannerPage({ embedded = false }: { embedded?: boolean }) {
   const { data, error, isLoading } = useApi<ScannerStatus>("/api/scanner", { refetchInterval: 15000 })
   const qc = useQueryClient()
   const [kw, setKw] = useState("")
@@ -56,11 +56,13 @@ export default function ScannerPage() {
   const busy = run.isPending || job.data?.status === "running" || job.data?.status === "queued"
 
   return (
-    <>
-      <PageHeader
-        title="Skaner źródeł"
-        description="Przeszukuje listę ostrzeżeń CERT Polska oraz biblioteki reklam (Microsoft, Google, Meta) po słowach kluczowych i ocenia, jak podejrzana jest każda znaleziona pozycja. Opcjonalnie od razu analizuje najbardziej podejrzane."
-      />
+    <div className="space-y-6">
+      {!embedded && (
+        <PageHeader
+          title="Skaner źródeł"
+          description="Przeszukuje listę ostrzeżeń CERT Polska oraz biblioteki reklam (Microsoft, Google, Meta) po słowach kluczowych i ocenia, jak podejrzana jest każda znaleziona pozycja."
+        />
+      )}
 
       <div className="grid items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Section title="Ustawienia skanu" description="Te same ustawienia obowiązują dla skanu jednorazowego i cyklicznego.">
@@ -101,11 +103,11 @@ export default function ScannerPage() {
             )}
           </div>
         </Section>
-        <Section title="Skan cykliczny" description="Powtarza skan w tle z ustawieniami z lewej, dopóki serwer działa.">
+        <Section title="Skan cykliczny" description="Powtarza ten sam skan w tle, z ustawieniami z lewej strony, dopóki serwer jest uruchomiony.">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`size-2 rounded-full ${data.running ? "bg-[var(--status-good)]" : "bg-muted-foreground/40"}`} />
-              <span className="text-sm font-medium">{data.running ? "Włączony" : "Wyłączony"}</span>
+              <span className="text-sm font-medium">{data.running ? "Skan cykliczny jest włączony" : "Skan cykliczny jest wyłączony"}</span>
               {data.running && <span className="text-sm text-muted-foreground">{data.next_run ? `następny: ${fmtDate(data.next_run)}` : "brak zaplanowanego uruchomienia — zatrzymaj i włącz ponownie"}</span>}
             </div>
             {data.running && data.config && (
@@ -114,13 +116,13 @@ export default function ScannerPage() {
               </p>
             )}
             <div className="flex flex-wrap items-center gap-2">
-              <Label htmlFor="min" className="font-normal">co</Label>
+              <Label htmlFor="min" className="font-normal">Powtarzaj co</Label>
               <Input id="min" type="number" min={5} max={1440} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} className="w-24" aria-invalid={!minutesOk} />
-              <span className="text-sm">min</span>
+              <span className="text-sm">minut</span>
               {data.running ? (
-                <Button variant="outline" onClick={() => startStop.mutate(false)}><Square /> Zatrzymaj</Button>
+                <Button variant="outline" onClick={() => startStop.mutate(false)}><Square /> Zatrzymaj skan cykliczny</Button>
               ) : (
-                <Button variant="outline" disabled={!minutesOk || !keywords.length} onClick={() => startStop.mutate(true)}><Timer /> Włącz</Button>
+                <Button variant="outline" disabled={!minutesOk || !keywords.length} onClick={() => startStop.mutate(true)}><Timer /> Włącz skan cykliczny</Button>
               )}
             </div>
             {!minutesOk && <p className="text-xs text-destructive">Podaj od 5 do 1440 minut.</p>}
@@ -142,8 +144,8 @@ export default function ScannerPage() {
       )}
       <LibrarySearch />
       <FoundTable items={data.found} />
-      <EventLog title="Dziennik skanów" events={data.events} empty="Jeszcze nie uruchomiono skanu." />
-    </>
+      <EventLog title="Dziennik skanów" events={data.events} empty="Dziennik jest pusty — pojawią się tu kolejne skany i ich wyniki." />
+    </div>
   )
 }
 
@@ -160,7 +162,7 @@ function CampaignWatch({ metaToken }: { metaToken: boolean }) {
   const res = job.data?.status === "done" ? job.data.result : null
   return (
     <Section
-      title={<span className="flex items-center gap-1">Szukaj materiałów znanych kampanii <HelpTip label="Skąd biorą się ziarna">{WATCH_HINT}</HelpTip></span>}
+      title={<span className="flex items-center gap-1.5">Szukaj nowych materiałów znanych kampanii <HelpTip label="Skąd biorą się zapytania">{WATCH_HINT}</HelpTip></span>}
       description={`Wyszukiwanie po identyfikatorach wykrytych kampanii: domeny → Google Ads Transparency, Microsoft Ad Library i nowe wpisy CERT Polska; ID reklamodawcy Google → Google Ads Transparency; nazwy produktów → Microsoft Ad Library${metaToken ? ", Meta Ad Library" : ""} i CERT Polska. Do ${seeds.data?.max_campaigns ?? 8} największych kampanii, po ${seeds.data?.max_seeds ?? 4} ziarna.`}
     >
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_1.2fr]">
@@ -172,7 +174,7 @@ function CampaignWatch({ metaToken }: { metaToken: boolean }) {
             </Label>
           </div>
           <Button onClick={() => run.mutate()} disabled={busy || !seeds.data?.seeds.length}>
-            <Radar /> {busy ? "Szukam…" : "Szukaj materiałów znanych kampanii"}
+            <Radar /> {busy ? "Przeszukuję źródła…" : "Szukaj w źródłach"}
           </Button>
           {jobId && <JobProgress job={job.data} error={job.error} />}
           {res && (
@@ -184,7 +186,7 @@ function CampaignWatch({ metaToken }: { metaToken: boolean }) {
           )}
         </div>
         <div className="space-y-2">
-          <p className="text-sm font-medium">Ziarna wyszukiwania</p>
+          <h3 className="font-medium">Zapytania, które zostaną wysłane („ziarna”)</h3>
           {seeds.isLoading ? <Loading /> : <div className="max-h-72 overflow-y-auto"><SeedList seeds={seeds.data?.seeds ?? []} /></div>}
         </div>
       </div>
@@ -218,12 +220,12 @@ function LibrarySearch() {
   const { data, isFetching, error } = useApi<{ results: ScanItem[]; errors: Record<string, string> }>(sub ? `/api/library-search?q=${encodeURIComponent(sub)}` : null)
   return (
     <Section
-      title="Szukaj w bibliotekach reklam"
-      description="Jednorazowe wyszukiwanie w Microsoft Ad Library, Google Ads Transparency i Meta Ad Library: nazwa produktu, platformy, nazwisko, hasło reklamy. Wyniki nie są zapisywane."
+      title="Szukaj własnego hasła w bibliotekach reklam"
+      description="Jednorazowe wyszukiwanie w Microsoft Ad Library, Google Ads Transparency i Meta Ad Library, np. po nazwie produktu, platformy, nazwisku albo haśle z reklamy. Wyniki nie są zapisywane w bazie."
     >
       <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 2) setSub(q.trim()) }}>
-        <Input placeholder="np. Świtowin, Uromexil, Brzoska…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-sm" />
-        <Button type="submit" variant="outline" disabled={isFetching || q.trim().length < 2}><Search /> {isFetching ? "Szukam…" : "Szukaj"}</Button>
+        <Input aria-label="Hasło do wyszukania" placeholder="np. Świtowin, Uromexil, Brzoska" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-sm" />
+        <Button type="submit" variant="outline" disabled={isFetching || q.trim().length < 2}><Search /> {isFetching ? "Przeszukuję biblioteki…" : "Szukaj"}</Button>
       </form>
       {error && <Alert variant="destructive" className="mt-3"><AlertDescription>{(error as Error).message}</AlertDescription></Alert>}
       {data && (
@@ -231,7 +233,7 @@ function LibrarySearch() {
           {Object.entries(data.errors).length > 0 && (
             <p className="text-xs text-muted-foreground">Niedostępne źródła: {Object.entries(data.errors).map(([k, v]) => `${k} (${v.slice(0, 80)})`).join("; ")}</p>
           )}
-          {data.results.length ? <ItemsList items={data.results} /> : <p className="text-sm text-muted-foreground">Brak wyników dla „{sub}”.</p>}
+          {data.results.length ? <ItemsList items={data.results} /> : <p className="text-sm text-muted-foreground">Biblioteki reklam nie zwróciły żadnej pozycji dla hasła „{sub}”. Spróbuj krótszego hasła albo samej domeny.</p>}
         </div>
       )}
     </Section>
@@ -248,12 +250,12 @@ function FoundTable({ items }: { items: ScanItem[] }) {
       description={`${rows.length} z ${items.length} zapisanych pozycji (z wcześniejszych skanów).`}
       aside={
         <div className="flex items-center gap-2 text-sm">
-          <Label htmlFor="minscore" className="font-normal text-muted-foreground">pokaż z oceną ≥</Label>
+          <Label htmlFor="minscore" className="font-normal text-muted-foreground">Pokaż pozycje z oceną co najmniej</Label>
           <Input id="minscore" type="number" step={0.1} min={0} max={1} value={min} onChange={(e) => setMin(Number(e.target.value))} className="h-8 w-20" />
         </div>
       }
     >
-      {rows.length ? <ItemsList items={rows} /> : <p className="text-sm text-muted-foreground">{items.length ? "Brak pozycji powyżej wybranej oceny." : "Brak pozycji — uruchom skan."}</p>}
+      {rows.length ? <ItemsList items={rows} /> : <p className="text-sm text-muted-foreground">{items.length ? "Żadna pozycja nie ma tak wysokiej oceny. Obniż próg, aby zobaczyć więcej." : "Skaner nie zapisał jeszcze żadnej pozycji. Uruchom skan powyżej."}</p>}
     </Section>
   )
 }
@@ -266,7 +268,7 @@ function ItemsList({ items }: { items: ScanItem[] }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-20">Ocena</TableHead>
+              <TableHead className="w-24" title="Ocena podejrzaności od 0 do 1 — szybka selekcja, nie werdykt">Ocena 0–1</TableHead>
               <TableHead>Źródło</TableHead>
               <TableHead>Pozycja</TableHead>
               <TableHead>Dlaczego podejrzana</TableHead>

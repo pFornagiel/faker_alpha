@@ -4,11 +4,17 @@ import { api, type Evidence, type Explanation } from "./api"
 // Cuts mirrored from ftf/config.py (CAMPAIGN_CUT, FAMILY_CUT, DUPLICATE_CUT). Pages that receive `thresholds`
 // from the API use those; these defaults only label static hints.
 export const CAMPAIGN_CUT = 0.6
-export const FAMILY_CUT = 0.9
+export const FAMILY_CUT = 0.93
 export const DUPLICATE_CUT = 0.05
 /** the same cuts in closeness units p = 1 − D */
 export const P_LINK = 0.4
-export const P_SIMILAR = 0.1
+export const P_SIMILAR = 0.07
+
+/** Clean short display label for a material (prevents raw URLs from overflowing cards/tables/axes). */
+export function matLabel(m: { name: string; display_name?: string } | null | undefined): string {
+  if (!m) return "—"
+  return m.display_name || m.name
+}
 
 /** closeness p, distance d or a view similarity — all in [0, 1] */
 export function fmtP(p: number | null | undefined): string {

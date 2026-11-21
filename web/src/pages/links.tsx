@@ -3,7 +3,7 @@ import { useMemo } from "react"
 import { Link, useSearchParams } from "react-router"
 
 import type { LinkBrief, Relation } from "@/lib/api"
-import { fmtP, useApi } from "@/lib/format"
+import { plural, useApi } from "@/lib/format"
 import { CampaignDot, ErrorState, Loading, PageHeader, RelationBadge, Strength, StrengthLegend } from "@/components/common"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -24,19 +24,19 @@ function PairName({ l }: { l: LinkBrief }) {
     <div className="space-y-0.5">
       <span className="inline-flex flex-wrap items-center gap-x-1.5">
         <CampaignDot c={l.a_info?.campaign} />
-        <Link to={`/materials/${l.a}`} className="font-medium underline-offset-4 hover:underline">mat. {l.a_info?.name}</Link>
+        <Link to={`/materials/${l.a}`} className="font-medium hover:underline">Materiał {l.a_info?.name}</Link>
         <span className="text-muted-foreground">↔</span>
         <CampaignDot c={l.b_info?.campaign} />
-        <Link to={`/materials/${l.b}`} className="font-medium underline-offset-4 hover:underline">mat. {l.b_info?.name}</Link>
+        <Link to={`/materials/${l.b}`} className="font-medium hover:underline">Materiał {l.b_info?.name}</Link>
       </span>
       <div className="text-xs text-muted-foreground">
-        {sameCamp ? `obie w ${l.a_info?.campaign?.code}` : `${l.a_info?.campaign?.code} i ${l.b_info?.campaign?.code}`}
+        {sameCamp ? `oba w kampanii ${l.a_info?.campaign?.code}` : `kampanie ${l.a_info?.campaign?.code} i ${l.b_info?.campaign?.code}`}
       </div>
     </div>
   )
 }
 
-export default function LinksPage() {
+export default function LinksPage({ embedded = false }: { embedded?: boolean }) {
   const { data, error, isLoading } = useApi<LinkBrief[]>("/api/links")
   const [params, setParams] = useSearchParams()
   const relParam = params.get("rel")
@@ -61,33 +61,33 @@ export default function LinksPage() {
   if (isLoading) return <Loading />
   if (error || !data) return <ErrorState error={error} />
   return (
-    <>
-      <PageHeader
-        title="Powiązania (pary materiałów)"
-        description="Każda para materiałów dostaje relację, odległość treści d i bliskość p (1 przy wspólnym identyfikatorze, inaczej 1 − d). To tabelaryczna wersja grafu i macierzy — kliknij „Dlaczego?”, by zobaczyć pełne uzasadnienie pary."
-      />
+    <div className="space-y-4">
+      {!embedded && (
+        <PageHeader
+          title="Pary materiałów"
+          description="Każda para materiałów dostaje relację, odległość treści d i bliskość p. „Porównaj parę” otwiera pełne uzasadnienie."
+        />
+      )}
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-muted-foreground">Pokaż relacje:</span>
-          <ToggleGroup type="multiple" variant="outline" value={rel} onValueChange={(v) => setParam("rel", v.join(","))} className="flex-wrap">
-            {REL.map((r) => (
-              <ToggleGroupItem key={r.value} value={r.value} className="px-3">
-                {r.label} <span className="tabular opacity-70">{counts[r.value] ?? 0}</span>
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span id="rel-filter" className="text-sm text-muted-foreground">Pokaż pary o relacji:</span>
+            <ToggleGroup type="multiple" variant="outline" size="sm" aria-labelledby="rel-filter" value={rel} onValueChange={(v) => setParam("rel", v.join(","))} className="flex-wrap">
+              {REL.map((r) => (
+                <ToggleGroupItem key={r.value} value={r.value} className="px-3">
+                  {r.label} <span className="tabular opacity-70">{counts[r.value] ?? 0}</span>
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+          <Input aria-label="Filtruj pary" placeholder="Filtruj: numer materiału, kod kampanii (C1), treść dowodu…" value={q} onChange={(e) => setParam("q", e.target.value)} className="h-8 max-w-sm" />
+          <span className="text-sm text-muted-foreground tabular">{plural(rows.length, "para", "pary", "par")} z {data.length}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Input placeholder="Filtruj: materiał, kampania (C1), dowód…" value={q} onChange={(e) => setParam("q", e.target.value)} className="max-w-xs" />
-          <span className="text-sm text-muted-foreground">{rows.length} par</span>
-        </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-1">
-          <StrengthLegend />
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="size-2.5 rounded-full" style={{ background: "var(--series-1)" }} /> kampania wielomateriałowa
-            <span className="ml-2 size-2.5 rounded-full ring-1 ring-inset ring-[var(--series-none)]" /> kampania jednomateriałowa
-          </span>
-        </div>
+        <StrengthLegend />
+        <p className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ background: "var(--series-1)" }} /> kolorowa kropka = materiał z kampanii wielomateriałowej (kolor kampanii)</span>
+          <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full ring-1 ring-inset ring-[var(--series-none)]" /> pusta kropka = pojedynczy materiał</span>
+        </p>
       </div>
 
       {/* desktop */}
@@ -96,31 +96,31 @@ export default function LinksPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="pl-4">Para</TableHead>
-              <TableHead className="w-48">Bliskość p</TableHead>
-              <TableHead>Relacja</TableHead>
-              <TableHead>Najważniejsze dowody</TableHead>
-              <TableHead className="w-28" />
+              <TableHead className="min-w-56">Bliskość p i odległość treści d</TableHead>
+              <TableHead>Relacja pary</TableHead>
+              <TableHead>Najmocniejsze dowody</TableHead>
+              <TableHead className="pr-4" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((l) => (
               <TableRow key={`${l.a}-${l.b}`}>
                 <TableCell className="pl-4 whitespace-nowrap"><PairName l={l} /></TableCell>
-                <TableCell><Strength p={l.p} /><div className="mt-0.5 pl-12 text-xs text-muted-foreground tabular">d = {fmtP(l.distance)}</div></TableCell>
+                <TableCell><Strength p={l.p} distance={l.distance} /></TableCell>
                 <TableCell><RelationBadge relation={l.relation} /></TableCell>
-                <TableCell className="max-w-xl">
+                <TableCell className="w-full max-w-0">
                   <ul className="space-y-0.5 text-sm">
-                    {l.reasons.slice(0, 2).map((r, i) => <li key={i} className="truncate" title={r.detail}>{r.detail}</li>)}
+                    {l.reasons.slice(0, 2).map((r, i) => <li key={i} className="line-clamp-2 break-words whitespace-normal" title={r.detail}>{r.detail}</li>)}
                     {!l.reasons.length && <li className="text-muted-foreground">brak wspólnych śladów</li>}
                   </ul>
                 </TableCell>
-                <TableCell>
-                  <Button asChild variant="ghost" size="sm"><Link to={`/pair/${l.a}/${l.b}`}>Dlaczego? <ArrowRight /></Link></Button>
+                <TableCell className="pr-4 text-right">
+                  <Button asChild variant="ghost" size="sm"><Link to={`/pair/${l.a}/${l.b}`}>Porównaj parę <ArrowRight /></Link></Button>
                 </TableCell>
               </TableRow>
             ))}
             {!rows.length && (
-              <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Brak par dla wybranych filtrów.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Żadna para nie pasuje do wybranych relacji i filtra. Włącz więcej relacji albo wyczyść filtr.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -135,14 +135,14 @@ export default function LinksPage() {
                 <PairName l={l} />
                 <RelationBadge relation={l.relation} />
               </div>
-              <Strength p={l.p} />
+              <Strength p={l.p} distance={l.distance} />
               <p className="text-sm text-muted-foreground">{l.reasons[0]?.detail ?? "brak wspólnych śladów"}</p>
-              <Button asChild variant="outline" size="sm" className="w-full"><Link to={`/pair/${l.a}/${l.b}`}>Dlaczego? <ArrowRight /></Link></Button>
+              <Button asChild variant="outline" size="sm" className="w-full"><Link to={`/pair/${l.a}/${l.b}`}>Porównaj parę <ArrowRight /></Link></Button>
             </CardContent>
           </Card>
         ))}
-        {!rows.length && <p className="py-6 text-center text-sm text-muted-foreground">Brak par dla wybranych filtrów.</p>}
+        {!rows.length && <p className="py-6 text-center text-sm text-muted-foreground">Żadna para nie pasuje do wybranych relacji i filtra.</p>}
       </div>
-    </>
+    </div>
   )
 }

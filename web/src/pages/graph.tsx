@@ -34,7 +34,7 @@ const isLinkingGroup = (g: string | undefined) => !!g && g !== "images" && g !==
 type Sel = { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge } | null
 const ALL_RELS: Relation[] = ["same_campaign", "duplicate", "similar"]
 
-export default function GraphPage() {
+export default function GraphPage({ embedded = false }: { embedded?: boolean }) {
   const [params, setParams] = useSearchParams()
   const focus = params.get("focus")
   const traces = params.get("traces") === "1"
@@ -192,14 +192,16 @@ export default function GraphPage() {
   const counts = data.counts ?? {}
 
   return (
-    <>
-      <PageHeader
-        title="Graf powiązań"
-        description="Każde kółko to materiał (z miniaturą kreacji). Ramka z nazwą = kampania wielomateriałowa. Linia = powiązanie pary; grubsza = bliższa. Kliknij materiał lub linię, aby zobaczyć uzasadnienie."
-      />
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+    <div className="space-y-4">
+      {!embedded && (
+        <PageHeader
+          title="Graf powiązań"
+          description="Każde kółko to materiał (z miniaturą kreacji). Ramka z nazwą = kampania wielomateriałowa. Linia = powiązanie pary; grubsza = bliższa. Kliknij materiał lub linię, aby zobaczyć uzasadnienie."
+        />
+      )}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl border bg-card p-3.5 shadow-xs">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">Pokaż linie:</span>
+          <span className="text-sm text-muted-foreground">Pokaż linie dla relacji:</span>
           <ToggleGroup type="multiple" variant="outline" size="sm" className="flex-wrap" value={rels} onValueChange={(v) => setParam("rel", v.length === ALL_RELS.length ? null : v.join(","))}>
             <ToggleGroupItem value="same_campaign" className="px-3">Ta sama kampania <span className="opacity-70">{counts.same_campaign ?? 0}</span></ToggleGroupItem>
             <ToggleGroupItem value="duplicate" className="px-3">Duplikaty <span className="opacity-70">{counts.duplicate ?? 0}</span></ToggleGroupItem>
@@ -208,20 +210,20 @@ export default function GraphPage() {
         </div>
         <div className="flex items-center gap-2">
           <Switch id="traces" checked={traces} onCheckedChange={(v) => setParam("traces", v ? "1" : null)} />
-          <Label htmlFor="traces" className="font-normal">Pokaż wspólne ślady jako węzły</Label>
+          <Label htmlFor="traces" className="font-normal">Dorysuj wspólne ślady (piksele, domeny…) jako osobne węzły</Label>
         </div>
         <div className="flex items-center gap-2">
           <Switch id="iso" checked={hideIsolated} onCheckedChange={(v) => setParam("hide", v ? "1" : null)} />
-          <Label htmlFor="iso" className="font-normal">Ukryj materiały bez powiązań</Label>
+          <Label htmlFor="iso" className="font-normal">Ukryj materiały bez żadnego powiązania</Label>
         </div>
         <Button variant="outline" size="sm" onClick={() => cyRef.current?.fit(undefined, 30)}>
           <Maximize2 /> Dopasuj widok
         </Button>
         {focus !== null && <Button variant="ghost" size="sm" onClick={() => setParam("focus", null)}>Pokaż całość</Button>}
       </div>
-      <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-        <Card className="relative overflow-hidden py-0">
-          <div ref={box} className="h-[55vh] min-h-[380px] w-full bg-[#fcfcfb] md:h-[68vh] md:min-h-[480px]" aria-label="Graf powiązań materiałów" role="img" />
+      <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
+        <Card className="relative overflow-hidden py-0 shadow-xs">
+          <div ref={box} className="h-[62vh] min-h-[460px] w-full bg-[#fcfcfb] md:h-[72vh] md:min-h-[560px]" aria-label="Graf powiązań materiałów" role="img" />
           {!nMaterials && (
             <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-muted-foreground">
               Nic do pokazania — włącz co najmniej jeden rodzaj linii albo wyłącz „Ukryj materiały bez powiązań”.
@@ -232,10 +234,7 @@ export default function GraphPage() {
           {sel ? <SelectionPanel sel={sel} data={data} onClose={() => { setSel(null); cyRef.current?.elements().removeClass("faded"); cyRef.current?.elements().unselect() }} /> : <Legend traces={traces} />}
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Wersja tabelaryczna: <Link to="/links" className="underline underline-offset-4">Powiązania (pary)</Link> · widok zbiorczy: <Link to="/matrix" className="underline underline-offset-4">Macierz podobieństwa</Link>
-      </p>
-    </>
+    </div>
   )
 }
 
@@ -307,7 +306,7 @@ function SelectionPanel({ sel, data, onClose }: { sel: NonNullable<Sel>; data: G
               <p className="mb-2 font-medium">Najważniejsze dowody</p>
               <EvidenceBrief evidence={sel.edge.evidence ?? []} />
             </div>
-            <Button asChild size="sm" className="w-full"><Link to={`/pair/${sel.edge.source}/${sel.edge.target}`}>Pełne uzasadnienie <ArrowRight /></Link></Button>
+            <Button asChild size="sm" className="w-full"><Link to={`/pair/${sel.edge.source}/${sel.edge.target}`}>Porównaj parę <ArrowRight /></Link></Button>
           </>
         )}
         {sel.kind === "node" && sel.node.kind === "material" && (

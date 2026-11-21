@@ -25,8 +25,8 @@ export default function TracePage() {
         <PageHeader docTitle="Ślad" title={<span className="break-all">{t.type_label}: {t.display}</span>} />
         <Empty className="border">
           <EmptyHeader>
-            <EmptyTitle>Ta wartość nie występuje w żadnym materiale</EmptyTitle>
-            <EmptyDescription>Sprawdź pisownię albo użyj wyszukiwarki w nagłówku.</EmptyDescription>
+            <EmptyTitle>Tej wartości nie ma w żadnym materiale w bazie</EmptyTitle>
+            <EmptyDescription>Sprawdź pisownię albo znajdź ślad wyszukiwarką u góry strony (klawisz /).</EmptyDescription>
           </EmptyHeader>
         </Empty>
       </>
@@ -37,13 +37,13 @@ export default function TracePage() {
       <PageHeader
         docTitle={`${t.type_label}: ${t.display}`}
         title={<span className="break-all">{t.type_label}: <span className={isPerson ? "" : "font-mono text-xl"}>{t.display}</span></span>}
-        description={`Wszystkie materiały, w których występuje ta wartość: ${t.df} z ${t.n}${campaigns.length ? ` (kampanie: ${campaigns.join(", ")})` : ""}.`}
+        description={`Ślad to pojedyncza wartość wyciągnięta z materiału. Ta występuje w ${t.df} z ${t.n} materiałów bazy${campaigns.length ? ` (kampanie: ${campaigns.join(", ")})` : ""}.`}
       />
       {t.thumbs.length > 0 && <img src={t.thumbs[0]} alt="wspólny obraz" className="max-h-56 rounded-md ring-1 ring-border" />}
       {t.linking && !t.counted && (
         <Alert>
           <AlertTriangle />
-          <AlertTitle>Wartość zbyt popularna</AlertTitle>
+          <AlertTitle>Ta wartość jest zbyt popularna, by łączyć materiały</AlertTitle>
           <AlertDescription>
             Występuje w {t.df} z {t.n} materiałów — w ponad {pct(t.max_df)} bazy — więc jest pomijana przy łączeniu: nie odróżnia jednej kampanii od innych.
           </AlertDescription>
@@ -52,7 +52,7 @@ export default function TracePage() {
       {!t.linking && (
         <Alert>
           <Info />
-          <AlertTitle>Ten ślad sam niczego nie łączy</AlertTitle>
+          <AlertTitle>Ten ślad nie łączy materiałów w kampanie</AlertTitle>
           <AlertDescription>
             {t.group === "images"
               ? "Obrazy ze stron docelowych są porównywane w widoku treści „obrazy” (pHash): wspólny obraz zwiększa podobieństwo treści, ale sam nie wymusza tej samej kampanii."
@@ -67,9 +67,9 @@ export default function TracePage() {
               <KV label="Rodzaj śladu"><GroupBadge label={t.group_label} linking={t.linking} /></KV>
               <KV label="Częstość">
                 w {t.df} z {t.n} materiałów ({pct(t.df / Math.max(1, t.n))})
-                <span className="block text-xs text-muted-foreground">identyfikator liczy się tylko, gdy występuje w co najwyżej {pct(t.max_df)} materiałów (zasada IDF)</span>
+                <span className="block text-xs text-muted-foreground">identyfikator łączy tylko wtedy, gdy występuje w najwyżej {pct(t.max_df)} materiałów — częstsze wartości nie odróżniają kampanii</span>
               </KV>
-              <KV label="Łączy materiały">
+              <KV label="Czy łączy materiały">
                 {t.counted ? "tak — wspólna wartość wymusza tę samą kampanię" : t.linking ? "nie — zbyt popularna" : t.group === "images" ? "nie — wpływa na widok treści „obrazy”" : "nie — cecha opisowa"}
               </KV>
             </dl>

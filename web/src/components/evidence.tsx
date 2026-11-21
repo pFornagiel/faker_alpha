@@ -11,7 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 /** One bar per content view, similarity 0–1. Unavailable views say so instead of showing 0. */
 export function ViewBars({ views }: { views: ViewRow[] }) {
-  if (!views.length) return <p className="text-sm text-muted-foreground">Brak widoku treści dostępnego po obu stronach.</p>
+  if (!views.length) return <p className="text-sm text-muted-foreground">Żaden widok treści nie jest dostępny w obu materiałach, więc treści nie da się porównać.</p>
   return (
     <div className="space-y-3 sm:space-y-2" role="table" aria-label="Podobieństwo w widokach treści (0–1)">
       {views.map((v) => (
@@ -56,21 +56,21 @@ export function IdentifierList({ e }: { e: Explanation }) {
                 <div key={`${it.type}:${it.value}`} className="grid gap-x-3 gap-y-0.5 border-t px-3 py-2 text-sm sm:grid-cols-[12rem_1fr_auto]">
                   <span className="text-muted-foreground">{it.type_label}</span>
                   <Link to={traceHref(it.type, it.value)} className="min-w-0 font-mono text-xs break-all underline-offset-4 hover:underline">{it.display}</Link>
-                  <span className="text-xs whitespace-nowrap text-muted-foreground tabular">w {it.df} z {it.n} materiałów</span>
+                  <span className="text-xs whitespace-nowrap text-muted-foreground tabular" title="W ilu materiałach całej bazy występuje ta wartość. Im rzadsza, tym mocniejszy dowód.">w {it.df} z {it.n} materiałów bazy</span>
                 </div>
               ))}
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">Brak wspólnego identyfikatora — o relacji decyduje odległość treści.</p>
+        <p className="text-sm text-muted-foreground">Materiały nie mają żadnej wspólnej wartości identyfikującej. O relacji decyduje wyłącznie odległość treści.</p>
       )}
       {e.ignored.length > 0 && (
         <Collapsible open={open} onOpenChange={setOpen}>
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm" className="-ml-2 h-auto text-left whitespace-normal text-muted-foreground">
               <ChevronDown className={open ? "rotate-180 transition-transform" : "transition-transform"} />
-              Pominięte wspólne wartości ({e.ignored.length}) — zbyt popularne, by coś znaczyć
+              {open ? "Ukryj" : "Pokaż"} pominięte wspólne wartości ({e.ignored.length}) — występują w ponad połowie bazy, więc nie odróżniają kampanii
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -116,14 +116,14 @@ export function Computation({ e }: { e: Explanation }) {
     <ol className="space-y-3 text-sm">
       <StepLi n={1} title="Wspólne identyfikatory">
         {e.must_link
-          ? `Tak (${nIds}) — wspólny identyfikator łączy materiały w jedną kampanię niezależnie od treści (p = 1).`
-          : "Brak — o relacji decyduje odległość treści."}
+          ? `Znaleziono ${nIds}. Wspólny identyfikator łączy materiały w jedną kampanię niezależnie od treści, więc bliskość p = 1.`
+          : "Nie znaleziono. O relacji decyduje odległość treści z kroku 2."}
       </StepLi>
-      <StepLi n={2} title="Odległość treści (Gower)">
-        <span className="block">d = 1 − średnia podobieństw z widoków dostępnych po obu stronach ({e.n_views}); każdy widok wnosi s / {e.n_views || "k"}.</span>
+      <StepLi n={2} title="Odległość treści d (odległość Gowera)">
+        <span className="block">d = 1 − średnia podobieństw z widoków dostępnych w obu materiałach (tutaj: {e.n_views}). Każdy widok waży tyle samo.</span>
         <span className="block font-mono text-xs break-words text-foreground">{e.formula}</span>
       </StepLi>
-      <StepLi n={3} title={`Relacja: ${e.relation_label}`}>{e.rule}</StepLi>
+      <StepLi n={3} title={`Wynik: ${e.relation_label}`}>{e.rule}</StepLi>
     </ol>
   )
 }
@@ -146,7 +146,7 @@ export function NotComparable() {
       <ShieldAlert />
       <AlertTitle>Treści tej pary nie da się porównać</AlertTitle>
       <AlertDescription>
-        Żaden widok treści nie jest dostępny po obu stronach (np. sam zrzut ekranu vs sam zapis strony), więc d = 1 oznacza brak danych, a nie różne kampanie.
+        Żaden widok treści nie jest dostępny w obu materiałach (np. jeden to sam zrzut ekranu, a drugi sam zapis strony). Odległość d = 1 oznacza tu brak danych, a nie dowód, że to różne kampanie.
       </AlertDescription>
     </Alert>
   )

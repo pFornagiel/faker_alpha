@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router"
 
 import type { MatrixData, Relation } from "@/lib/api"
 import { fmtP, P_CLASSES, seqColor, seqInk, useApi } from "@/lib/format"
-import { CampaignDot, ErrorState, Loading, PageHeader } from "@/components/common"
+import { CampaignDot, ErrorState, Loading, PageHeader, ReadingNote } from "@/components/common"
 import { Card, CardContent } from "@/components/ui/card"
 
 const REL_PL: Record<Relation, string> = {
@@ -14,7 +14,7 @@ const REL_PL: Record<Relation, string> = {
 }
 const HATCH = "repeating-linear-gradient(45deg,#e8e7e2 0 3px,#fcfcfb 3px 6px)"
 
-export default function MatrixPage() {
+export default function MatrixPage({ embedded = false }: { embedded?: boolean }) {
   const { data, error, isLoading } = useApi<MatrixData>("/api/matrix")
   const [cur, setCur] = useState<{ i: number; j: number }>({ i: 0, j: 1 })
   const [active, setActive] = useState(false)
@@ -36,10 +36,11 @@ export default function MatrixPage() {
   if (isLoading) return <Loading />
   if (error || !data) return <ErrorState error={error} />
   const n = data.materials.length
-  const cell = n <= 12 ? 52 : n <= 30 ? 30 : n <= 60 ? 18 : 12
+  const cell = n <= 12 ? 48 : n <= 30 ? 32 : n <= 60 ? 20 : 14
   const showNums = cell >= 30
-  const labelW = 92
-  const top = 34
+  const labelW = 132
+  const top = 38
+  const shortCol = (s: string) => (s.length <= 7 ? s : s.slice(0, 6) + "…")
   const boundary = new Set(blocks.map((b) => b.start).filter((s) => s > 0))
 
   const focusCell = (i: number, j: number) => {
@@ -63,20 +64,31 @@ export default function MatrixPage() {
   const sameCamp = a.campaign && b.campaign && a.campaign.id === b.campaign.id
 
   return (
-    <>
-      <PageHeader
-        title="Macierz podobieństwa"
-        description="Każda komórka to bliskość p = 1 − D jednej pary materiałów (1 przy wspólnym identyfikatorze, inaczej 1 − d, gdzie d to odległość treści) — im ciemniej, tym bliżej. Wiersze i kolumny to te same materiały, ułożone według kampanii, więc kampania jest widoczna jako ciemny kwadrat na przekątnej (obrysowany na czarno). Kliknij komórkę, aby zobaczyć uzasadnienie pary."
-      />
-      <div className="grid gap-4 xl:grid-cols-[auto_18rem]">
+    <div className="space-y-4">
+      {!embedded && (
+        <PageHeader
+          title="Macierz podobieństwa"
+          description="Każda komórka to bliskość p = 1 − D jednej pary materiałów — im ciemniej, tym bliżej. Wiersze i kolumny ułożone są według kampanii (ciemne kwadraty na przekątnej). Kliknij komórkę, aby zobaczyć pełne uzasadnienie pary."
+        />
+      )}
+      <div className="grid gap-5 xl:grid-cols-[auto_22rem]">
         <Card className="min-w-0">
           <CardContent className="overflow-x-auto">
-            <p className="mb-2 text-xs text-muted-foreground">Wiersze i kolumny: numer materiału (przy wierszu kod kampanii).</p>
+            <ReadingNote className="mb-4">
+              każdy wiersz i każda kolumna to jeden materiał, a komórka na ich przecięciu to para. Im ciemniejsza komórka, tym bliższa para;
+              liczba to bliskość p. Ciemny kwadrat wokół przekątnej to jedna kampania. Macierz jest symetryczna, więc każda para występuje w niej dwa razy.
+              Kliknij komórkę, aby porównać parę.
+            </ReadingNote>
             <div className="relative inline-block" style={{ paddingLeft: labelW, paddingTop: top }}>
               {data.materials.map((m, j) => (
-                <div key={`c-${m.id}`} className="absolute flex items-end justify-center gap-1 text-xs font-medium" style={{ left: labelW + j * cell, top: 0, width: cell, height: 30 }}>
-                  {cell >= 18 && <CampaignDot c={m.campaign} className="size-2" />}
-                  {cell >= 18 && <span className={active && cur.j === j ? "underline" : ""}>{m.name}</span>}
+                <div
+                  key={`c-${m.id}`}
+                  title={`Materiał ${m.name} (${m.campaign?.code ?? "—"})`}
+                  className="absolute flex items-end justify-center gap-0.5 overflow-hidden px-0.5 text-xs font-medium"
+                  style={{ left: labelW + j * cell, top: 0, width: cell, height: 34 }}
+                >
+                  {cell >= 20 && <CampaignDot c={m.campaign} className="mb-0.5 size-2 shrink-0" />}
+                  {cell >= 20 && <span className={`truncate ${active && cur.j === j ? "underline" : ""}`}>{shortCol(m.name)}</span>}
                 </div>
               ))}
               {data.materials.map((m, i) => (
@@ -84,13 +96,13 @@ export default function MatrixPage() {
                   key={`r-${m.id}`}
                   to={`/materials/${m.id}`}
                   tabIndex={-1}
-                  className="absolute flex items-center justify-end gap-1.5 pr-2 text-xs font-medium hover:underline"
+                  className="absolute flex items-center justify-end gap-1.5 overflow-hidden pr-2.5 text-xs font-medium hover:underline"
                   style={{ left: 0, top: top + i * cell, width: labelW, height: cell }}
                   title={`Materiał ${m.name} — ${m.campaign?.code ?? ""}`}
                 >
-                  <span className={active && cur.i === i ? "underline" : ""}>mat. {m.name}</span>
-                  <span className="text-muted-foreground">{m.campaign?.code}</span>
-                  <CampaignDot c={m.campaign} className="size-2" />
+                  <span className={`truncate ${active && cur.i === i ? "underline" : ""}`}>{m.name}</span>
+                  <span className="shrink-0 text-muted-foreground">{m.campaign?.code}</span>
+                  <CampaignDot c={m.campaign} className="size-2 shrink-0" />
                 </Link>
               ))}
               <div
@@ -153,14 +165,13 @@ export default function MatrixPage() {
           <Card size="sm" aria-live="polite">
             <CardContent className="space-y-2 text-sm">
               {!active ? (
-                <p className="text-muted-foreground">Najedź na komórkę albo przejdź do macierzy klawiszem Tab i poruszaj się strzałkami. Enter lub kliknięcie otwiera uzasadnienie pary.</p>
+                <p className="text-muted-foreground">Najedź na komórkę, aby zobaczyć tu szczegóły pary. Z klawiatury: Tab przenosi do macierzy, strzałki zmieniają komórkę, Enter otwiera porównanie pary.</p>
               ) : cur.i === cur.j ? (
-                <p className="text-muted-foreground">Materiał {a.name} — ta sama pozycja (przekątna macierzy nie ma wartości).</p>
+                <p className="text-muted-foreground">Materiał {a.name} na przecięciu z samym sobą — przekątna nie ma wartości.</p>
               ) : (
                 <>
-                  <p className="font-medium">Materiał {a.name} ↔ materiał {b.name}</p>
-                  <p className="text-2xl font-semibold tabular">p = {fmtP(p)}</p>
-                  <p className="text-muted-foreground tabular">odległość treści d = {fmtP(dist)}</p>
+                  <p className="font-medium">Materiał {a.name} ↔ Materiał {b.name}</p>
+                  <p className="tabular">bliskość p = <span className="font-medium">{fmtP(p)}</span> · odległość treści d = <span className="font-medium">{fmtP(dist)}</span></p>
                   <p className="text-muted-foreground">
                     {r ? REL_PL[r] : "nie porównano"}
                     {r === "none" && sameCamp ? ` — ale oba w ${a.campaign!.code} przez inne materiały` : ""}
@@ -172,7 +183,7 @@ export default function MatrixPage() {
           </Card>
           <Card size="sm">
             <CardContent className="space-y-3 text-sm">
-              <p className="font-medium">Legenda</p>
+              <p className="font-medium">Kolory i oznaczenia</p>
               <ul className="space-y-1.5 text-xs">
                 {P_CLASSES.map((c) => (
                   <li key={c.label} className="flex items-center gap-2">
@@ -192,10 +203,10 @@ export default function MatrixPage() {
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground">
-            Te same dane w tabeli: <Link to="/links?rel=same_campaign,duplicate,similar,none" className="underline underline-offset-4">Powiązania (pary)</Link>
+            Te same pary jako lista z dowodami: <Link to="/relations?tab=pairs&rel=same_campaign,duplicate,similar,none" className="underline">tabela par</Link>
           </p>
         </div>
       </div>
-    </>
+    </div>
   )
 }

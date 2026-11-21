@@ -11,9 +11,23 @@ export interface CampaignRef {
   color: number | null
 }
 
+export interface MaterialSignals {
+  has_web: boolean
+  has_infra: boolean
+  has_faces: boolean
+  has_ocr: boolean
+  has_llm: boolean
+  has_images: boolean
+  n_indicators: number
+  n_linking_indicators: number
+  n_faces: number
+  n_domains: number
+}
+
 export interface MaterialSummary {
   id: string
   name: string
+  display_name?: string
   title: string
   source: string
   source_label: string
@@ -27,6 +41,7 @@ export interface MaterialSummary {
   thumb: string | null
   thumb_kind: string | null
   counts: { pages: number; images: number; videos: number }
+  signals?: MaterialSignals
 }
 
 /** One piece of evidence behind a link: a shared identifier value or one content view's similarity. */
@@ -98,11 +113,13 @@ export interface Overview {
   n_singletons: number
   n_in_multi: number
   n_duplicate_groups: number
+  duplicates?: MaterialSummary[][]
   links: Record<Relation, number>
   /** families of similar campaigns (only those spanning 2+ campaigns) */
   families: { id: number; campaigns: number[]; refs: CampaignRef[]; size: number }[]
   campaigns: CampaignCard[]
   examples: Example[]
+  thresholds?: Thresholds
 }
 
 export interface MatrixRow {
@@ -129,6 +146,15 @@ export interface ChainStep {
   reasons: string[]
 }
 
+export interface CampaignViewProfile {
+  view: string
+  label: string
+  inside: number | null
+  outside: number | null
+  n_inside: number
+  n_outside: number
+}
+
 export interface CampaignDetail extends CampaignCard {
   matrix: MatrixRow[]
   chain: ChainStep[]
@@ -136,7 +162,67 @@ export interface CampaignDetail extends CampaignCard {
   nearest_outside: (LinkBrief & { inside: string; outside_campaign: CampaignRef | null })[]
   siblings: CampaignRef[]
   titles: string[]
+  view_profile?: CampaignViewProfile[]
+  thresholds?: Thresholds
   n_pairs: number
+}
+
+export interface MaterialSeed {
+  kind: string
+  kind_label: string
+  value: string
+  query: string
+  can_library_search: boolean
+  can_analyse_url: boolean
+}
+
+export interface MaterialSeedsResponse {
+  material_id: string
+  campaign: CampaignRef | null
+  seeds: MaterialSeed[]
+}
+
+export interface DendrogramLeaf {
+  idx: number
+  x: number
+  id: string
+  name: string
+  title: string
+  campaign: CampaignRef | null
+}
+
+export interface DendrogramMerge {
+  id: number
+  left_x: number
+  right_x: number
+  x: number
+  left_y: number
+  right_y: number
+  y: number
+}
+
+export interface DendrogramData {
+  leaves: DendrogramLeaf[]
+  merges: DendrogramMerge[]
+  max_d: number
+  thresholds: Thresholds
+}
+
+export interface MetricsOverview {
+  n_materials: number
+  n_campaigns: number
+  n_multi: number
+  n_singletons: number
+  n_pairs: number
+  n_must_link: number
+  thresholds: Thresholds
+  distance_histogram: { range: string; lo: number; hi: number; must_link: number; same_campaign: number; similar: number; none: number; total: number }[]
+  signal_attribution: { group: string; label: string; pairs: number }[]
+  feature_coverage: { key: string; label: string; count: number; total: number; pct: number }[]
+  scam_types: { label: string; count: number }[]
+  top_persons: { name: string; count: number; visual: number; named: number }[]
+  view_summary: { view: string; label: string; mean_same: number; mean_diff: number; n_same: number; n_diff: number }[]
+  dendrogram: DendrogramData | null
 }
 
 export interface IndicatorGroup {

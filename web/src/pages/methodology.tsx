@@ -33,18 +33,20 @@ const VARIANT_PL: Record<string, string> = {
 
 const pct = (x: number) => `${Math.round(x * 100)}%`
 
-export default function MethodologyPage() {
+export default function MethodologyPage({ embedded = false }: { embedded?: boolean }) {
   const { data: m, error, isLoading } = useApi<Methodology>("/api/methodology")
   if (isLoading) return <Loading />
   if (error || !m) return <ErrorState error={error} />
   const c = m.constants
   const refNo = new Map(m.references.map((r, i) => [r.id, i + 1]))
   return (
-    <>
-      <PageHeader
-        title="Metodyka"
-        description="Jak FakeTrace łączy pojedyncze podejrzane reklamy w kampanie. Każda miara jest standardowa i cytowalna; liczby na tej stronie pochodzą z bieżącej konfiguracji (ftf/config.py) i bieżącej bazy."
-      />
+    <div className="space-y-6">
+      {!embedded && (
+        <PageHeader
+          title="Metodyka"
+          description="Jak FakeTrace łączy pojedyncze podejrzane reklamy w kampanie. Każda miara jest standardowa i cytowalna; liczby na tej stronie pochodzą z bieżącej konfiguracji (ftf/config.py) i bieżącej bazy."
+        />
+      )}
       <nav className="-mx-4 overflow-x-auto px-4 lg:hidden" aria-label="Spis treści">
         <ul className="flex gap-2 pb-1 text-sm whitespace-nowrap">
           {TOC.map(([id, label]) => <li key={id}><a href={`#${id}`} className="block rounded-full border px-3 py-1 text-muted-foreground">{label}</a></li>)}
@@ -262,7 +264,7 @@ export default function MethodologyPage() {
           </Block>
         </div>
       </div>
-    </>
+    </div>
   )
 }
 
