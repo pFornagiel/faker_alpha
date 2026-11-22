@@ -1331,6 +1331,7 @@ def methodology():
                                   for g in GROUP_ORDER],
             "views": [{"view": v, "label": view_label(v), "hint": VIEW_HINT[v]} for v in VIEWS],
             "constants": {"max_df": config.MAX_DF, "phash_hamming": config.PHASH_HAMMING, "duplicate_cut": config.DUPLICATE_CUT,
+                          "min_class_names": config.MIN_CLASS_NAMES, "min_script_shingles": config.MIN_SCRIPT_SHINGLES,
                           "campaign_cut": config.CAMPAIGN_CUT, "family_cut": config.FAMILY_CUT,
                           "face_det_threshold": config.FACE_DET_THRESHOLD, "face_min_side": config.FACE_MIN_SIDE,
                           "face_match_threshold": config.FACE_MATCH_THRESHOLD},

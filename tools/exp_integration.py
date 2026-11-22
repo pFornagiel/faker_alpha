@@ -145,11 +145,6 @@ def main() -> None:
                 fus.append(grouped(b, f"min(all, {'+'.join(names)} >= {need} views), structure cut {cut}", d, ML | CERT)[0])
     print("\nSTRUCTURE GROUP on top of all changes (campaign cut stays 0.6; a structure distance above its own cut is ignored)")
     print(b.table(fus, width=58))
-    ex = b.examples(M_all, 12)
-    print("\nEXAMPLES: grouped after the integration, not before")
-    print("\n".join(ex))
-    print("\nEXAMPLES: the same, presumed-unrelated pairs")
-    print("\n".join(b.examples(M_all & b.NEG_L, 12)))
     Bench.save("integration", {"rows": rows, "fusion": fus, **out})
 
 

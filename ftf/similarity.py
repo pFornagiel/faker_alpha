@@ -31,7 +31,8 @@ VIEWS = ("text", "ocr", "semantic", "html", "css", "js", "images")
 VIEW_PL = {"text": "tekst strony", "ocr": "tekst kreacji (OCR)", "semantic": "znaczenie tekstu (e5)", "html": "struktura HTML",
            "css": "klasy CSS", "js": "szkielet skryptów", "images": "obrazy"}
 _PAGE_SIG_VIEWS = (("html", "dom"), ("css", "css"), ("js", "js"))       # view -> vector kind, one signature per page
-GROUP_PL = {"ad_library": "biblioteka reklam", "domains": "domena", "tracking_ids": "identyfikator śledzący",
+GROUP_PL = {"ad_library": "biblioteka reklam", "domains": "domena", "certificates": "certyfikat TLS",
+            "tracking_ids": "identyfikator śledzący",
             "contacts": "kontakt", "kit_files": "plik / szablon kitu", "product": "produkt / platforma"}
 TYPE_PL = {
     "ad_id": "ID reklamy", "advertiser_id": "ID reklamodawcy", "landing_domain": "domena docelowa",

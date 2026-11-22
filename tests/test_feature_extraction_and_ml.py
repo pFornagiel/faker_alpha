@@ -490,6 +490,19 @@ class PageStructureSignalsTests(unittest.TestCase):
         link = similarity.pair("a", fa, va, "b", fb, vb, corpus)
         self.assertTrue(link.distance == 0.0 and link.comparable)
 
+    def test_shared_certificate_batch_is_a_must_link(self):
+        from ftf import similarity
+
+        fa = {"indicators": {"cert_batch": ["2026-11-02T12:54"], "landing_domain": ["one.example"]}}
+        fb = {"indicators": {"cert_batch": ["2026-11-02T12:54"], "landing_domain": ["two.example"]}}
+        fc = {"indicators": {"cert_batch": ["2026-11-02T12:55"], "landing_domain": ["three.example"]}}
+        corpus = similarity.Corpus({"a": (fa, {}), "b": (fb, {}), "c": (fc, {}), "d": ({}, {}), "e": ({}, {})})
+        link = similarity.pair("a", fa, {}, "b", fb, {}, corpus)
+        self.assertTrue(link.must_link)
+        self.assertEqual([s.group for s in link.shared_ids], ["certificates"])
+        self.assertIn("certyfikat TLS", link.explain())
+        self.assertFalse(similarity.pair("a", fa, {}, "c", fc, {}, corpus).must_link)
+
 
 if __name__ == "__main__":
     unittest.main()

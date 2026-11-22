@@ -21,10 +21,11 @@ SCAM_TYPE_PL = {
 }
 ENUM_PL = SCAM_TYPE_PL
 
-GROUP_ORDER = ["ad_library", "domains", "tracking_ids", "contacts", "kit_files", "product"]
+GROUP_ORDER = ["ad_library", "domains", "certificates", "tracking_ids", "contacts", "kit_files", "product"]
 GROUP_HINT = {
     "ad_library": "to samo ID reklamy lub reklamodawcy w bibliotece reklam",
     "domains": "ta sama domena docelowa, w przekierowaniu, host TDS lub domena widoczna na kreacji",
+    "certificates": "własny certyfikat TLS hosta wystawiony w tej samej minucie co certyfikat innego hosta",
     "tracking_ids": "piksele i ID analityki, UUID tenanta landing-buildera, parametry afiliacyjne, ID kampanii w URL",
     "contacts": "ten sam telefon, e-mail, Telegram, WhatsApp lub portfel krypto",
     "kit_files": "identyczny skrypt, szablon API backendu, endpoint formularza, szablon ścieżki URL",

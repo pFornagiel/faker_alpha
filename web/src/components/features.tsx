@@ -12,6 +12,8 @@ const VIEW_PLAIN: Record<string, string> = {
   ocr: "Czy kreacje (reklama, zrzut ekranu, klatka wideo) mają ten sam napis.",
   semantic: "Czy teksty mówią o tym samym, nawet innymi słowami.",
   html: "Czy strona jest zbudowana z tego samego szablonu: ten sam układ znaczników HTML, niezależnie od treści.",
+  css: "Czy strony używają tego samego zestawu nazw klas CSS. Szablon przerobiony na inną markę i inny język zachowuje te nazwy.",
+  js: "Czy strony mają te same własne skrypty, jeśli pominąć wpisane w nie wartości (adresy, identyfikatory, teksty).",
   images: "Czy na stronach są te same obrazy (logo, zdjęcia, banery), również po przeskalowaniu.",
 }
 

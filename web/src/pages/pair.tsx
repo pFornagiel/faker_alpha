@@ -19,7 +19,7 @@ export default function PairPage() {
     <>
       <PageHeader
         title={`Materiał ${matLabel(d.a)} ↔ Materiał ${matLabel(d.b)}`}
-        description="Dlaczego ta para jest albo nie jest połączona: wspólne identyfikatory, podobieństwo treści w pięciu widokach i reguła, która rozstrzygnęła."
+        description="Dlaczego ta para jest albo nie jest połączona: wspólne identyfikatory, podobieństwo treści w siedmiu widokach i reguła, która rozstrzygnęła."
       />
 
       <Card>
@@ -72,7 +72,7 @@ export default function PairPage() {
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Section
-          title="Podobieństwo treści w pięciu widokach"
+          title="Podobieństwo treści w siedmiu widokach"
           description="Każdy widok porównuje inną warstwę materiału i daje wynik od 0 (nic wspólnego) do 1 (identyczne). Odległość treści d = 1 − średnia z widoków dostępnych po obu stronach; „brak danych” nie wchodzi do średniej."
         >
           <ViewBars views={viewsOfExplanation(d)} />

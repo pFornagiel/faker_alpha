@@ -39,7 +39,8 @@ LLM_TIMEOUT = int(os.environ.get("FTF_LLM_TIMEOUT", "120"))
 IDENTIFIER_GROUP = {
     "ad_id": "ad_library", "advertiser_id": "ad_library",
     "landing_domain": "domains", "redirect_domain": "domains", "page_host": "domains", "ocr_domain": "domains",
-    "tds_host": "domains", "cert_batch": "domains",
+    "tds_host": "domains",
+    "cert_batch": "certificates",
     "fb_pixel": "tracking_ids", "tiktok_pixel": "tracking_ids", "ga": "tracking_ids", "gtm": "tracking_ids",
     "gads": "tracking_ids", "tenant_uuid": "tracking_ids", "affiliate": "tracking_ids", "adset": "tracking_ids",
     "campaign_param": "tracking_ids",

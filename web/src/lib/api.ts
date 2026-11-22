@@ -259,7 +259,7 @@ export interface Features {
   notes: string[]
   dates: string[]
   elapsed_s: number | null
-  /** the five content views: can this material be compared on it, and what it holds */
+  /** the content views: can this material be compared on it, and what it holds */
   views: { view: string; label: string; hint: string; available: boolean; detail: string | null }[]
 }
 
@@ -408,6 +408,8 @@ export interface Methodology {
   constants: {
     max_df: number
     phash_hamming: number
+    min_class_names: number
+    min_script_shingles: number
     duplicate_cut: number
     campaign_cut: number
     family_cut: number

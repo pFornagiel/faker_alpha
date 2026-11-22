@@ -26,6 +26,10 @@ const GROUP_TEXT: Record<string, string> = {
   domains:
     "Domena rejestrowalna (eTLD+1) strony docelowej, kolejnych przekierowań i systemu dystrybucji ruchu (TDS) oraz domena odczytana z kreacji przez OCR. " +
     "Domeny usług ogólnodostępnych, np. CDN i analityki, są pomijane. Na hostingu współdzielonym porównywany jest pełny host klienta.",
+  certificates:
+    "Minuta wystawienia certyfikatu TLS hosta strony. Certyfikaty zamawiane jedną serią dla wielu domen zaczynają obowiązywać w tej samej minucie. " +
+    "Liczy się tylko własny certyfikat hosta: wszystkie nazwy na certyfikacie muszą należeć do jego domeny rejestrowalnej, " +
+    "bo platformy hostingowe wystawiają jeden wspólny certyfikat wszystkim klientom.",
   tracking_ids:
     "Identyfikatory kont w usługach analitycznych i reklamowych zapisane w kodzie strony (Facebook Pixel, TikTok Pixel, Google Analytics, Tag Manager, Google Ads), " +
     "identyfikator konta w kreatorze stron oraz parametry afiliacyjne i identyfikatory kampanii w adresie URL.",
@@ -96,7 +100,7 @@ export default function GlossaryPage() {
       <Group
         id="tresc"
         title="Cechy: treść"
-        intro="Pięć miar podobieństwa treści, każda w skali od 0 do 1. Decydują o grupowaniu, gdy materiały nie mają wspólnego identyfikatora."
+        intro="Siedem miar podobieństwa treści, każda w skali od 0 do 1. Decydują o grupowaniu, gdy materiały nie mają wspólnego identyfikatora."
       >
         <Term name={view("text")}>
           Współczynnik Jaccarda zbiorów 4-gramów słów w tekście strony docelowej, szacowany metodą MinHash ze 128 permutacjami (Broder 1997).
@@ -109,6 +113,18 @@ export default function GlossaryPage() {
         </Term>
         <Term name={view("html")}>
           Współczynnik Jaccarda 5-gramów kolejnych znaczników HTML, szacowany metodą MinHash (Cui i in. 2017). Wykrywa ten sam szablon strony przy zmienionym tekście.
+        </Term>
+        <Term name={view("css")}>
+          Współczynnik Jaccarda zbiorów nazw klas CSS użytych na stronie, szacowany metodą MinHash. Fragmenty nazw generowane automatycznie (liczby, skróty)
+          są maskowane. Zestaw phishingowy przerobiony na inną markę i inny język zachowuje własne nazwy klas. Miara wymaga co najmniej {c.min_class_names} nazw.
+        </Term>
+        <Term name={view("js")}>
+          Współczynnik Jaccarda 5-gramów tokenów własnych skryptów strony, szacowany metodą MinHash. Komentarze są usuwane, a napisy i liczby maskowane,
+          więc dwie instalacje tego samego zestawu różnią się tylko wartościami. Skrypty usług ogólnodostępnych (analityka, zgody, CDN) są pomijane.
+        </Term>
+        <Term name="Reguła językowa">
+          Miary {view("text")} i {view("ocr")} porównują słowa, więc dla tłumaczenia tej samej strony dają 0. Gdy oba teksty mają rozpoznany, różny język,
+          te dwie miary są dla pary niedostępne i nie wchodzą do średniej. Język jest rozpoznawany po słowach funkcyjnych; przy krótkim tekście pozostaje nieznany.
         </Term>
         <Term name={view("images")}>
           Udział obrazów mniejszego zbioru, które mają w drugim materiale odpowiednik: odległość Hamminga między 64-bitowymi skrótami percepcyjnymi pHash
