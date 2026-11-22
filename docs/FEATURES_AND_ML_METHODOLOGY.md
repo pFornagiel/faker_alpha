@@ -11,7 +11,7 @@
 
 * **identifiers** — exact values an operator reuses (a tracking pixel, a domain, a backend API path). One shared,
   non-trivial identifier links two materials (deterministic record linkage [1]);
-* **content views** — five graded similarities in [0, 1], each a standard, citable measure, averaged with equal
+* **content views** — seven graded similarities in [0, 1], each a standard, citable measure, averaged with equal
   weight over the views available on both sides (Gower [13]).
 
 Everything else we extract (persons, scam type, registrar, keywords, …) is shown to the analyst but **never used for
@@ -31,6 +31,7 @@ Raw indicator types are mapped to groups by `config.IDENTIFIER_GROUP`:
 |---|---|---|
 | `ad_library` | `ad_id`, `advertiser_id` | yt-dlp `.info.json`, ad-library URL, OCR of "Identyfikator biblioteki" |
 | `domains` | `landing_domain`, `redirect_domain`, `page_host`, `ocr_domain`, `tds_host` | URLs, redirect chain in HAR, `saved from url=`, domains read from the creative (OCR/QR). Reduced to the registrable domain (PSL); OCR/QR domains must pass `web.is_decoy_or_generic_domain` |
+| `certificates` | `cert_batch` | issuance minute of the host's TLS certificate (`dns_ssl.json`: `tls_valid_from`), emitted only when every name on the certificate (`tls_san`) lies under the host's registrable domain. Certificates requested in one batch start in the same minute; shared certificates of hosting platforms (`*.pages.dev`) are excluded by the name rule |
 | `tracking_ids` | `fb_pixel`, `tiktok_pixel`, `ga`, `gtm`, `gads`, `tenant_uuid`, `affiliate`, `adset`, `campaign_param` | HTML, HAR bodies, saved scripts, URL parameters. Canonicalised to bare IDs; per-visit session UUIDs are removed from `tenant_uuid` |
 | `contacts` | `phone`, `email`, `telegram`, `whatsapp`, `wallet` | page text and HTML |
 | `kit_files` | `script_hash`, `api_template`, `form_endpoint`, `path_template` | first-party script SHA-1 (generic libraries filtered); POST/form paths with IDs templated, e.g. `POST /api/v1/trigger/field/{id}/` |
@@ -50,7 +51,7 @@ Why these: shared analytics/pixel IDs reveal common operators across otherwise u
 reused and identifiable by their files and endpoints [4]. On our 10 labelled materials no identifier value is shared
 between different campaigns.
 
-### 1.2 Content views (graded similarity, `similarity.VIEWS = ("text", "ocr", "semantic", "html", "images")`)
+### 1.2 Content views (graded similarity, `similarity.VIEWS = ("text", "ocr", "semantic", "html", "css", "js", "images")`)
 
 | View | Representation | Similarity `sim_v(a,b)` |
 |---|---|---|
@@ -58,11 +59,24 @@ between different campaigns.
 | `ocr` | the same signature of the **creative text**: OCR of screenshots / video keyframes (+ ad copy supplied as text and ad-library metadata), entity-masked; field `text.minhash_ocr_masked`. For materials stored before this field existed it is computed from the stored `text.ocr_text` (no re-ingest) | estimated Jaccard [5, 6] |
 | `semantic` | multilingual-e5-small embedding [7] of the material text (stored vector kind `"text"`) | cosine after subtracting the plain corpus mean (Mu & Viswanath [8]), clipped to [0, 1]; raw cosine if the corpus has < 3 materials |
 | `html` | MinHash of HTML tag-sequence 5-gram shingles (vector kind `"dom"`), one per page | estimated Jaccard [6, 9]; max over page pairs |
+| `css` | MinHash of the page's set of CSS class names (`web.class_vocabulary`, vector kind `"css"`): generated parts (numbers, hex digests, CSS-in-JS suffixes) are masked; a page needs ≥ `MIN_CLASS_NAMES` (= 10) names | estimated Jaccard [6]; max over page pairs |
+| `js` | MinHash of token 5-grams of the page's own inline scripts (`web.script_shingles`, vector kind `"js"`): comments dropped, strings → `S`, numbers → `0`, identifiers kept; snippets of public services (analytics, consent, CDN) skipped; ≥ `MIN_SCRIPT_SHINGLES` (= 30) 5-grams | estimated Jaccard [6]; max over page pairs |
 | `images` | set of 64-bit pHashes [10] of the material's images: non-UI creatives (screenshots, video keyframes) + landing-page images (`asset_phash`) | overlap = number of images of the smaller set that have a match at Hamming ≤ `config.PHASH_HAMMING` (= 4) in the other set, divided by `min(|A|, |B|)` (containment of the smaller set [6]) |
 
 A view is **available** for a pair only if both materials have that representation (missing page, no text, no
 images → view skipped, never scored as 0). Keeping `text` and `ocr` apart means a creative-only variant (dead page)
 is compared OCR-to-OCR, never OCR-to-page-text.
+
+**Language rule.** `text` and `ocr` compare words, so a translated copy of a page scores 0 on them by construction.
+When both texts have a known and different language (`ftf/lang.py`: stop words of 21 languages plus non-Latin
+scripts; short text → unknown), the two views are unavailable for the pair. Without the rule a kit translated for
+several markets split into one campaign per language.
+
+**Cropped and rescaled images.** A pHash describes the whole picture, so a crop changes it completely. Creative
+images without a pHash match are compared by ORB keypoints (ratio test, RANSAC affine fit): a match needs
+≥ `LOCAL_MIN_INLIERS` (= 40) inliers spanning ≥ `LOCAL_MIN_EXTENT` (= 3 %) of one image. In stores larger than
+`LOCAL_GATE_ABOVE` (= 300) materials the test runs only for pairs that a full image match could bring within
+`CAMPAIGN_CUT`. Measurements: `research/experiments/`.
 
 Why masking: "same article, celebrity swapped" variants share the masked text. Why centring: raw e5 cosines between
 unrelated Polish scam pages are very high (embedding anisotropy [8]); subtracting the corpus mean restores range.

@@ -81,6 +81,25 @@ Wysokości scaleń dendrogramu: 0 (×4, must-link w C1), 0,913, 0,957, 0,982, 0,
   świeżo policzonych; wcześniej porównanie OCR kreacji z tekstem strony dawało 0. Osobny widok `ocr` porównuje
   OCR-do-OCR (dla zapisanych materiałów liczony z zapisanego `ocr_text`), co daje d = 0,59 i `known_campaign`.
 
+## Po dodaniu sygnałów struktury strony, reguły językowej i dopasowania obrazów (listopad 2026)
+
+Dodane: widoki `css` i `js`, reguła językowa dla `text` / `ocr`, identyfikator `cert_batch`, dopasowanie obrazów
+punktami charakterystycznymi. Opis i pełne tabele: [`research/experiments/integration.md`](../research/experiments/integration.md).
+Pomiar bez LLM (`--no-llm`), stary i nowy kod na tej samej maszynie, każdy na świeżej analizie zbioru.
+
+| Test | Przed | Po |
+|---|---|---|
+| Kampanie, duplikaty, rodziny | 6 kampanii | bez zmian |
+| Etykiety: pairwise P / R, ARI | 1,00 / 1,00, 1,00 | 1,00 / 1,00, 1,00 |
+| Leave-one-out | 9/10 | 9/10 |
+| Warianty: tylko kreacja / tylko strona / domena / nazwisko | 7/8, 8/8, 9/9, 5/5 | bez zmian |
+| Warianty: zrzut przycięty o 8 %, zmniejszony ×0,6, JPEG q = 55 | 2/7 | **6/7** |
+
+Korpus badawczy (1 503 strony z listy ostrzeżeń CERT Polska, bez etykiet operatorów; ocena względem wskazań
+pośrednich): udział par z co najmniej dwoma niezależnymi wskazaniami, które trafiają do jednej kampanii, wzrósł
+z 0,38 do 0,72 przy tym samym odsetku połączeń par uznanych za niepowiązane (0,0022). Liczba stron bez kampanii
+spadła z 350 do 209.
+
 ## Ograniczenia wyników
 
 * 10 materiałów, w tym 5 singletonów — wyniki pokazują poprawność działania, nie skuteczność na nowych danych.

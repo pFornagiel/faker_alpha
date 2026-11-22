@@ -35,6 +35,7 @@ export const EXPERIMENTS: { branch: string; title: string; question: string }[] 
   { branch: "exp/domain-name-generator", title: "Wzorce nazw domen", question: "Czy sam zapis nazwy domeny wskazuje zestaw phishingowy albo operatora?" },
   { branch: "exp/css-class-vocab", title: "Słownik klas CSS", question: "Czy zbiór nazw klas CSS rozpoznaje zestaw phishingowy po zmianie tekstu i marki?" },
   { branch: "exp/fusion-two-groups", title: "Sposób łączenia miar", question: "Czy inna reguła łączenia miar niż średnia pozwala wykorzystać zgodność struktury strony?" },
+  { branch: "exp/crop-robust-images", title: "Obrazy po przycięciu", question: "Jak rozpoznać tę samą kreację po przycięciu, przeskalowaniu i ponownej kompresji, gdy skrót pHash się zmienia?" },
   { branch: "exp/compression-distance", title: "Odległość kompresji", question: "Czy podobieństwo liczone kompresorem (NCD, LZJD) znajduje to, czego nie znajduje miara struktury HTML?" },
 ]
 
@@ -317,6 +318,44 @@ export const REJECTED: RejectedFeature[] = [
       { label: NP, value: "0.64" },
     ],
     reason: "Przypadkowa zgodność dwóch miar jest zbyt częsta, żeby wystarczała do połączenia.",
+  },
+  {
+    name: "Osobna grupa miar struktury strony",
+    stage: "experiment",
+    branch: "exp/fusion-two-groups",
+    tried: "Odległość pary to mniejsza z dwóch średnich: po wszystkich miarach i po samych miarach struktury (HTML, klasy CSS, szkielet skryptów). Sprawdzone po wdrożeniu nowych miar, na sygnaturach używanych w produkcie.",
+    metrics: [
+      { label: `${P} (HTML + klasy CSS)`, value: "0.99 → 0.90" },
+      { label: `${F} (HTML + klasy CSS)`, value: "0.0022 → 0.0228" },
+      { label: `${P} (trzy miary, próg 0.6 / 0.5)`, value: "0.99 / 0.92" },
+      { label: `${R} (trzy miary, próg 0.6)`, value: "0.72 → 0.94" },
+    ],
+    reason: "Wynik zależy od wariantu i progu: ta sama reguła daje precyzję 0.99 albo 0.92 po przesunięciu progu o 0.1. Same miary dodane do średniej dają większość zysku bez wzrostu fałszywych połączeń.",
+  },
+  // ------------------------------------------------------------------ exp/crop-robust-images
+  {
+    name: "pHash czterech wycinków środka obrazu",
+    stage: "experiment",
+    branch: "exp/crop-robust-images",
+    tried: "Zamiast jednego skrótu całego obrazu porównywane są skróty czterech współśrodkowych wycinków.",
+    metrics: [
+      { label: "Rozpoznane kopie: przycięcie 8 %, skala 0.6, JPEG 55", value: "0.56" },
+      { label: "Rozpoznane kopie: przycięcie nierówne", value: "0.00" },
+      { label: "Rozpoznane kopie: obraz wklejony w większą ramkę", value: "0.00" },
+    ],
+    reason: "Działa tylko przy przycięciu symetrycznym. Dopasowanie punktów charakterystycznych ORB rozpoznaje w tych samych testach 1.00, 0.86 i 0.89 kopii i to ono zostało wdrożone.",
+  },
+  {
+    name: "Punkty charakterystyczne SIFT",
+    stage: "experiment",
+    branch: "exp/crop-robust-images",
+    tried: "Ten sam test dopasowania obrazów co dla ORB, z deskryptorami SIFT.",
+    metrics: [
+      { label: "Rozpoznane kopie przy najmocniejszym przekształceniu", value: "0.94 (ORB 0.53)" },
+      { label: "Przyjęte pary różnych obrazów przy tym samym progu", value: "4.9 % (ORB 0)" },
+      { label: "Rozmiar deskryptorów", value: "16 razy większy" },
+    ],
+    reason: "Wyższa czułość nie równoważy fałszywych dopasowań różnych obrazów ani kosztu przechowywania.",
   },
   // ------------------------------------------------------------------ exp/compression-distance
   {

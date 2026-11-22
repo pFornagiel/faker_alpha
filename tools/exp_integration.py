@@ -2,7 +2,7 @@
 """Effect of the integrated signals on the research corpus, one change at a time.
 
 The corpus is re-analysed with the current code into its own store. Pairwise comparison then runs twice:
-  raw      language rule switched off and the certificate-batch identifier removed (all seven views as computed)
+  raw      language rule and keypoint image match switched off, certificate-batch identifier removed
   product  the code as shipped
 From the raw matrices each change is applied on its own, so its contribution can be read off, and the sum of all
 changes is checked against the product run. `new` counts pairs the grouping before the integration did not have.
@@ -37,14 +37,15 @@ def bench(cache: Path, raw: bool) -> Bench:
     for name in ("cases.pkl", "refs.npz"):                      # references do not depend on the product
         if not (cache / name).exists():
             (cache / name).write_bytes((BASE_CACHE / name).read_bytes())
-    differ, groups = lang.differ, dict(config.IDENTIFIER_GROUP)
+    differ, groups, local = lang.differ, dict(config.IDENTIFIER_GROUP), config.LOCAL_MATCH
     if raw:
         lang.differ = lambda a, b: False
         config.IDENTIFIER_GROUP.pop("cert_batch", None)
+        config.LOCAL_MATCH = False
     try:
         return Bench(workers=WORKERS, verbose=False)
     finally:
-        lang.differ = differ
+        lang.differ, config.LOCAL_MATCH = differ, local
         config.IDENTIFIER_GROUP.clear()
         config.IDENTIFIER_GROUP.update(groups)
 
@@ -113,7 +114,9 @@ def main() -> None:
     rows = [{"label": "before: old code, old store", "largest": int(max(Counter(old).values())),
              "groups": sum(1 for s in Counter(old).values() if s >= 2), "singletons": sum(1 for s in Counter(old).values() if s == 1),
              **b.score(OLD)}]
-    ruled = {**v, "text": np.where(XL_page, np.nan, v["text"]), "ocr": np.where(XL_creative, np.nan, v["ocr"])}
+    keyed = prod.views[VIEWS.index("images")]                 # images view with the keypoint match (gated at this size)
+    print(f"image pairs matched by keypoints only: {int(((keyed > np.nan_to_num(v['images'], nan=2.0)) & b.iu).sum())}")
+    ruled = {**v, "text": np.where(XL_page, np.nan, v["text"]), "ocr": np.where(XL_creative, np.nan, v["ocr"]), "images": keyed}
     five = [v[n] for n in OLD_VIEWS]
     ML = raw.ML
     for label, d, must in (
@@ -123,6 +126,10 @@ def main() -> None:
             ("  + css + js views", gower(five + [v["css"], v["js"]]), ML),
             ("  + language rule", gower([ruled[n] for n in OLD_VIEWS]), ML),
             ("  + certificate batch", gower(five), ML | CERT),
+            ("  + keypoint image match", gower([v[n] for n in OLD_VIEWS[:-1]] + [keyed]), ML),
+            # the `tls` reference is the same fact as the certificate identifier, so this row is the one to read
+            # for evidence that does not confirm itself
+            ("all changes except certificate batch", gower([ruled[n] for n in VIEWS]), ML),
             ("all changes (from raw matrices)", gower([ruled[n] for n in VIEWS]), ML | CERT)):
         rows.append(grouped(b, label, d, must)[0])
     r, M_prod = grouped(prod, "all changes (product code path)", prod.d, prod.ML)

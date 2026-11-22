@@ -11,7 +11,7 @@
 
 * **identyfikatory** — dokładne wartości, które operator używa ponownie (piksel, domena, ścieżka API backendu).
   Jeden wspólny, nietrywialny identyfikator łączy dwa materiały (deterministyczne łączenie rekordów [1]);
-* **widoki treści** — pięć podobieństw w [0, 1], każde standardową miarą z literatury, uśrednionych z równą wagą
+* **widoki treści** — siedem podobieństw w [0, 1], każde standardową miarą z literatury, uśrednionych z równą wagą
   po widokach dostępnych po obu stronach (współczynnik Gowera [13]).
 
 Pozostałe cechy (osoby, typ oszustwa, rejestrator, słowa kluczowe…) są pokazywane analitykowi, ale **nie łączą
@@ -40,6 +40,7 @@ Typy wskaźników są mapowane na grupy przez `config.IDENTIFIER_GROUP`:
 |---|---|---|
 | `ad_library` | `ad_id`, `advertiser_id` | `.info.json` z yt-dlp, URL biblioteki reklam, OCR „Identyfikator biblioteki” |
 | `domains` | `landing_domain`, `redirect_domain`, `page_host`, `ocr_domain`, `tds_host` | URL-e, łańcuch przekierowań z HAR, `saved from url=`, domeny odczytane z kreacji (OCR/QR). Domena rejestrowalna (PSL); domeny z OCR/QR przechodzą filtr `web.is_decoy_or_generic_domain` |
+| `certificates` | `cert_batch` | minuta wystawienia certyfikatu TLS hosta (`dns_ssl.json`: `tls_valid_from`), tylko gdy wszystkie nazwy na certyfikacie (`tls_san`) leżą pod domeną rejestrowalną hosta. Certyfikaty zamawiane jedną serią zaczynają się w tej samej minucie; wspólne certyfikaty platform hostingowych (`*.pages.dev`) są w ten sposób wykluczone |
 | `tracking_ids` | `fb_pixel`, `tiktok_pixel`, `ga`, `gtm`, `gads`, `tenant_uuid`, `affiliate`, `adset`, `campaign_param` | HTML, treści z HAR, zapisane skrypty, parametry URL; ID kanonizowane do gołej postaci, UUID-y sesji usuwane z `tenant_uuid` |
 | `contacts` | `phone`, `email`, `telegram`, `whatsapp`, `wallet` | tekst i HTML strony |
 | `kit_files` | `script_hash`, `api_template`, `form_endpoint`, `path_template` | SHA-1 skryptów 1st-party (bez bibliotek generycznych); ścieżki POST/formularzy z ID zastąpionymi szablonem, np. `POST /api/v1/trigger/field/{id}/` |
@@ -60,7 +61,7 @@ Dlaczego te cechy: wspólne identyfikatory analityki/pikseli ujawniają wspólne
 stron [2]; zestawy phishingowe (kity) są wielokrotnie używane i rozpoznawalne po plikach i endpointach [4]. W 10
 oznaczonych materiałach żadna wartość identyfikatora nie występuje w dwóch różnych kampaniach.
 
-### 1.2 Widoki treści (`similarity.VIEWS = ("text", "ocr", "semantic", "html", "images")`)
+### 1.2 Widoki treści (`similarity.VIEWS = ("text", "ocr", "semantic", "html", "css", "js", "images")`)
 
 | Widok | Reprezentacja | Miara `sim_v(a,b)` |
 |---|---|---|
@@ -68,9 +69,22 @@ oznaczonych materiałach żadna wartość identyfikatora nie występuje w dwóch
 | `ocr` | ta sama sygnatura dla **tekstu kreacji**: OCR zrzutów i klatek wideo (+ treść reklamy podana jako tekst i metadane z biblioteki reklam), osoby zamaskowane. Dla materiałów zapisanych wcześniej liczona z zapisanego `text.ocr_text` (bez ponownej analizy) | estymowany indeks Jaccarda [5, 6] |
 | `semantic` | embedding multilingual-e5-small [7] tekstu materiału | cosinus po odjęciu zwykłej średniej korpusu [8], obcięty do [0, 1]; surowy cosinus, gdy korpus ma < 3 materiały |
 | `html` | MinHash 5-gramów sekwencji tagów HTML, jeden na stronę | estymowany Jaccard [6, 9]; maksimum po parach stron |
+| `css` | MinHash zbioru nazw klas CSS strony (`web.class_vocabulary`): fragmenty generowane (liczby, skróty szesnastkowe, sufiksy CSS-in-JS) zamaskowane; strona musi mieć ≥ `MIN_CLASS_NAMES` (= 10) nazw | estymowany Jaccard [6]; maksimum po parach stron |
+| `js` | MinHash 5-gramów tokenów własnych skryptów inline (`web.script_shingles`): komentarze usunięte, napisy → `S`, liczby → `0`, identyfikatory zachowane; fragmenty usług ogólnodostępnych (analityka, zgody, CDN) pominięte; ≥ `MIN_SCRIPT_SHINGLES` (= 30) 5-gramów | estymowany Jaccard [6]; maksimum po parach stron |
 | `images` | zbiór 64-bitowych pHash [10] obrazów materiału: kreacje spoza interfejsu platformy (zrzuty, klatki wideo) + obrazy ze strony docelowej (`asset_phash`) | współczynnik pokrycia: liczba obrazów mniejszego zbioru mających odpowiednik w drugim przy odległości Hamminga ≤ `config.PHASH_HAMMING` (= 4), podzielona przez `min(|A|, |B|)` (zawieranie mniejszego zbioru [6]) |
 
 Widok jest **dostępny** dla pary tylko wtedy, gdy obie strony mają daną reprezentację; brak nie jest liczony jako 0.
+
+**Reguła językowa.** `text` i `ocr` porównują słowa, więc tłumaczenie tej samej strony ma w nich podobieństwo 0 z
+samej konstrukcji. Gdy oba teksty mają rozpoznany i różny język (`ftf/lang.py`: słowa funkcyjne 21 języków i pisma
+niełacińskie; krótki tekst → język nieznany), te dwa widoki są dla pary niedostępne. Bez tej reguły zestaw
+przetłumaczony na kilka rynków rozpadał się na osobne kampanie.
+
+**Obrazy przycięte i przeskalowane.** pHash opisuje cały obraz, więc przycięcie zmienia go całkowicie. Obrazy kreacji
+bez dopasowania pHash są porównywane punktami charakterystycznymi ORB (test ilorazu, dopasowanie afiniczne RANSAC):
+dopasowanie przy ≥ `LOCAL_MIN_INLIERS` (= 40) punktach zgodnych obejmujących ≥ `LOCAL_MIN_EXTENT` (= 3 %) powierzchni
+jednego z obrazów. W bazach większych niż `LOCAL_GATE_ABOVE` (= 300) materiałów test jest wykonywany tylko dla par,
+które pełne dopasowanie obrazu mogłoby sprowadzić poniżej `CAMPAIGN_CUT`. Wyniki: `research/experiments/`.
 Dzięki rozdzieleniu `text` i `ocr` kreacja bez strony (strona martwa) jest porównywana OCR-do-OCR, a nie OCR-do-tekstu
 strony.
 Maskowanie osób wykrywa „ten sam artykuł, podmieniony celebryta”. Centrowanie usuwa anizotropię embeddingów:
@@ -155,7 +169,7 @@ materiałach (`data/labels_dane.csv`, kampanie A–F):
 
 | Usunięte | Dowód / powód |
 |---|---|
-| embeddingi kreacji CLIP i DINOv2; stopniowane podobieństwo pHash kreacji | brak separacji: pary z różnych kampanii miały wyniki ≥ par z tej samej kampanii. Zostało tylko dokładne ponowne użycie obrazu (pHash, Hamming ≤ 4) w `images` |
+| embeddingi kreacji CLIP i DINOv2; stopniowane podobieństwo pHash kreacji | brak separacji: pary z różnych kampanii miały wyniki ≥ par z tej samej kampanii. Zostało ponowne użycie tego samego obrazu w `images`: pHash (Hamming ≤ 4), a dla kopii przyciętych i przeskalowanych punkty charakterystyczne ORB |
 | osoby jako dowód (tożsamość z bazy, dopasowanie nieznanych twarzy, ten sam kadr twarzy), kategorie LLM (`scam_type`, szablon narracji, format kreacji), rejestrator / NS / IP / seria rejestracji | wspólne dla różnych kampanii (huby) → tylko opis |
 | frazy LLM i dodatkowe pola LLM; iteracyjne dopisywanie atrybutów przez LLM (`tools/llm_refine.py`, `llm_extra_*`) | atrybuty były proponowane na podstawie tych samych klastrów, które miały rozdzielać (rozumowanie w kółko); frazy dublują widok `text` |
 | drugi embedding tekstu (EmbeddingGemma-2) | dubluje widok `semantic`, ~4–6× wolniejszy na CPU |
