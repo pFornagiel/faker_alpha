@@ -39,7 +39,7 @@ Instalację bez Dockera opisuje rozdział [Bez Dockera](#bez-dockera).
 ### Instalacja i start
 
 ```bash
-git clone <adres repozytorium> faker_alpha
+git clone https://github.com/pFornagiel/faker_alpha.git
 cd faker_alpha
 docker compose up --build -d
 ```
@@ -188,7 +188,7 @@ Bez `uv` skrypt użyje Pythona 3.12 lub 3.13 z `PATH` (venv i pip, wolniej).
 Bez `ffmpeg` wszystko działa, ale wideo jest analizowane bez klatek.
 
 ```bash
-git clone <adres repozytorium> faker_alpha
+git clone https://github.com/pFornagiel/faker_alpha.git
 cd faker_alpha
 ./setup.sh --demo                     # biblioteki, modele, panel i zbiór demonstracyjny, ok. 1,5 min
 .venv/bin/python -m ftf serve         # panel: http://127.0.0.1:8765
