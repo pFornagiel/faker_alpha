@@ -107,7 +107,7 @@ def main(argv=None):
 
         if not (config.ROOT / "web" / "dist" / "index.html").exists():
             print("web UI not built — run: cd web && npm ci && npm run build   (API alone is still served under /api)")
-        print(f"FakeTrace UI: http://{a.host}:{a.port}")
+        print(f"FakerAlpha UI: http://{a.host}:{a.port}")
         uvicorn.run("ftf.api:app", host=a.host, port=a.port, log_level="warning")
         return 0
     eng = Engine()

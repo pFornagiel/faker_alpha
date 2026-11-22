@@ -22,7 +22,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ftf import config, faces  # noqa: E402
 
-UA = {"User-Agent": "FakeTrace-hackathon-POC/0.1 (research prototype; reference face gallery)"}
+UA = {"User-Agent": "FakerAlpha-hackathon-POC/0.1 (research prototype; reference face gallery)"}
 PERSONS = [
     "Rafał Brzoska", "Andrzej Duda", "Karol Nawrocki", "Donald Tusk", "Adam Glapiński", "Robert Lewandowski",
     "Rafał Trzaskowski", "Sławomir Mentzen", "Sebastian Kulczyk", "Wojciech Cejrowski", "Bogdan Rymanowski",

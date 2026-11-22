@@ -1,4 +1,4 @@
-# FakeTrace — metodyka (Kolekcjoner Fejków / Follow the Fake)
+# FakerAlpha — metodyka (Kolekcjoner Fejków / Follow the Fake)
 
 > Cel: z pojedynczych podejrzanych reklam wydobyć **wspólne ślady** i połączyć materiały w **kampanie**, pokazując
 > dla każdego powiązania **przesłanki**. Nie budujemy detektora pojedynczej fałszywej reklamy — budujemy metodę łączenia.

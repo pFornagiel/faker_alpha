@@ -1,4 +1,4 @@
-"""FakeTrace HTTP API (FastAPI) — serves curated, display-ready JSON to the web UI in `web/`.
+"""FakerAlpha HTTP API (FastAPI) — serves curated, display-ready JSON to the web UI in `web/`.
 
 Run:   python -m ftf.cli serve                    (UI at http://localhost:8765 after `npm run build` in web/)
 Dev:   uvicorn ftf.api:app --reload --port 8765   +  `npm run dev` in web/ (Vite proxies /api)
@@ -53,7 +53,7 @@ async def _lifespan(_app):
     yield
 
 
-app = FastAPI(title="FakeTrace API", version="1.0", lifespan=_lifespan)
+app = FastAPI(title="FakerAlpha API", version="1.0", lifespan=_lifespan)
 
 _ENGINE: Engine | None = None
 _ENGINE_LOCK = threading.Lock()

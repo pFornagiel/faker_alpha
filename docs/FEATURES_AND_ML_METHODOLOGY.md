@@ -1,6 +1,6 @@
-# FakeTrace — Features, Similarity & Clustering
+# FakerAlpha — Features, Similarity & Clustering
 
-> How FakeTrace turns a material (ad, landing page, screenshot, video, HAR, text lead) into features, compares two
+> How FakerAlpha turns a material (ad, landing page, screenshot, video, HAR, text lead) into features, compares two
 > materials, groups them into campaigns and families, and assigns a new material (open set).
 > Code: `ftf/config.py`, `ftf/pipeline.py`, `ftf/web.py`, `ftf/vision.py`, `ftf/faces.py`, `ftf/text.py`,
 > `ftf/gazetteer.py`, `ftf/llm.py`, `ftf/similarity.py`, `ftf/cluster.py`.

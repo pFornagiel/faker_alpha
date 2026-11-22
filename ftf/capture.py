@@ -31,7 +31,7 @@ DEFAULT_TIMEOUT: tuple[float, float] = (5.0, 12.0)
 
 PROFILES: dict[str, dict[str, str]] = {
     "bot": {
-        "User-Agent": "Mozilla/5.0 (compatible; FakeTraceBot/0.1)",
+        "User-Agent": "Mozilla/5.0 (compatible; FakerAlphaBot/0.1)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     },
     "desktop_pl": {

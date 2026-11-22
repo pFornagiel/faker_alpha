@@ -1,4 +1,4 @@
-# 🕵️ FakeTrace — Follow the Fake
+# 🕵️ FakerAlpha — Follow the Fake
 
 **HackNation 2026 · wyzwanie NASK „Kolekcjoner Fejków / Follow the Fake”.**
 Narzędzie, które z pojedynczych podejrzanych reklam (posty sponsorowane, filmy, strony docelowe)
@@ -48,7 +48,7 @@ Tryb deweloperski UI: `uvicorn ftf.api:app --reload --port 8765` + `cd web && np
 |---|---|
 | **Kampanie** `/` | kluczowe liczby, karty kampanii z najmocniejszymi wspólnymi śladami, rozkład odległości par, co łączy pary, pojedyncze materiały |
 | **Kampania** `/campaigns/:id` | materiały, macierz „który ślad łączy które materiały”, profil podobieństwa w 5 widokach treści, łańcuch najsilniejszych par, najbliższe materiały spoza kampanii |
-| **Przestrzeń cech** `/space` | materiały na płaszczyźnie (MDS / t-SNE z odległości treści `d`), kolor wg metody grupowania: FakeTrace, sama treść, pojedyncze / pełne wiązanie, HDBSCAN, Louvain; tabela silhouette i ARI (vs FakeTrace i vs `data/labels_dane.csv`), dendrogram UPGMA, które cechy odróżniają kampanie |
+| **Przestrzeń cech** `/space` | materiały na płaszczyźnie (MDS / t-SNE z odległości treści `d`), kolor wg metody grupowania: FakerAlpha, sama treść, pojedyncze / pełne wiązanie, HDBSCAN, Louvain; tabela silhouette i ARI (vs FakerAlpha i vs `data/labels_dane.csv`), dendrogram UPGMA, które cechy odróżniają kampanie |
 | **Graf** `/graph` | sieć: kampanie jako ramki, materiały jako kółka; klik pokazuje dowody pary |
 | **Macierz** `/matrix` | mapa cieplna bliskości `p` uporządkowana wg kampanii; klik otwiera porównanie pary |
 | **Materiały** `/materials`, `/materials/:id` | lista z jednym polem wyszukiwania; strona materiału: podgląd, najbliższe materiały, identyfikatory z `df`, 5 widoków treści z wyjaśnieniem, opis (nie łączy) |

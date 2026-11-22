@@ -14,7 +14,7 @@ with sync_playwright() as p:
     b = p.chromium.launch()
     pg = b.new_page(viewport={"width": 1600, "height": 1100})
     pg.goto(url, wait_until="networkidle", timeout=120000)
-    pg.wait_for_selector("text=FakeTrace", timeout=120000)
+    pg.wait_for_selector("text=FakerAlpha", timeout=120000)
     pg.wait_for_selector('[role="tab"]', timeout=120000); pg.wait_for_timeout(3000)
     tabs = pg.locator('[role="tab"]')
     n = tabs.count()

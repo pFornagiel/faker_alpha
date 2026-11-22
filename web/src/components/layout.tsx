@@ -37,7 +37,7 @@ function AppSidebar() {
         <Link to="/" className="flex items-center gap-3 px-1">
           <img src="/favicon.svg" alt="" className="size-7 shrink-0" />
           <div className="leading-tight">
-            <div className="text-base font-semibold tracking-tight">FakeTrace</div>
+            <div className="text-base font-semibold tracking-tight">FakerAlpha</div>
             <div className="text-xs text-muted-foreground">Kampanie fałszywych reklam</div>
           </div>
         </Link>

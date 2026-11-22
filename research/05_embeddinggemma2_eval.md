@@ -1,6 +1,6 @@
 # 05 — EmbeddingGemma-2 vs multilingual-e5-small (evaluation, 2026-11-21)
 
-Question: is `google/embeddinggemma-2` a better narrative-similarity embedder for FakeTrace than the
+Question: is `google/embeddinggemma-2` a better narrative-similarity embedder for FakerAlpha than the
 current `intfloat/multilingual-e5-small` (ONNX int8, `ftf.text.embed_text`)?
 
 **Short answer:** it is available without credentials, runs on our CPU through onnxruntime (no PyTorch),

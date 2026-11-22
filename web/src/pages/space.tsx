@@ -23,7 +23,7 @@ const MIN_GAP = 24
 export default function SpacePage() {
   const { data, error, isLoading } = useApi<FeatureSpace>("/api/feature-space")
   const metrics = useApi<MetricsOverview>("/api/metrics/overview")
-  const [methodKey, setMethodKey] = useState("faketrace")
+  const [methodKey, setMethodKey] = useState("fakeralpha")
   const [proj, setProj] = useState<ProjKey>("mds")
 
   if (isLoading) return <Loading />
@@ -99,7 +99,7 @@ export default function SpacePage() {
         <>
           <Section
             title="Drzewo łączenia (UPGMA)"
-            description={`Jak metoda FakeTrace skleja materiały: poziomy odcinek łączy dwie grupy na wysokości odległości D, przy której się łączą. Wszystko poniżej progu ${data.campaign_cut} to jedna kampania. Kliknij liść, aby otworzyć materiał.`}
+            description={`Jak metoda FakerAlpha skleja materiały: poziomy odcinek łączy dwie grupy na wysokości odległości D, przy której się łączą. Wszystko poniżej progu ${data.campaign_cut} to jedna kampania. Kliknij liść, aby otworzyć materiał.`}
           >
             <DendrogramChart data={metrics.data.dendrogram} />
           </Section>
@@ -270,9 +270,9 @@ function Scatter({ points, xy, method, edges }: { points: MaterialSummary[]; xy:
             </div>
           </div>
           <p className="mt-2 flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">FakeTrace:</span> <CampaignBadge c={h.campaign} link={false} />
+            <span className="text-muted-foreground">FakerAlpha:</span> <CampaignBadge c={h.campaign} link={false} />
           </p>
-          {method.key !== "faketrace" && (
+          {method.key !== "fakeralpha" && (
             <p className="mt-1 text-xs">
               <span className="text-muted-foreground">{method.label}:</span>{" "}
               {method.noise[hover!] ? "szum" : inMulti.has(hover!) ? "w grupie" : "osobno"}
@@ -310,7 +310,7 @@ function MethodPanel({ method, points }: { method: ClusterMethod; points: Materi
               <span className="mt-1 size-3 shrink-0 rounded-full" style={{ background: c === null ? "#52514e" : seriesColor(c) }} aria-hidden />
               <div className="min-w-0">
                 <p className="font-medium">{plural(g.length, "materiał", "materiały", "materiałów")}: {names(g)}</p>
-                <p className="text-xs text-muted-foreground">kampanie FakeTrace: {codes.join(", ") || "—"}</p>
+                <p className="text-xs text-muted-foreground">kampanie FakerAlpha: {codes.join(", ") || "—"}</p>
               </div>
             </li>
           )
@@ -343,7 +343,7 @@ function ComparisonTable({ methods, current, onPick, hasLabels }: { methods: Clu
             <TableHead className="text-right">Grupy</TableHead>
             <TableHead className="text-right">Osobno</TableHead>
             <TableHead className="text-right">Silhouette</TableHead>
-            <TableHead className="text-right">Zgodność z FakeTrace</TableHead>
+            <TableHead className="text-right">Zgodność z FakerAlpha</TableHead>
             {hasLabels && <TableHead className="pr-6 text-right">Zgodność z etykietami</TableHead>}
           </TableRow>
         </TableHeader>
@@ -359,7 +359,7 @@ function ComparisonTable({ methods, current, onPick, hasLabels }: { methods: Clu
               <TableCell className="text-right tabular">{m.n_clusters}</TableCell>
               <TableCell className="text-right tabular">{m.n_singletons + m.n_noise}</TableCell>
               <TableCell className="text-right tabular">{num(m.silhouette)}</TableCell>
-              <TableCell className="text-right tabular">{num(m.ari_faketrace)}</TableCell>
+              <TableCell className="text-right tabular">{num(m.ari_fakeralpha)}</TableCell>
               {hasLabels && <TableCell className="pr-6 text-right tabular">{num(m.ari_labels)}</TableCell>}
             </TableRow>
           ))}

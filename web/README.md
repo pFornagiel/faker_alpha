@@ -1,4 +1,4 @@
-# FakeTrace — panel analityka
+# FakerAlpha — panel analityka
 
 React + TypeScript + Tailwind CSS + [shadcn/ui](https://ui.shadcn.com) (Radix), TanStack Query, Cytoscape.js.
 Dane z API `ftf/api.py` (FastAPI).

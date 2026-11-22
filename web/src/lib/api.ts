@@ -1,4 +1,4 @@
-// Typed client for the FakeTrace API (ftf/api.py).
+// Typed client for the FakerAlpha API (ftf/api.py).
 
 export type Relation = "duplicate" | "same_campaign" | "similar" | "none"
 export type Decision = "duplicate" | "known_campaign" | "merge_proposal" | "new_campaign"
@@ -601,14 +601,14 @@ export interface ClusterMethod {
   hint: string
   /** cluster id per point (noise points get their own ids) */
   cluster: number[]
-  /** colour slot per point, matched to the FakeTrace campaign it overlaps most; null = single / noise */
+  /** colour slot per point, matched to the FakerAlpha campaign it overlaps most; null = single / noise */
   color: (number | null)[]
   noise: boolean[]
   n_clusters: number
   n_singletons: number
   n_noise: number
   silhouette: number | null
-  ari_faketrace: number | null
+  ari_fakeralpha: number | null
   ari_labels: number | null
 }
 

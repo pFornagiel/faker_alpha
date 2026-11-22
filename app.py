@@ -1,4 +1,4 @@
-"""FakeTrace — Streamlit demonstrator ("Kolekcjoner Fejków / Follow the Fake", HackNation 2026).
+"""FakerAlpha — Streamlit demonstrator ("Kolekcjoner Fejków / Follow the Fake", HackNation 2026).
 
 Run:  streamlit run app.py
 """
@@ -17,7 +17,7 @@ from ftf.engine import Engine
 from ftf.similarity import GROUP_PL, TYPE_PL, VIEW_PL
 
 logging.basicConfig(level=logging.WARNING)
-st.set_page_config(page_title="FakeTrace – Follow the Fake", page_icon="🕵️", layout="wide")
+st.set_page_config(page_title="FakerAlpha – Follow the Fake", page_icon="🕵️", layout="wide")
 
 DECISION_PL = {
     "duplicate": ("🟣 DUPLIKAT", "Materiał jest duplikatem już przeanalizowanego zgłoszenia."),
@@ -111,7 +111,7 @@ def show_features(f: dict):
 
 eng = engine()
 items = eng.store.all()
-st.sidebar.title("🕵️ FakeTrace")
+st.sidebar.title("🕵️ FakerAlpha")
 st.sidebar.caption("Łączenie pozornie niezależnych reklam-oszustw w kampanie — z uzasadnieniem każdej krawędzi.")
 st.sidebar.metric("Materiały w bazie", len(items))
 use_llm = st.sidebar.toggle("Atrybuty LLM (claude CLI / Gemini / reguły)", value=True)

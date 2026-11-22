@@ -1,4 +1,4 @@
-# FakeTrace — End-to-End Pipeline Walkthrough
+# FakerAlpha — End-to-End Pipeline Walkthrough
 
 > A step-by-step engineering guide tracing **what happens to a material from raw input to campaign decision**, including an explicit audit log of **fixed bugs, heuristics, weird design choices, and known limitations**.
 >

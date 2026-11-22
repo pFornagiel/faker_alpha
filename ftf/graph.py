@@ -125,7 +125,7 @@ def _q(s) -> str:
 
 
 def to_cypher(G: nx.Graph, path: Path | None = None) -> str:
-    lines = ["// FakeTrace export — load with: cat graph.cypher | cypher-shell -u neo4j -p <pwd>",
+    lines = ["// FakerAlpha export — load with: cat graph.cypher | cypher-shell -u neo4j -p <pwd>",
              "CREATE CONSTRAINT IF NOT EXISTS FOR (n:Node) REQUIRE n.uid IS UNIQUE;"]
     for n, d in G.nodes(data=True):
         props = ", ".join(f"{k}: {_q(v)}" for k, v in d.items() if k != "kind")

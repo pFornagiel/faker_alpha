@@ -6,13 +6,13 @@ What the map shows (position): the content (Gower) distance d between every pair
 Shared identifiers are not distances, so they do not move points; pairs that share one are returned as edges.
 
 What the colours show (grouping), every method on the same matrices (D = 0 inside a must-link component, else d):
-  faketrace  must-link + average linkage (UPGMA) on D cut at CAMPAIGN_CUT: the method used everywhere else
+  fakeralpha  must-link + average linkage (UPGMA) on D cut at CAMPAIGN_CUT: the method used everywhere else
   content    average linkage on d alone, same cut: what the identifiers add
   single     single linkage on D, same cut: "close to anyone" -> chains
   complete   complete linkage on D, same cut: "close to everyone" -> strict
   hdbscan    HDBSCAN (Campello et al. 2013) on D, min_cluster_size = 2: density; sparse points are noise
   louvain    Louvain modularity communities (Blondel et al. 2008) on the graph of linked pairs weighted by p
-Quality: silhouette (Rousseeuw 1987) on D, ARI (Hubert & Arabie 1985) vs FakeTrace and vs reference labels if present.
+Quality: silhouette (Rousseeuw 1987) on D, ARI (Hubert & Arabie 1985) vs FakerAlpha and vs reference labels if present.
 """
 from __future__ import annotations
 
@@ -37,10 +37,10 @@ PROJECTIONS = {
 }
 
 METHODS = {
-    "faketrace": ("FakeTrace", "Wspólny identyfikator łączy zawsze; resztę grupuje średnie wiązanie (UPGMA) odległości D, "
+    "fakeralpha": ("FakerAlpha", "Wspólny identyfikator łączy zawsze; resztę grupuje średnie wiązanie (UPGMA) odległości D, "
                                "cięte na wysokości {cut}. Tej metody używa cały panel."),
     "content": ("Sama treść", "To samo średnie wiązanie i ten sam próg {cut}, ale tylko na odległości treści d — bez identyfikatorów. "
-                              "Różnica względem FakeTrace pokazuje, co wnoszą domeny, piksele i kontakty."),
+                              "Różnica względem FakerAlpha pokazuje, co wnoszą domeny, piksele i kontakty."),
     "single": ("Pojedyncze wiązanie", "Grupy łączą się, gdy choć jedna para jest bliżej niż {cut}. Jeden materiał-łącznik "
                                       "potrafi skleić odległe grupy (efekt łańcucha)."),
     "complete": ("Pełne wiązanie", "Grupy łączą się dopiero, gdy każda para jest bliżej niż {cut}. Kampanie są ciaśniejsze, "
@@ -160,7 +160,7 @@ def _ari(a: list, b: list) -> float | None:
 
 
 def _colour(lab: np.ndarray, noise: np.ndarray, ref: np.ndarray, ref_slot: dict[int, int]) -> list[int | None]:
-    """Give each multi-material cluster the colour of the FakeTrace campaign it overlaps most, so the same group
+    """Give each multi-material cluster the colour of the FakerAlpha campaign it overlaps most, so the same group
     keeps its colour when the method changes; clusters without a counterpart take the next free colour."""
     members = defaultdict(list)
     for i, x in enumerate(lab):
@@ -212,7 +212,7 @@ def feature_space(items: dict, cl: dict, ids: list[str], slot_of_campaign) -> di
 
     no_noise = np.zeros(n, dtype=bool)
     ft = np.array([cl["campaign_of"][m] for m in ids])
-    raw: dict[str, tuple[np.ndarray, np.ndarray]] = {"faketrace": (ft, no_noise)}
+    raw: dict[str, tuple[np.ndarray, np.ndarray]] = {"fakeralpha": (ft, no_noise)}
     raw["content"] = (_cut(d, "average", cut), no_noise)
     raw["single"] = (_cut(D, "single", cut), no_noise)
     raw["complete"] = (_cut(D, "complete", cut), no_noise)
@@ -243,7 +243,7 @@ def feature_space(items: dict, cl: dict, ids: list[str], slot_of_campaign) -> di
             "cluster": [int(x) for x in scored], "color": _colour(lab, noise, ft, ref_slot), "noise": [bool(x) for x in noise],
             "n_clusters": sum(1 for s in sizes.values() if s >= 2), "n_singletons": sum(1 for s in sizes.values() if s == 1),
             "n_noise": int(noise.sum()), "silhouette": _silhouette(D, scored),
-            "ari_faketrace": _ari(ft_scored.tolist(), scored.tolist()),
+            "ari_fakeralpha": _ari(ft_scored.tolist(), scored.tolist()),
             "ari_labels": _ari([gold[ids[i]] for i in gold_idx], [int(scored[i]) for i in gold_idx]) if len(gold_idx) >= 2 else None,
         })
 

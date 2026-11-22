@@ -182,8 +182,8 @@ export default function GlossaryPage() {
         title="Porównanie metod grupowania"
         intro={<>Strona {space} stosuje kilka metod do tych samych macierzy odległości. Kampanie w panelu wyznacza pierwsza z nich; pozostałe są punktem odniesienia.</>}
       >
-        <Term name="FakeTrace">Metoda średnich połączeń (UPGMA) na odległości D, czyli z ograniczeniami must-link, cięta na wysokości {c.campaign_cut}.</Term>
-        <Term name="Sama treść">Ta sama metoda i ten sam próg na odległości d, bez identyfikatorów. Różnica względem FakeTrace pokazuje wkład identyfikatorów.</Term>
+        <Term name="FakerAlpha">Metoda średnich połączeń (UPGMA) na odległości D, czyli z ograniczeniami must-link, cięta na wysokości {c.campaign_cut}.</Term>
+        <Term name="Sama treść">Ta sama metoda i ten sam próg na odległości d, bez identyfikatorów. Różnica względem FakerAlpha pokazuje wkład identyfikatorów.</Term>
         <Term name="Pojedyncze wiązanie (single linkage)">
           Odległość między grupami to odległość najbliższej pary. Grupy mogą łączyć się przez pojedyncze materiały pośrednie (efekt łańcuchowy).
         </Term>

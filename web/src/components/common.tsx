@@ -22,7 +22,7 @@ export function PageHeader({ title, description, actions, children, docTitle }: 
 }) {
   const t = docTitle ?? (typeof title === "string" ? title : undefined)
   useEffect(() => {
-    document.title = t ? `${t} · FakeTrace` : "FakeTrace"
+    document.title = t ? `${t} · FakerAlpha` : "FakerAlpha"
   }, [t])
   return (
     <div className="flex flex-col gap-3">

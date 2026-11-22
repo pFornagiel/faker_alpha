@@ -1,6 +1,6 @@
-# FakeTrace — Web Fetching, Anti-Cloaking & OSINT Enrichment Methodology
+# FakerAlpha — Web Fetching, Anti-Cloaking & OSINT Enrichment Methodology
 
-> Technical and methodological reference for FakeTrace's acquisition, safe web-fetching, cloaking classification, artifact ingestion, and public infrastructure OSINT layers (`ftf/net.py`, `ftf/capture.py`, `ftf/ingest.py`, `ftf/web.py`, `ftf/enrich.py`, `ftf/sources.py`, `ftf/scheduler.py`).
+> Technical and methodological reference for FakerAlpha's acquisition, safe web-fetching, cloaking classification, artifact ingestion, and public infrastructure OSINT layers (`ftf/net.py`, `ftf/capture.py`, `ftf/ingest.py`, `ftf/web.py`, `ftf/enrich.py`, `ftf/sources.py`, `ftf/scheduler.py`).
 >
 > See also: [`docs/PIPELINE_WALKTHROUGH.md`](PIPELINE_WALKTHROUGH.md) · [`docs/FEATURES_AND_ML_METHODOLOGY.md`](FEATURES_AND_ML_METHODOLOGY.md) · [`docs/METHODOLOGY.md`](METHODOLOGY.md)
 
@@ -42,7 +42,7 @@ Investigating online scam-ad ecosystems in Poland (and the EU) imposes five hard
 
 1. **Pre-flight SSRF Validation**: Rejects invalid or non-public URLs immediately with `cloaking_verdict = "invalid_url"`.
 2. **Multi-Profile Redirect Following (`follow_profile`)**: Fetches the exact ad URL (preserving full path and query parameters) under three distinct client profiles (`PROFILES`, `0.25s` polite delay between profiles, up to `12` hops, timeout `(5.0s, 12.0s)`, body cap `3 MB`):
-   - `bot`: `Mozilla/5.0 (compatible; FakeTraceBot/0.1)` — baseline crawler identity.
+   - `bot`: `Mozilla/5.0 (compatible; FakerAlphaBot/0.1)` — baseline crawler identity.
    - `desktop_pl`: Windows 10 Chrome 131 with `Accept-Language: pl-PL,pl;q=0.9,en;q=0.5`.
    - `fb_mobile`: Android 14 Samsung SM-S918B Chrome 131 with Facebook In-App Browser signature `[FB_IAB/FB4A;FBAV/480.0.0.0;]`, `Accept-Language: pl-PL,pl;q=0.9,en;q=0.5`, `Referer: https://l.facebook.com/`, `X-Requested-With: com.facebook.katana`, plus a deterministic synthetic `fbclid=IwAR0<sha1[:24]>` appended via `_with_synthetic_fbclid()` if none is present.
    - Tracks HTTP `3xx` redirects, `<meta http-equiv="refresh">` (both attribute orderings, first 20 KB), and small JS redirect stubs (`len(html) < 3500`, visible text `< 300` chars matching `location.href = ...` / `location.replace(...)`), detecting redirect cycles and validating every hop with `net.validate_public_url`.
@@ -97,7 +97,7 @@ Investigating online scam-ad ecosystems in Poland (and the EU) imposes five hard
 Early prototypes compared `sha1(html)` across client profiles. Empirical live testing immediately exposed two fatal false-positive modes:
 - **Per-request nonces & tokens** (e.g., `nask.pl`): Content Security Policy (`nonce="..."`), CSRF tokens, and echoed timestamps change the raw SHA-1 on every single request even for identical pages.
 - **Responsive mobile layouts** (e.g., `onet.pl`): Serving a mobile-optimized template to `fb_mobile` vs a desktop layout to `desktop_pl` changes raw bytes while preserving the exact same domain, article title, and core narrative.
-- **WAF / Bot Management**: Legitimate sites behind Cloudflare/Akamai often return HTTP `403`/`429`/`503` to `FakeTraceBot/0.1` while serving identical `200 OK` pages to `desktop_pl` and `fb_mobile`.
+- **WAF / Bot Management**: Legitimate sites behind Cloudflare/Akamai often return HTTP `403`/`429`/`503` to `FakerAlphaBot/0.1` while serving identical `200 OK` pages to `desktop_pl` and `fb_mobile`.
 
 ### Structural & Semantic Classifier (`capture.classify_cloaking`)
 
@@ -118,7 +118,7 @@ Pairwise profile comparisons (`desktop_pl vs fb_mobile`, `bot vs fb_mobile`, `bo
 | **`unreachable`** | `False` | No client profile received a `2xx` HTML response. | Dead domain, NXDOMAIN, TLS error, or total IP block. |
 | *(Pre-flight)* **`invalid_url`** | `False` | `net.validate_public_url()` rejected the input URL. | Disallowed scheme or non-public/SSRF target. |
 
-**Known limitation**: Server-side cloakers that verify Polish mobile carrier ASNs (residential mobile IP) or single-use live click tokens (`banReason: "empty_redirect_hash"`, observed live on CERT Polska `.store` scam bursts in `research/02_web_infrastructure_osint.md`) serve the white page to all three profiles from a datacenter IP. In those cases, FakeTrace records the exact verdict (`none` / `unreachable`) and falls back to infrastructure OSINT (RDAP registration bursts, account-scoped Cloudflare NS pairs, kit hashes).
+**Known limitation**: Server-side cloakers that verify Polish mobile carrier ASNs (residential mobile IP) or single-use live click tokens (`banReason: "empty_redirect_hash"`, observed live on CERT Polska `.store` scam bursts in `research/02_web_infrastructure_osint.md`) serve the white page to all three profiles from a datacenter IP. In those cases, FakerAlpha records the exact verdict (`none` / `unreachable`) and falls back to infrastructure OSINT (RDAP registration bursts, account-scoped Cloudflare NS pairs, kit hashes).
 
 ---
 
