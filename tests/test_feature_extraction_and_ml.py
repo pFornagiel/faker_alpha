@@ -9,7 +9,7 @@ from unittest import mock
 import numpy as np
 from PIL import Image
 
-from ftf import cluster, faces, gazetteer, llm, pipeline, similarity, text, vision, web
+from ftf import cluster, config, faces, gazetteer, llm, pipeline, similarity, text, vision, web
 
 
 def _make_material_entry(
@@ -115,6 +115,56 @@ class TestVisionHelpers(unittest.TestCase):
         portrait_big = Image.fromarray(arr2)
         cropped_big = vision.creative_crop(portrait_big)
         self.assertGreaterEqual(cropped_big.size[0] * cropped_big.size[1], 0.35 * 400 * 800)
+
+    @staticmethod
+    def _busy_picture(seed: int, size=(480, 600)) -> Image.Image:
+        """A picture with many distinct corners: random rectangles and discs on a noisy background."""
+        from PIL import ImageDraw
+
+        rng = np.random.default_rng(seed)
+        im = Image.fromarray(rng.integers(100, 140, size=(size[1], size[0], 3), dtype=np.uint8))
+        d = ImageDraw.Draw(im)
+        for _ in range(90):
+            x, y = int(rng.integers(0, size[0] - 40)), int(rng.integers(0, size[1] - 40))
+            w, h = int(rng.integers(12, 70)), int(rng.integers(12, 70))
+            col = tuple(int(c) for c in rng.integers(0, 255, 3))
+            (d.rectangle if rng.random() < 0.6 else d.ellipse)([x, y, x + w, y + h], fill=col)
+        return im
+
+    def test_local_match_survives_crop_and_rescale_where_phash_does_not(self):
+        a, other = self._busy_picture(1), self._busy_picture(2)
+        w, h = a.size
+        cropped = a.crop((int(w * .08), int(h * .08), int(w * .92), int(h * .92))).resize((int(w * .5), int(h * .5)))
+        da, dc, do = (vision.local_descriptors(x) for x in (a, cropped, other))
+        ha, hc = int(vision.hashes(a)["phash"], 16), int(vision.hashes(cropped)["phash"], 16)
+        self.assertGreater(bin(ha ^ hc).count("1"), 4)                       # the pHash test fails on the cropped copy
+        self.assertGreaterEqual(vision.local_match(da, dc), config.LOCAL_MIN_INLIERS)     # the keypoint test passes
+        self.assertLess(vision.local_match(da, do), config.LOCAL_MIN_INLIERS)             # and rejects a different picture
+        back = vision.unpack_local(vision.pack_local(da), da[2])
+        self.assertTrue(np.array_equal(back[0], da[0]) and np.array_equal(back[1], da[1]) and back[2] == da[2])
+
+    def test_images_view_counts_keypoint_match_and_says_so(self):
+        a, other = self._busy_picture(3), self._busy_picture(4)
+        w, h = a.size
+        cropped = a.crop((int(w * .1), int(h * .05), int(w * .95), int(h * .9))).resize((int(w * .6), int(h * .6)))
+
+        def entry(mid, im):
+            loc = vision.local_descriptors(im)
+            img = {"src": f"{mid}.png", "kind": "keyframe", "phash": vision.hashes(im)["phash"], "local": [0, len(loc[1]), *loc[2]]}
+            return _make_material_entry(mid, images=[img], vectors={"local": vision.pack_local(loc)})
+
+        items = {"orig": entry("orig", a), "copy": entry("copy", cropped), "other": entry("other", other)}
+        corpus = similarity.Corpus(items)
+        same = similarity.pair("orig", *items["orig"], "copy", *items["copy"], corpus)
+        self.assertEqual(same.views, {"images": 1.0})
+        self.assertEqual(same.local_images, 1)
+        self.assertIn("punktach charakterystycznych", same.explain())
+        diff = similarity.pair("orig", *items["orig"], "other", *items["other"], corpus)
+        self.assertEqual(diff.views, {"images": 0.0})
+        self.assertEqual(diff.local_images, 0)
+        with mock.patch.object(similarity.config, "LOCAL_MATCH", False):       # pHash-only behaviour is still available
+            off = similarity.pair("orig", *items["orig"], "copy", *items["copy"], corpus)
+        self.assertEqual(off.views, {"images": 0.0})
 
     def test_hashes_returns_phash_only(self):
         im = Image.new("RGB", (64, 64), (120, 80, 200))

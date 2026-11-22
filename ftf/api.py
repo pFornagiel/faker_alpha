@@ -413,7 +413,9 @@ def explain_link(l: Link, items: dict | None = None) -> dict:
     views = [{"view": v, "label": view_label(v), "hint": VIEW_HINT[v], "available": v in l.views,
               "score": round(l.views[v], 3) if v in l.views else None,
               "contribution": round(l.views[v] / k, 3) if v in l.views else None,
-              "thumbs": thumbs_for(_shared_assets(feats), feats, 6) if v == "images" and l.views.get("images") else []}
+              "thumbs": thumbs_for(_shared_assets(feats), feats, 6) if v == "images" and l.views.get("images") else [],
+              "note": (f"{l.local_images} dopasowane po punktach charakterystycznych (przycięta lub przeskalowana kopia)"
+                       if v == "images" and l.local_images else "")}
              for v in VIEWS]
     formula = (f"d = 1 − ({' + '.join(f'{l.views[v]:.2f}' for v in VIEWS if v in l.views)}) / {k} = {l.distance:.2f}"
                if k else "d = 1 (brak widoku dostępnego po obu stronach)")

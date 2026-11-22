@@ -65,6 +65,7 @@ class VisualStage:
     asset_faces: list[dict] = field(default_factory=list)
     videos: list[dict] = field(default_factory=list)
     face_vecs: list[np.ndarray] = field(default_factory=list)
+    local_rows: list[np.ndarray] = field(default_factory=list)
     file_shas: set[str] = field(default_factory=set)
     qr_urls: list[str] = field(default_factory=list)
     indicators: dict[str, set[str]] = field(default_factory=dict)
@@ -115,11 +116,13 @@ def is_ui_screenshot(ocr_text: str) -> bool:
 
 
 def _image_features(im, src: str, kind: str, want_faces: bool = True, want_ocr: bool = True) -> tuple[dict, dict]:
-    crop = vision.crop_content(im)
-    if kind == "screenshot":
-        crop = vision.creative_crop(crop)
+    crop = vision.creative_view(im, kind)
     f = {"src": src, "kind": kind, "size": list(im.size), **vision.hashes(crop)}
     vec: dict = {}
+    loc = vision.local_descriptors(crop)
+    if len(loc[1]):
+        vec["local"] = vision.pack_local(loc)
+        f["local"] = [0, len(loc[1]), *loc[2]]      # [first row in the "local" vectors, keypoints, scaled width, height]
     if want_ocr:
         o = vision.ocr(im)
         f["ocr_text"], f["ocr_lines"] = o["text"], o["lines"][:80]
@@ -308,6 +311,9 @@ def _stage_visual_and_faces(m: Material, har_images: list[tuple[str, bytes]], sa
         f, v = _image_features(im, str(src), kind)
         if is_ui_screenshot(f.get("ocr_text", "")):
             f["kind"] = "ui_screenshot"
+        if "local" in v:
+            f["local"][0] = sum(len(r) for r in st.local_rows)
+            st.local_rows.append(v["local"])
         st.img_feats.append(f)
         st.face_vecs.extend(v.get("faces", []))
 
@@ -529,6 +535,8 @@ def _assemble_features(
     raw_vecs: dict[str, list] = {"faces": vis_s.face_vecs, "text": text_s.text_vecs, "dom": web_s.dom_sigs,
                                  "css": web_s.css_sigs, "js": web_s.js_sigs}
     vectors = {k: (np.stack(v) if len(v) and not isinstance(v[0], list) else v) for k, v in raw_vecs.items()}
+    if vis_s.local_rows:
+        vectors["local"] = np.concatenate(vis_s.local_rows)      # ORB keypoints of the creatives, rows indexed by images[].local
     return feats, vectors
 
 

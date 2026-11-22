@@ -55,6 +55,24 @@ PHASH_HAMMING = 4       # two images match when their 64-bit pHashes differ in <
 MIN_CLASS_NAMES = 10    # view "css" needs at least this many distinct class names on a page
 MIN_SCRIPT_SHINGLES = 30   # view "js" needs at least this many distinct token 5-grams of own inline scripts
 
+# Experiment switch (default off = word 4-grams): FTF_OCR_CHARS=5 compares creative text (view "ocr") by character
+# 5-gram shingles, which tolerate the misread words of OCR on small or recompressed images.
+OCR_CHARS = int(os.environ.get("FTF_OCR_CHARS", "0"))
+
+# Crop-robust image match, used only where pHash fails: ORB keypoints of the image scaled to LOCAL_MAX_SIDE, ratio
+# test, RANSAC affine fit. Two images match with >= LOCAL_MIN_INLIERS inliers whose bounding box spans >=
+# LOCAL_MIN_EXTENT of the area of one of them. Study (research/experiments/crop-robust-images.md): copies cropped
+# 8 %, scaled x0.6, JPEG q=55 gave >= 49 inliers and extent >= 0.048; different pictures reached 51 inliers on a
+# shared row of platform buttons (extent <= 0.018) and at most 28 otherwise.
+LOCAL_MATCH = os.environ.get("FTF_LOCAL_MATCH", "1") != "0"      # FTF_LOCAL_MATCH=0 restores the pHash-only images view
+LOCAL_MAX_SIDE = 640
+LOCAL_KEYPOINTS = 1000
+LOCAL_RATIO = 0.75
+LOCAL_MIN_INLIERS = 40
+LOCAL_MIN_EXTENT = 0.03
+LOCAL_GATE_ABOVE = 300      # corpora larger than this: test only pairs a full image match could bring within
+                            # CAMPAIGN_CUT, and only with keypoints stored at analysis time (none computed on the fly)
+
 # C. Clustering: average linkage (UPGMA) on D (0 inside a must-link component, else d); fcluster cuts.
 DUPLICATE_CUT = 0.05    # d <= this -> duplicate
 CAMPAIGN_CUT = 0.6      # dendrogram cut -> campaigns; also the open-set rejection threshold (assign)

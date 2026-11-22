@@ -39,18 +39,25 @@ def tokens(text: str) -> list[str]:
     return [w for w in normalize(text).split() if len(w) > 1]
 
 
-def minhash(text: str, k: int = 4) -> MinHash | None:
+def minhash(text: str, k: int = 4, chars: int = 0) -> MinHash | None:
+    """MinHash of word k-gram shingles, or of character `chars`-gram shingles of the normalised text when chars > 0.
+    Either way a text needs at least k + 2 words to get a signature."""
     toks = tokens(text)
     if len(toks) < k + 2:
         return None
     m = MinHash(num_perm=NUM_PERM, seed=7)
+    if chars:
+        t = " ".join(toks)
+        for sh in {t[i:i + chars] for i in range(len(t) - chars + 1)}:
+            m.update(sh.encode())
+        return m
     for i in range(len(toks) - k + 1):
         m.update(" ".join(toks[i:i + k]).encode())
     return m
 
 
-def minhash_sig(text: str, masked: bool = False) -> list[int] | None:
-    m = minhash(mask_entities(text) if masked else text)
+def minhash_sig(text: str, masked: bool = False, chars: int = 0) -> list[int] | None:
+    m = minhash(mask_entities(text) if masked else text, chars=chars)
     return m.hashvalues.tolist() if m is not None else None
 
 

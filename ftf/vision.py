@@ -114,6 +114,89 @@ def creative_crop(im: Image.Image, min_frac: float = 0.15, min_area_frac: float 
     return im.crop((x0, int(y0), x1 + 1, int(y1) + 1))
 
 
+# ----------------------------------------------------------------------------- local features (crop-robust match)
+def creative_view(im: Image.Image, kind: str) -> Image.Image:
+    """The part of an input image that is hashed and described: borders trimmed, feed screenshots cut to the creative."""
+    crop = crop_content(im)
+    return creative_crop(crop) if kind == "screenshot" else crop
+
+
+def local_descriptors(im: Image.Image, max_side: int = config.LOCAL_MAX_SIDE,
+                      n: int = config.LOCAL_KEYPOINTS) -> tuple[np.ndarray, np.ndarray, tuple[int, int]]:
+    """ORB keypoints (Rublee et al. 2011) of an image scaled to `max_side`: (points uint16 [k, 2], descriptors
+    uint8 [k, 32], (width, height) of the scaled image). Unlike pHash, local features survive cropping, rescaling
+    and added bands."""
+    g = np.asarray(im.convert("L"))
+    s = max_side / max(g.shape)
+    if s < 1:
+        g = cv2.resize(g, (max(8, int(g.shape[1] * s)), max(8, int(g.shape[0] * s))), interpolation=cv2.INTER_AREA)
+    size = (int(g.shape[1]), int(g.shape[0]))
+    kp, des = cv2.ORB_create(nfeatures=n).detectAndCompute(g, None)
+    if des is None or not len(kp):
+        return np.zeros((0, 2), np.uint16), np.zeros((0, 32), np.uint8), size
+    return np.round([k.pt for k in kp]).astype(np.uint16), des, size
+
+
+def pack_local(d: tuple[np.ndarray, np.ndarray, tuple[int, int]]) -> np.ndarray:
+    """Keypoints + descriptors as one uint8 array [k, 36] (x, y as uint16, then the 32 descriptor bytes) for the store."""
+    pts, des, _ = d
+    return np.hstack([np.ascontiguousarray(pts, dtype=np.uint16).view(np.uint8).reshape(-1, 4), des]) if len(des) else np.zeros((0, 36), np.uint8)
+
+
+def unpack_local(rows: np.ndarray, size) -> tuple[np.ndarray, np.ndarray, tuple[int, int]]:
+    rows = np.ascontiguousarray(rows, dtype=np.uint8)
+    return rows[:, :4].copy().view(np.uint16).reshape(-1, 2), np.ascontiguousarray(rows[:, 4:]), (int(size[0]), int(size[1]))
+
+
+def _coverage(pts: np.ndarray, size: tuple[int, int], grid: int = 4) -> float:
+    """Share of the cells of a grid x grid raster over the image that contain at least one of the points."""
+    w, h = max(size[0], 1), max(size[1], 1)
+    cx = np.minimum((pts[:, 0] * grid / w).astype(int), grid - 1)
+    cy = np.minimum((pts[:, 1] * grid / h).astype(int), grid - 1)
+    return len(set(zip(cx.tolist(), cy.tolist()))) / (grid * grid)
+
+
+def _extent(pts: np.ndarray, size: tuple[int, int]) -> float:
+    """Area of the box holding the middle 90 % of the points in x and in y, as a share of the image area."""
+    (x0, x1), (y0, y1) = np.quantile(pts[:, 0], [.05, .95]), np.quantile(pts[:, 1], [.05, .95])
+    return float((x1 - x0) * (y1 - y0) / (max(size[0], 1) * max(size[1], 1)))
+
+
+def local_match_detail(a, b, ratio: float = config.LOCAL_RATIO) -> dict:
+    """Geometrically verified keypoint matches between two images: nearest-neighbour ratio test (Lowe 2004), then
+    RANSAC (Fischler & Bolles 1981) for one affine transform. Returns the inlier count and how much of each image
+    the inliers span: `cover` = share of 4 x 4 grid cells holding an inlier, `extent` = area of the box around the
+    middle 90 % of the inliers. Matches confined to a strip (a platform's button row) span little of both images."""
+    (pa, da, sa), (pb, db, sb) = a, b
+    out = {"inliers": 0, "good": 0, "cover_a": 0.0, "cover_b": 0.0, "extent_a": 0.0, "extent_b": 0.0}
+    if len(da) < 8 or len(db) < 8:
+        return out
+    m = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(np.ascontiguousarray(da), np.ascontiguousarray(db), k=2)
+    good = [x[0] for x in m if len(x) == 2 and x[0].distance < ratio * x[1].distance]
+    out["good"] = len(good)
+    if len(good) < 6:
+        return out
+    src = np.float32([pa[g.queryIdx] for g in good])
+    dst = np.float32([pb[g.trainIdx] for g in good])
+    A, inl = cv2.estimateAffine2D(src, dst, method=cv2.RANSAC, ransacReprojThreshold=4.0)
+    if A is None or inl is None:
+        return out
+    sx, sy = np.linalg.norm(A[:, 0]), np.linalg.norm(A[:, 1])
+    if not (0.2 <= sx <= 5 and 0.2 <= sy <= 5) or np.linalg.det(A[:, :2]) <= 0:
+        return out                                 # mirrored or absurdly scaled fits are not copies
+    keep = inl.ravel().astype(bool)
+    if keep.sum() >= 3:
+        out.update(inliers=int(keep.sum()), cover_a=_coverage(src[keep], sa), cover_b=_coverage(dst[keep], sb),
+                   extent_a=_extent(src[keep], sa), extent_b=_extent(dst[keep], sb))
+    return out
+
+
+def local_match(a, b) -> int:
+    """Inlier count of `local_match_detail`, or 0 when the inliers are confined to a small part of both images."""
+    d = local_match_detail(a, b)
+    return d["inliers"] if max(d["extent_a"], d["extent_b"]) >= config.LOCAL_MIN_EXTENT else 0
+
+
 # ----------------------------------------------------------------------------- ONNX runtime
 @lru_cache(maxsize=None)
 def _session(path: str):
