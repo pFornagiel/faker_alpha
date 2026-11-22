@@ -6,13 +6,14 @@ wyciąga wspólne ślady — tekstowe, wizualne, osobowe, infrastrukturalne — 
 pokazując **uzasadnienie każdego powiązania**. Nowy materiał jest przypisywany do znanej kampanii albo
 oznaczany jako **nowy wzorzec** (open-set).
 
+* Uruchomienie w Dockerze: [Uruchomienie](#uruchomienie) · własne dane: [Własne dane](#własne-dane) · bez Dockera: [Bez Dockera](#bez-dockera)
+* Funkcje i przebieg pozyskiwania danych w skrócie: [`FUNKCJE.md`](FUNKCJE.md)
 * Metodyka (skrót PL): [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md)
 * Przebieg pipeline'u krok po kroku i audyt decyzji: [`docs/PIPELINE_WALKTHROUGH.md`](docs/PIPELINE_WALKTHROUGH.md)
 * Metodyka pobierania web, cloakingu i OSINT: [`docs/WEB_FETCHING_METHODOLOGY.md`](docs/WEB_FETCHING_METHODOLOGY.md)
 * Metodyka cech, modeli ML, podobieństwa i klastrowania: [`docs/FEATURES_AND_ML_METHODOLOGY.md`](docs/FEATURES_AND_ML_METHODOLOGY.md)
 * Research (źródła danych, modele, prior art): [`research/`](research/)
 * Wyniki na zbiorze przykładowym: [`docs/RESULTS.md`](docs/RESULTS.md)
-* Rozwiązanie zagadki CTF ze strony z zajawką: [`docs/CTF_SOLUTION.md`](docs/CTF_SOLUTION.md)
 
 ```
 URL / zrzut ekranu / wideo / HTML / HAR / ZIP / nazwa produktu / biblioteka reklam
@@ -29,17 +30,216 @@ URL / zrzut ekranu / wideo / HTML / HAR / ZIP / nazwa produktu / biblioteka rekl
         ▼  panel analityka (React + shadcn/ui, FastAPI) · Neo4j · CSV/JSON · scheduler bibliotek reklam
 ```
 
-## Szybki start (lokalnie, CPU)
+## Uruchomienie
+
+Zalecana droga to Docker. Potrzebny jest tylko Docker z poleceniem `docker compose`: Docker Desktop na Windows
+i macOS albo Docker Engine z wtyczką Compose na Linuksie. Python, Node, ffmpeg i modele są w obrazie.
+Instalację bez Dockera opisuje rozdział [Bez Dockera](#bez-dockera).
+
+### Instalacja i start
 
 ```bash
-uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python tools/download_models.py            # ~310 MB modeli ONNX (e5, SCRFD+ArcFace) + ~30 MB OCR
-.venv/bin/python tools/build_face_gallery.py         # baza referencyjna twarzy (Wikimedia Commons)
-# zbiór organizatora (nie jest dystrybuowany w repo) -> data/organizer/dane/<case>/...
-.venv/bin/python -m ftf.cli ingest data/organizer/dane   # ekstrakcja cech + kampanie
-(cd web && npm ci && npm run build)                     # panel analityka (jednorazowo; Node ≥ 20)
-.venv/bin/python -m ftf.cli serve                       # http://localhost:8765
+git clone <adres repozytorium> faker_alpha
+cd faker_alpha
+docker compose up --build -d
 ```
+
+Pierwsza budowa obrazu trwa ok. 7 min. Pobiera ok. 1 GB bibliotek i ok. 340 MB modeli, a gotowy obraz zajmuje
+ok. 4 GB. Kolejne starty trwają kilka sekund. Czas zmierzono na laptopie (8 wątków, szybkie łącze) bez pamięci
+podręcznej Dockera.
+
+Po starcie otwórz <http://localhost:8765>. Polecenie `docker compose ps` pokazuje stan `healthy`, gdy serwer odpowiada.
+
+### Zbiór demonstracyjny
+
+Na pustej bazie panel pokazuje przycisk **Wczytaj zbiór demonstracyjny**. Zbiór ma 8 zmyślonych przypadków.
+Import trwa ok. 10 s i nie używa sieci. To samo z terminala:
+
+```bash
+docker compose exec app python -m ftf demo
+```
+
+### Własne dane
+
+Kontener widzi tylko folder `./data` w katalogu repozytorium (w kontenerze `/app/data`). Zbiór trzeba najpierw
+tam skopiować.
+
+**Krok 1. Przygotuj folder.** Jeden podfolder to jeden przypadek, czyli jedna reklama albo jedna strona.
+Do podfolderu włóż wszystko, co masz o tym przypadku. Nazwy plików są dowolne. Wystarczy jeden plik.
+
+```text
+moj_zbior/
+├── przypadek-01/
+│   ├── strona.html          zapisana strona (z folderem zasobów, jeśli przeglądarka go utworzyła)
+│   ├── ruch.har             zapis ruchu sieciowego
+│   └── zrzut.png            zrzut ekranu reklamy
+├── przypadek-02/
+│   └── reklama.mp4          wideo
+└── przypadek-03/
+    └── reklama.txt          tekst reklamy albo lista linków
+```
+
+| Rodzaj pliku | Rozszerzenia |
+|---|---|
+| zapisana strona | `.html`, `.htm`, `.mhtml` |
+| zapis ruchu sieciowego | `.har` |
+| zrzut ekranu, grafika reklamy | `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.avif` |
+| wideo | `.mp4`, `.mov`, `.webm`, `.mkv`, `.m4v`, `.avi` |
+| tekst reklamy, linki | `.txt` |
+
+**Krok 2. Skopiuj folder do `./data`.**
+
+```bash
+cp -r ~/moj_zbior data/
+```
+
+Na Windows wystarczy skopiować folder w Eksploratorze do `faker_alpha\data\`. Zbiór organizatora włóż do
+`data/organizer/dane`. Tę ścieżkę panel podpowiada sam.
+
+**Krok 3. Wczytaj zbiór.** Na stronie startowej panelu albo na stronie **Analizuj materiał** jest karta
+**Wczytaj zbiór przypadków**. Wpisz `data/moj_zbior` i kliknij **Importuj zbiór**. Pasek postępu pokazuje kolejne
+przypadki. Import trwa ok. 20 s na przypadek na CPU. To samo z terminala:
+
+```bash
+docker compose exec app python -m ftf ingest data/moj_zbior
+```
+
+**Krok 4. Zobacz wynik.** Strona **Kampanie** pokazuje, które przypadki trafiły do jednej kampanii. Po kliknięciu
+kampanii albo pary materiałów widać ślady i podobieństwa, które je połączyły. To samo z terminala:
+
+```bash
+docker compose exec app python -m ftf campaigns                        # lista kampanii
+docker compose exec app python -m ftf pair przypadek-01 przypadek-02   # dlaczego dwa materiały są (albo nie są) powiązane
+docker compose exec app python -m ftf export                           # graf, kampanie i pary do ./data/exports
+```
+
+Dalsze możliwości:
+
+1. **Zbiór testowy.** Skopiuj go do `./data` i wczytaj tak samo, z innego folderu. Nowe przypadki dołączają do
+   znanych kampanii albo tworzą nowe. Przypadki, które już są w bazie, są pomijane.
+2. **Jeden nowy materiał.** Strona **Analizuj materiał** przyjmuje adres URL, plik albo tekst. Plikiem może być
+   zrzut, wideo, zapisana strona, HAR albo ZIP z folderem przypadku. Odpowiedzią jest decyzja z dowodami: duplikat,
+   znana kampania, propozycja scalenia albo nowy wzorzec. Z terminala plik musi leżeć w `./data`:
+
+   ```bash
+   docker compose exec app python -m ftf add data/nowa_reklama.png --dry   # --dry: bez zapisu w bazie
+   docker compose exec app python -m ftf add "https://przyklad.example/oferta"
+   ```
+3. **Ocena względem własnych etykiet.** Zapisz w `./data/etykiety.csv` wiersze `nazwa_przypadku,etykieta_kampanii`.
+   Wynik to precyzja, czułość i F1 par, B-cubed oraz ARI.
+
+   ```text
+   przypadek-01,kampania-A
+   przypadek-02,kampania-A
+   przypadek-03,kampania-B
+   ```
+
+   ```bash
+   docker compose exec app python -m ftf eval data/etykiety.csv
+   ```
+4. **Osobna baza dla testów.** `FTF_STORE=data/store/test.sqlite docker compose up -d` uruchamia panel na osobnej
+   bazie. Importy z panelu i polecenia `docker compose exec` trafiają wtedy do niej. Powrót do głównej bazy daje
+   `docker compose up -d`.
+
+Uwagi:
+
+* Nie przenoś folderu przypadku po imporcie. Identyfikator materiału zależy od ścieżki, więc przeniesiony przypadek
+  zostałby wczytany drugi raz.
+* Model językowy działa w kontenerze tylko z kluczem `GEMINI_API_KEY` w pliku `.env` obok `docker-compose.yml`.
+  Bez klucza atrybuty opisowe powstają z reguł słownikowych. Przełącznik w karcie importu wyłącza model dla
+  jednego importu, a w terminalu robi to opcja `--no-llm`.
+* `FTF_LLM=none FTF_ENRICH=0 docker compose up -d` uruchamia panel bez usług zewnętrznych. Tekst przypadków nie
+  trafia wtedy do modelu językowego, a domeny nie są sprawdzane w RDAP, DNS i crt.sh.
+
+### Codzienna obsługa
+
+| Czynność | Polecenie |
+|---|---|
+| start | `docker compose up -d` |
+| zatrzymanie (dane zostają w `./data`) | `docker compose down` |
+| stan | `docker compose ps` |
+| logi serwera | `docker compose logs -f app` |
+| aktualizacja po `git pull` | `docker compose up --build -d` |
+| inny port | `FTF_PORT=8770 docker compose up -d`, panel pod <http://localhost:8770> |
+| pusta baza | `docker compose down`, potem `docker compose run --rm app rm -r data/store` i `docker compose up -d` |
+| pomoc CLI | `docker compose exec app python -m ftf --help` |
+
+Warianty obrazu:
+
+```bash
+docker compose build --build-arg WITH_PLAYWRIGHT=0    # mniejszy obraz bez headless Chromium (render stron z URL)
+docker compose --profile neo4j up --build -d          # dodatkowo Neo4j na :7474 (neo4j/fakefakefake)
+docker compose --profile scheduler up -d              # dodatkowo cykliczny skaner źródeł
+```
+
+Na Linuksie kontener zapisuje pliki w `./data` jako root. Własność zmienia `sudo chown -R "$USER" data`.
+
+### Bez Dockera
+
+Linux, macOS albo WSL.
+
+| Wymaganie | Do czego | Instalacja |
+|---|---|---|
+| [`uv`](https://docs.astral.sh/uv/) | środowisko Pythona (uv sam pobiera Pythona 3.12) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| Node ≥ 20 z npm | jednorazowa budowa panelu | <https://nodejs.org/> albo menedżer pakietów systemu |
+| `ffmpeg`, `ffprobe` | klatki z wideo | `sudo apt install ffmpeg` lub `brew install ffmpeg` |
+
+Bez `uv` skrypt użyje Pythona 3.12 lub 3.13 z `PATH` (venv i pip, wolniej).
+Bez `ffmpeg` wszystko działa, ale wideo jest analizowane bez klatek.
+
+```bash
+git clone <adres repozytorium> faker_alpha
+cd faker_alpha
+./setup.sh --demo                     # biblioteki, modele, panel i zbiór demonstracyjny, ok. 1,5 min
+.venv/bin/python -m ftf serve         # panel: http://127.0.0.1:8765
+```
+
+Skrypt `setup.sh` można uruchamiać wielokrotnie. Gotowe kroki są pomijane. Opcje:
+
+| Opcja | Znaczenie |
+|---|---|
+| `--demo` | wczytuje zbiór demonstracyjny |
+| `--playwright` | instaluje headless Chromium do renderowania stron z URL (ok. 300 MB) |
+| `--no-web` | pomija budowę panelu, zostaje samo CLI i Node nie jest potrzebny |
+
+Polecenia z rozdziału [Własne dane](#własne-dane) działają tak samo. Zamiast `docker compose exec app python -m ftf`
+wpisz `.venv/bin/python -m ftf`. Zbiór nie musi leżeć w `data/`. Ścieżka wpisana w panelu jest liczona względem
+katalogu repozytorium. Osobną bazę wybiera `FTF_STORE=data/store/test.sqlite .venv/bin/python -m ftf serve`.
+
+Te same kroki co `setup.sh --demo`, wykonane ręcznie:
+
+```bash
+uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt   # ok. 30 s
+.venv/bin/python tools/download_models.py     # ~310 MB modeli ONNX (e5, SCRFD + ArcFace) + ~30 MB OCR, ok. 15 s
+(cd web && npm ci && npm run build)           # panel analityka, ok. 15 s
+.venv/bin/python -m ftf demo                  # zbiór demonstracyjny, ok. 15 s
+.venv/bin/python -m ftf serve                 # http://127.0.0.1:8765
+```
+
+Baza referencyjna twarzy działa od razu po instalacji, także w Dockerze. Plik `ftf/assets/face_gallery.npz` zawiera
+średnie embeddingi ArcFace 29 osób, pod które oszuści podszywają się najczęściej. Są to same wektory, bez zdjęć.
+Skrypt `tools/build_face_gallery.py` jest potrzebny tylko do dodania osób albo odtworzenia pliku ze zdjęć
+Wikimedia Commons:
+
+```bash
+.venv/bin/python tools/build_face_gallery.py "Imię Nazwisko"   # pobiera zdjęcia do data/reference_faces/
+.venv/bin/python tools/build_face_gallery.py --export          # zapisuje ftf/assets/face_gallery.* ze zdjęć na dysku
+```
+
+### Gdy coś nie działa
+
+| Objaw | Co zrobić |
+|---|---|
+| `Bind for 0.0.0.0:8765 failed: port is already allocated` | Port jest zajęty. Uruchom `FTF_PORT=8770 docker compose up -d`. |
+| Import w panelu zgłasza, że folder nie istnieje | W Dockerze zbiór musi leżeć w `./data`, a ścieżka w panelu zaczyna się od `data/`. Bez Dockera ścieżka jest liczona względem katalogu repozytorium. |
+| Panel pokazuje komunikat o pustej bazie | Wczytaj zbiór przyciskiem na tej stronie albo poleceniem `demo`. |
+| Panel nie odpowiada po starcie | Sprawdź `docker compose ps` i `docker compose logs app`. Serwer startuje kilka sekund. |
+| Budowa obrazu przerwała się przy pobieraniu | Uruchom ponownie `docker compose up --build -d`. Gotowe warstwy są brane z pamięci podręcznej. |
+| Brak uprawnień do plików w `./data` (Linux) | `sudo chown -R "$USER" data` |
+| Bez Dockera: `nie można nasłuchiwać na 127.0.0.1:8765` | Port jest zajęty. Uruchom `.venv/bin/python -m ftf serve --port 8770`. |
+| Bez Dockera: pod adresem panelu jest tylko API, bez strony | Panel nie jest zbudowany. Uruchom `./setup.sh` albo `cd web && npm ci && npm run build`. |
+| Bez Dockera: pobieranie modeli zostało przerwane | Uruchom ponownie `tools/download_models.py`. Gotowe pliki są pomijane. |
+| Bez Dockera: brak klatek z wideo | Zainstaluj `ffmpeg` i wczytaj zbiór ponownie z opcją `--force`. |
 
 Tryb deweloperski UI: `uvicorn ftf.api:app --reload --port 8765` + `cd web && npm run dev` (Vite, proxy `/api` → 8765).
 
@@ -57,36 +257,68 @@ Tryb deweloperski UI: `uvicorn ftf.api:app --reload --port 8765` + `cd web && np
 | **Analizuj materiał** `/analyse` | URL / plik / tekst → decyzja open-set z dowodami (opcjonalnie bez zapisu w bazie) |
 
 Skaner źródeł (CERT Polska, biblioteki reklam) działa tylko z wiersza poleceń: `python -m ftf.scheduler --once [--analyse] [--watch]`
-albo cyklicznie `--every N`. Import i eksport danych: `python -m ftf.cli ingest <folder>` / `python -m ftf.cli export`.
+albo cyklicznie `--every N`. Import zbioru opisuje rozdział [Własne dane](#własne-dane). Eksport: `python -m ftf export`.
 
 Wyszukiwarka w nagłówku (`/` lub `Ctrl+K`) znajduje domeny, identyfikatory, osoby, produkty i kampanie.
-Poprzedni demonstrator Streamlit (`app.py`) pozostaje w repo jako wersja historyczna.
-
-Opcjonalnie render stron w headless Chromium: `uv pip install playwright && .venv/bin/playwright install chromium`.
-
-### Docker
-
-```bash
-docker compose up --build                      # UI na :8765 (modele pobierane przy budowie obrazu)
-docker compose --profile neo4j up --build      # + Neo4j na :7474 (neo4j/fakefakefake)
-```
-Dane wejściowe montowane są z `./data` (zbiór organizatora w `./data/organizer/dane`).
+Poprzedni demonstrator Streamlit (`app.py`) pozostaje w repo jako wersja historyczna. Jego zależności są w osobnym pliku:
+`uv pip install --python .venv/bin/python -r requirements-legacy.txt && .venv/bin/streamlit run app.py`.
 
 ## CLI
 
+Wszystko, co pokazuje panel, jest dostępne w terminalu: czytelne tabele, a z `--json` JSON o stałych kluczach.
+Pełny opis z przykładowymi wynikami, kształtem JSON, kodami wyjścia i zmiennymi środowiskowymi: [docs/CLI.md](docs/CLI.md).
+`python -m ftf` i `python -m ftf.cli` to to samo polecenie; dotychczasowe wywołania działają bez zmian.
+
 ```bash
-python -m ftf.cli ingest <folder_zbioru> [--no-llm]   # przetwórz przypadki (folder = incydent)
-python -m ftf.cli add <plik|folder|URL|"tekst">        # nowy materiał -> decyzja + najbardziej podobne
-python -m ftf.cli campaigns                            # kampanie, wspólne ślady, duplikaty, rodziny
-python -m ftf.cli links --min 0.1                      # pary z uzasadnieniem (p = 1 − D; domyślnie 0.1)
-python -m ftf.cli export                               # data/exports: graph.html, graph.cypher, campaigns.json, links.csv
-python -m ftf.cli eval labels.csv                      # P/R/F1, B-cubed, ARI (gdy są etykiety)
+python -m ftf --help                                 # przegląd poleceń; każde ma własne --help z przykładami
+python -m ftf status                                 # która baza, ile materiałów i kampanii, konfiguracja
+
+# co jest w bazie
+python -m ftf campaigns [--min-size N]               # kampanie, najmocniejsze wspólne ślady, duplikaty, rodziny
+python -m ftf campaign C1                            # jedna kampania: materiały, który ślad łączy które, najsilniejsze pary
+python -m ftf materials [tekst] [--campaign C1]      # lista materiałów z filtrem
+python -m ftf material <id|nazwa>                    # identyfikatory z df, widoki treści, najbliższe materiały, opis
+python -m ftf search <tekst>                         # szukanie w materiałach, kampaniach i wartościach śladów
+
+# dlaczego materiały są powiązane
+python -m ftf links [--min 0.1] [--relation …]       # pary z uzasadnieniem (p = 1 − D; domyślnie p ≥ 0.1)
+python -m ftf pair <A> <B>                           # jedna para: wspólne identyfikatory, podobieństwo w widokach, obliczenie d
+python -m ftf trace <wartość> [--type fb_pixel]      # wszystkie materiały z daną domeną, pikselem, telefonem, osobą…
+python -m ftf matrix [--campaign C1] [--distance]    # macierz bliskości
+
+# jakość grupowania
+python -m ftf metrics [--methods]                    # metody grupowania (silhouette, ARI), rozkład odległości, pokrycie cech
+python -m ftf eval labels.csv                        # P/R/F1 par, B-cubed, ARI względem własnych etykiet
 python tools/evaluate.py --labels data/labels_dane.csv --no-llm   # leave-one-out + 5 wariantów syntetycznych + metryki
-python -m ftf.scheduler --once [--analyse]             # skan bibliotek reklam / listy CERT
-python -m ftf.scheduler --once --watch                 # + obserwacja kampanii: szukanie nowych materiałów po ich domenach / ID reklamodawców / produktach
+
+# nowe dane (jedyne polecenia, które zapisują do bazy)
+python -m ftf add <plik|folder|URL|"tekst"> [--dry] [--no-llm]    # nowy materiał -> decyzja open-set + dowody (--dry: bez zapisu)
+python -m ftf ingest <folder_zbioru> [--no-llm] [--force]         # import zbioru (podfolder = przypadek)
+
+# eksport, panel, słowniczek
+python -m ftf export [--out katalog] [--only links.csv]           # graph.html, graph.cypher, campaigns.json, links.csv (domyślnie data/exports)
+python -m ftf serve [--host 127.0.0.1] [--port 8765]              # panel WWW i API
+python -m ftf glossary                                            # typy śladów, widoki treści, relacje, decyzje, progi
+
+# skaner źródeł ma osobne polecenie
+python -m ftf.scheduler --once [--analyse]           # skan bibliotek reklam / listy CERT
+python -m ftf.scheduler --once --watch               # + obserwacja kampanii: szukanie nowych materiałów po ich domenach / ID reklamodawców / produktach
 ```
 
+Bazę wskazuje opcja `--store ŚCIEŻKA` albo zmienna `FTF_STORE` (domyślnie `<FTF_ROOT>/data/store/ftf.sqlite`); polecenia
+odczytu otwierają ją tylko do odczytu, a gdy pliku nie ma, mówią, jak go wskazać lub utworzyć. `FTF_LLM=none` i `--no-llm`
+wyłączają model językowy. `add <URL>` pobiera stronę z tego komputera — obowiązuje uwaga o izolacji z sekcji poniżej.
+
 ## Większy zbiór badawczy (CERT Polska + urlscan.io)
+
+> **Uwaga: pobieranie jest domyślnie wyłączone i nie należy go uruchamiać bez wyraźnej potrzeby.**
+> `tools/harvest_urlscan.py` zapisuje na dysku kopie stron oszustów: wyrenderowany HTML razem ze skryptami napisanymi
+> przez oszustów, zrzuty ekranu i listy żądań. Korpus pobrany w listopadzie 2026 został 22.11.2026 usunięty z laptopa
+> i z serwera ze względów bezpieczeństwa. Zostały tylko dane pochodne: bazy cech (poza repo) i wyniki w
+> `research/experiments/`. Skrypt odmawia działania bez flagi `--i-accept-scam-content-on-this-machine`.
+> Jeśli korpus trzeba kiedyś odtworzyć: tylko w odizolowanym środowisku (maszyna wirtualna albo kontener bez dostępu
+> do prywatnych i współdzielonych danych), bez otwierania plików `page.html` w przeglądarce, a foldery przypadków
+> należy usunąć zaraz po ekstrakcji cech. Poniższe polecenia opisują, jak korpus powstał.
 
 Zbiór organizatora to kilkanaście przypadków — za mało, by sprawdzić, które ślady naprawdę łączą kampanie, a które
 tylko tak wyglądają. `tools/harvest_urlscan.py` buduje publiczny korpus tła: bierze domeny z listy ostrzeżeń CERT Polska
@@ -98,7 +330,8 @@ odwiedzamy sami. Każda domena trafia do folderu w tym samym układzie co przypa
 echo 'URLSCAN_API_KEY=...' > .env
 
 # 2. pobranie: co 10. domena z listy CERT (rozrzut po ~6 miesiącach), do 2000 przypadków -> data/harvest/urlscan/<domena>/
-python tools/harvest_urlscan.py --limit 2000 --stride 10 --max-domains 12000
+#    NIEBEZPIECZNE i domyślnie wyłączone (patrz uwaga wyżej); bez flagi skrypt kończy pracę, nic nie pobierając
+python tools/harvest_urlscan.py --i-accept-scam-content-on-this-machine --limit 2000 --stride 10 --max-domains 12000
 
 # 3. ekstrakcja cech równolegle, do osobnej bazy (demo w data/store/ftf.sqlite zostaje nietknięte)
 FTF_STORE=data/store/ftf_harvest.sqlite python tools/ingest_parallel.py data/harvest/urlscan \
@@ -177,22 +410,58 @@ Z tokenem scheduler przeszukuje **wszystkie reklamy emitowane w UE (także niepo
 | Microsoft Ad Library API | publiczne, bez klucza | reklamy EOG |
 | Google Ads Transparency Center | publiczne (wewn. RPC) | brak wyszukiwania pełnotekstowego |
 | Meta Ad Library API | token (wyżej) | automatyczny scraping UI jest sprzeczny z ToS Meta — używamy API/yt-dlp per ID |
-| urlscan.io — historyczne skany domen z listy CERT (`tools/harvest_urlscan.py`) | klucz API (darmowe konto) | limity dzienne; tylko korpus badawczy, treści skanów nie są w repo (`data/harvest/` w `.gitignore`) |
-| Wikimedia Commons (baza twarzy) | publiczne | licencje CC/PD zapisane w `data/reference_faces/*/sources.json` |
+| urlscan.io — historyczne skany domen z listy CERT (`tools/harvest_urlscan.py`) | klucz API (darmowe konto) | **pobieranie domyślnie wyłączone** (kopie stron oszustów na dysku, patrz sekcja o zbiorze badawczym); limity dzienne; treści skanów nie są w repo (`data/harvest/` w `.gitignore`) |
+| Wikimedia Commons (baza twarzy) | publiczne | licencje CC/PD zdjęć zapisane w `data/reference_faces/*/sources.json`; w repo są tylko wektory cech (`ftf/assets/face_gallery.npz`), bez zdjęć |
 | Zbiór organizatora | tylko na potrzeby wyzwania | **nie jest publikowany w repo** (`.gitignore`) |
 
 ## Modele i biblioteki (licencje)
+Licencje bibliotek odczytane z metadanych zainstalowanych pakietów (`requirements.txt`, `requirements-legacy.txt`, `web/package.json`).
+
+**Modele**
+
 | Komponent | Licencja |
 |---|---|
 | intfloat/multilingual-e5-small (ONNX int8, Xenova) | MIT |
 | InsightFace buffalo_l (SCRFD det_10g + ArcFace w600k_r50) | kod MIT, **wagi: tylko badania niekomercyjne** |
 | RapidOCR / PP-OCRv6 | Apache-2.0 |
-| onnxruntime, OpenCV, SciPy, scikit-learn, datasketch, networkx, pyvis, streamlit, imagehash, yake, tldextract, bs4 | MIT/BSD/Apache |
-| FastAPI, React, Tailwind CSS, shadcn/ui, Radix UI, TanStack Query, Cytoscape.js (+fcose), lucide | MIT |
-| Claude (Anthropic) przez Claude Code CLI / Gemini API | usługi zewnętrzne, opcjonalne |
+
+**Biblioteki Pythona (`requirements.txt`)**
+
+| Komponent | Licencja |
+|---|---|
+| onnxruntime, datasketch, beautifulsoup4, APScheduler, FastAPI | MIT |
+| Pillow | MIT-CMU |
+| NumPy, SciPy, scikit-learn, networkx, lxml, tldextract, uvicorn | BSD-3-Clause |
+| imagehash, pyvis | BSD |
+| opencv-python-headless, tokenizers, rapidocr, requests, python-multipart, neo4j (sterownik) | Apache-2.0 |
+| dnspython | ISC |
+| yt-dlp | Unlicense |
+| tylko historyczny `app.py` (`requirements-legacy.txt`): streamlit, pandas | Apache-2.0, BSD-3-Clause |
+
+**Panel (`web/package.json`)**
+
+| Komponent | Licencja |
+|---|---|
+| React, React Router, Tailwind CSS, shadcn/ui, Radix UI, TanStack Query, Cytoscape.js (+fcose), cmdk, sonner, next-themes, tw-animate-css, Vite | MIT |
+| lucide-react | ISC |
+| class-variance-authority, TypeScript | Apache-2.0 |
+| krój Geist (`@fontsource-variable/geist`) | OFL-1.1 |
+
+**Narzędzia systemowe i usługi**
+
+| Komponent | Licencja / ograniczenia |
+|---|---|
+| ffmpeg / ffprobe (klatki z wideo) | LGPL lub GPL, zależnie od kompilacji |
+| Playwright + Chromium (opcjonalnie, render stron) | Playwright: Apache-2.0; Chromium: BSD-3-Clause i inne |
+| Neo4j Community 5 (opcjonalnie, profil `neo4j` w `docker-compose.yml`) | GPLv3 |
+| Claude (Anthropic) przez Claude Code CLI / Gemini API | usługi zewnętrzne, opcjonalne; obowiązują regulaminy dostawców |
 
 ## Struktura repo
 ```
+FUNKCJE.md             krótki opis funkcji i przebiegu pozyskiwania danych
+setup.sh               instalacja lokalna jednym poleceniem (środowisko, modele, panel, opcjonalnie zbiór demonstracyjny)
+Dockerfile, docker-compose.yml   obraz z modelami i panelem; profile: neo4j, scheduler
+requirements.txt       biblioteki Pythona; requirements-legacy.txt: tylko dla historycznego app.py
 web/                   panel analityka: React + TypeScript + Tailwind + shadcn/ui, Cytoscape.js (graf)
 ftf/api.py             FastAPI: JSON dla panelu (kampanie, pary z uzasadnieniem, graf, macierz, analiza, skaner)
 ftf/labels.py          polskie etykiety enumów, grup identyfikatorów, widoków, relacji i decyzji
@@ -202,7 +471,8 @@ ftf/capture.py         przechwycenie URL: 3 profile klienta, cloaking, Playwrigh
 ftf/web.py             URL/HTML/HAR/MHTML → wskaźniki (piksele, TDS, endpointy, DOM…)
 ftf/vision.py          pHash, OCR, QR, klatki wideo, wycięcie kreacji
 ftf/faces.py           SCRFD + ArcFace + baza referencyjna
-ftf/text.py            MinHash, maskowanie osób, e5, YAKE, kwoty
+ftf/assets/            gotowe embeddingi bazy referencyjnej twarzy (face_gallery.npz + opis w .json)
+ftf/text.py            MinHash, maskowanie osób, e5, słowa kluczowe, kwoty
 ftf/gazetteer.py       osoby / marki / media / leksykony (PL)
 ftf/llm.py             atrybuty LLM: typ oszustwa, osoby, marki, medium, produkt (claude CLI / Gemini / reguły)
 ftf/similarity.py      identyfikatory (must-link, MAX_DF), widoki treści, odległość Gowera, Link + uzasadnienie
@@ -210,7 +480,8 @@ ftf/cluster.py         średnie wiązanie: duplikaty, kampanie, rodziny; HDBSCAN
 ftf/graph.py           NetworkX, pyvis, Neo4j/Cypher
 ftf/sources.py         CERT PL, MS Ad Library, Google ATC, Meta API/yt-dlp, LinkedIn
 ftf/scheduler.py       APScheduler: skan → triage → analiza
-tools/                 pobieranie modeli, baza twarzy, ewaluacja, rozwiązanie CTF
-tools/harvest_urlscan.py, ingest_parallel.py, research_corpus.py   korpus badawczy: pobranie, równoległa ekstrakcja, badanie cech
+tools/                 pobieranie modeli, baza twarzy, ewaluacja
+tests/                 testy (python -m unittest); tests/fixtures/synthetic_dataset = zbiór demonstracyjny
+tools/harvest_urlscan.py, ingest_parallel.py, research_corpus.py   korpus badawczy: pobranie (domyślnie wyłączone, niebezpieczne), równoległa ekstrakcja, badanie cech
 research/              raporty z researchu (źródła, infrastruktura, modele, prior art)
 ```

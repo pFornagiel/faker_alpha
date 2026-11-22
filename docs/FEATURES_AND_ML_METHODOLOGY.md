@@ -12,7 +12,7 @@
 * **identifiers** — exact values an operator reuses (a tracking pixel, a domain, a backend API path). One shared,
   non-trivial identifier links two materials (deterministic record linkage [1]);
 * **content views** — seven graded similarities in [0, 1], each a standard, citable measure, averaged with equal
-  weight over the views available on both sides (Gower [13]).
+  weight over the views available on both sides (Gower [12]).
 
 Everything else we extract (persons, scam type, registrar, keywords, …) is shown to the analyst but **never used for
 linking**, because on our labelled data it is shared across different campaigns. The whole method has five tuned
@@ -87,7 +87,7 @@ unrelated Polish scam pages are very high (embedding anisotropy [8]); subtractin
 |---|---|---|
 | persons | ArcFace [11] match against a 29-person reference gallery (SCRFD detection [11]; a face is used if detector score ≥ `FACE_DET_THRESHOLD` and face side ≥ `FACE_MIN_SIDE`, identity if cosine ≥ `FACE_MATCH_THRESHOLD`) + gazetteer names in text | the same celebrities appear in many independent campaigns (hubs) |
 | `scam_type` | LLM / rules (closed enum) | shared across campaigns in the labelled data |
-| keywords | YAKE [12] | topical, not operator-specific |
+| keywords | most frequent words and two-word phrases (`text.keywords`) | topical, not operator-specific |
 | amounts | regex (`zł`, `PLN`, `EUR`) | context |
 | registrar, creation date, nameservers, IP, CERT Polska listing | RDAP, DNS, crt.sh, CERT PL list | registrar shared across campaigns; useful context for the analyst |
 | `advertiser_name`, spoofed media outlet, brands | OCR, LLM, gazetteer | context; names are not unique |
@@ -107,7 +107,7 @@ The LLM schema is reduced to `scam_type`, `impersonated_persons`, `impersonated_
 
 1. **Must-link.** Two materials are linked if they share ≥ 1 counted identifier (§ 1.1). Links are closed
    transitively with union-find → must-link components [1, 2].
-2. **Content distance** (Gower's general coefficient over the available views [13]):
+2. **Content distance** (Gower's general coefficient over the available views [12]):
 
    ```
    d(a,b) = 1 − (1/k) · Σ_{v ∈ V(a,b)} sim_v(a,b),     V(a,b) = views available on both, k = |V(a,b)|
@@ -119,7 +119,7 @@ No weights, no priors: each available view contributes exactly `sim_v / k`.
 
 ## 3. Clustering
 
-* **Algorithm**: agglomerative clustering with **average linkage** (UPGMA) on `D`, `scipy.cluster.hierarchy` [14].
+* **Algorithm**: agglomerative clustering with **average linkage** (UPGMA) on `D`, `scipy.cluster.hierarchy` [13].
   The distance between two clusters is the mean `D` over all cross pairs, so one accidental high similarity does not
   chain clusters together (unlike single linkage). Must-link components merge first (at height 0) and are never split by a cut.
 * **Campaigns** = `fcluster` of the dendrogram at `config.CAMPAIGN_CUT` (= 0.6).
@@ -129,7 +129,7 @@ No weights, no priors: each available view contributes exactly `sim_v / k`.
 * **Pair relation** (`Link.relation`): `duplicate` | `same_campaign` (shared identifier or `d ≤ CAMPAIGN_CUT`) |
   `similar` (`d ≤ FAMILY_CUT`) | `none`. Campaign membership comes from the dendrogram, so two members of one campaign
   may be connected only through other members.
-* **Baseline**: HDBSCAN [15] on the same `D` (`metric="precomputed"`), shown in the UI for comparison.
+* **Baseline**: HDBSCAN [14] on the same `D` (`metric="precomputed"`), shown in the UI for comparison.
 
 `cluster.build()` returns `links`, `duplicates`, `campaigns`, `campaign_of`, `families`, `family_of`, `hdbscan`
 (+ campaign profiles).
@@ -138,7 +138,7 @@ No weights, no priors: each available view contributes exactly `sim_v / k`.
 
 Batch clustering answers "which materials form a group" (average linkage). Assignment answers a different
 question — "is this a variant of a material we already know?" — so it uses the **nearest neighbour** (1-NN, Cover &
-Hart [19]) with a rejection threshold (open set [16]). A campaign mean would penalise a variant of a campaign that is
+Hart [18]) with a rejection threshold (open set [15]). A campaign mean would penalise a variant of a campaign that is
 held together only by identifiers while its members' content differs.
 
 1. shares a counted identifier with members of exactly one campaign → `known_campaign`; with ≥ 2 campaigns →
@@ -204,7 +204,7 @@ On the same labels the simplified method reproduces the reference grouping: ARI 
    and recompressed screenshot, swapped domain with URL IDs removed, swapped celebrity name → expected
    `known_campaign`.
 3. **Unrelated materials** → expected `new_campaign`.
-4. **With labels**: ARI [17] and B-cubed precision/recall [18] against the labels, and against the HDBSCAN baseline;
+4. **With labels**: ARI [16] and B-cubed precision/recall [17] against the labels, and against the HDBSCAN baseline;
    pairwise precision/recall/F1 from the same pair-counting table as ARI.
 
 **Limitations (honest caveats)**
@@ -234,11 +234,10 @@ On the same labels the simplified method reproduces the reference grouping: ARI 
 9. Cui, Q. et al. *Tracking Phishing Attacks Over Time*. WWW 2017. <https://doi.org/10.1145/3038912.3052654>
 10. Zauner, C. *Implementation and Benchmarking of Perceptual Image Hash Functions*. 2010. <https://phash.org/docs/pubs/thesis_zauner.pdf>
 11. Deng, J. et al. *ArcFace: Additive Angular Margin Loss for Deep Face Recognition*. CVPR 2019. <https://arxiv.org/abs/1801.07698> · Guo, J. et al. *Sample and Computation Redistribution for Efficient Face Detection* (SCRFD). <https://arxiv.org/abs/2105.04714>
-12. Campos, R. et al. *YAKE! Keyword extraction from single documents using multiple local features*. Information Sciences, 2020. <https://doi.org/10.1016/j.ins.2019.09.013>
-13. Gower, J. C. *A general coefficient of similarity and some of its properties*. Biometrics, 1971. <https://doi.org/10.2307/2528823>
-14. Müllner, D. *Modern hierarchical, agglomerative clustering algorithms*. 2011. <https://arxiv.org/abs/1109.2378>
-15. Campello, R. J. G. B. et al. *Density-Based Clustering Based on Hierarchical Density Estimates* (HDBSCAN). PAKDD 2013. <https://doi.org/10.1007/978-3-642-37456-2_14>
-16. Bendale, A., Boult, T. *Towards Open World Recognition*. CVPR 2015. <https://arxiv.org/abs/1412.5687>
-17. Hubert, L., Arabie, P. *Comparing partitions* (ARI). J. Classification, 1985. <https://doi.org/10.1007/BF01908075>
-18. Amigó, E. et al. *A comparison of extrinsic clustering evaluation metrics based on formal constraints* (B-cubed). Information Retrieval, 2009. <https://doi.org/10.1007/s10791-008-9066-8>
-19. Cover, T., Hart, P. *Nearest neighbor pattern classification*. IEEE Trans. Inf. Theory 13(1):21–27, 1967. <https://doi.org/10.1109/TIT.1967.1053964>
+12. Gower, J. C. *A general coefficient of similarity and some of its properties*. Biometrics, 1971. <https://doi.org/10.2307/2528823>
+13. Müllner, D. *Modern hierarchical, agglomerative clustering algorithms*. 2011. <https://arxiv.org/abs/1109.2378>
+14. Campello, R. J. G. B. et al. *Density-Based Clustering Based on Hierarchical Density Estimates* (HDBSCAN). PAKDD 2013. <https://doi.org/10.1007/978-3-642-37456-2_14>
+15. Bendale, A., Boult, T. *Towards Open World Recognition*. CVPR 2015. <https://arxiv.org/abs/1412.5687>
+16. Hubert, L., Arabie, P. *Comparing partitions* (ARI). J. Classification, 1985. <https://doi.org/10.1007/BF01908075>
+17. Amigó, E. et al. *A comparison of extrinsic clustering evaluation metrics based on formal constraints* (B-cubed). Information Retrieval, 2009. <https://doi.org/10.1007/s10791-008-9066-8>
+18. Cover, T., Hart, P. *Nearest neighbor pattern classification*. IEEE Trans. Inf. Theory 13(1):21–27, 1967. <https://doi.org/10.1109/TIT.1967.1053964>

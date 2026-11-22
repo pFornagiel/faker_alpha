@@ -7,6 +7,7 @@ import { api, type AnalysisResult, type Decision, type Job } from "@/lib/api"
 import { fmtP, matLabel, viewsOfExplanation } from "@/lib/format"
 import { CampaignBadge, MaterialRow, PageHeader, RelationBadge, Section, Strength } from "@/components/common"
 import { Computation, IdentifierList, ViewBars } from "@/components/evidence"
+import { DatasetImport } from "@/components/dataset-import"
 import { JobProgress, useJob } from "@/components/job"
 import { FeatureSections } from "@/components/features"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -118,6 +119,7 @@ export default function AnalysePage() {
 
       {jobId && <JobProgress job={job.data} error={job.error} />}
       {job.data?.status === "done" && job.data.result && <Result r={job.data.result} />}
+      {!jobId && <DatasetImport />}
     </div>
   )
 }

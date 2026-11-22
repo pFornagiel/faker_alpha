@@ -3,7 +3,7 @@
 Executed as 6 explicit, typed stages:
   Stage 1 (_stage_web)              - HTML/MHTML/HAR/URLs/capture-meta/ad-library-meta/saved scripts, DOM MinHash, non-CDN IPs
   Stage 2 (_stage_visual_and_faces) - keyframes, screenshots, UI filter, deduplicated page assets (pHash), SCRFD+ArcFace, OCR ad facts
-  Stage 3 (_stage_text)             - text aggregation, gazetteer, YAKE/amounts, entity-masked MinHash (page / creative), e5
+  Stage 3 (_stage_text)             - text aggregation, gazetteer, keywords/amounts, entity-masked MinHash (page / creative), e5
   Stage 4 (_stage_llm)              - structured LLM attributes (or deterministic rules when use_llm=False)
   Stage 5 (_stage_enrich)           - optional concurrent public OSINT enrichment (RDAP / DNS / crt.sh / CERT Polska)
   Stage 6 (_assemble_features)      - merge indicators, vectors and JSON-serialisable feature summary

@@ -1,0 +1,123 @@
+{
+ "about": "Mean L2-normalised ArcFace (InsightFace buffalo_l, w600k_r50) embedding per person, 512 float32. Computed from the Wikimedia Commons photos listed in data/reference_faces/<person>/sources.json; the photos themselves are not redistributed. Rebuild: tools/build_face_gallery.py --export",
+ "names": [
+  "Adam Glapiński",
+  "Andrzej Duda",
+  "Anna Lewandowska",
+  "Cristiano Ronaldo",
+  "Daniel Obajtek",
+  "Donald Tusk",
+  "Dorota Wellman",
+  "Elon Musk",
+  "Ewa Drzyzga",
+  "Grzegorz Braun",
+  "Izabela Leszczyna",
+  "Karol Nawrocki",
+  "Krzysztof Bosak",
+  "Krzysztof Ibisz",
+  "Krzysztof Stanowski",
+  "Kuba Wojewódzki",
+  "Marcin Prokop",
+  "Mateusz Morawiecki",
+  "Monika Olejnik",
+  "Paweł Grzesiowski",
+  "Piotr Kraśko",
+  "Rafał Brzoska",
+  "Rafał Trzaskowski",
+  "Robert Lewandowski",
+  "Sebastian Kulczyk",
+  "Szymon Hołownia",
+  "Sławomir Mentzen",
+  "Tomasz Sekielski",
+  "Wojciech Cejrowski"
+ ],
+ "meta": {
+  "Adam Glapiński": {
+   "n_images": 4
+  },
+  "Andrzej Duda": {
+   "n_images": 4
+  },
+  "Anna Lewandowska": {
+   "n_images": 4
+  },
+  "Cristiano Ronaldo": {
+   "n_images": 4
+  },
+  "Daniel Obajtek": {
+   "n_images": 1
+  },
+  "Donald Tusk": {
+   "n_images": 4
+  },
+  "Dorota Wellman": {
+   "n_images": 4
+  },
+  "Elon Musk": {
+   "n_images": 4
+  },
+  "Ewa Drzyzga": {
+   "n_images": 4
+  },
+  "Grzegorz Braun": {
+   "n_images": 4
+  },
+  "Izabela Leszczyna": {
+   "n_images": 4
+  },
+  "Karol Nawrocki": {
+   "n_images": 4
+  },
+  "Krzysztof Bosak": {
+   "n_images": 4
+  },
+  "Krzysztof Ibisz": {
+   "n_images": 4
+  },
+  "Krzysztof Stanowski": {
+   "n_images": 2
+  },
+  "Kuba Wojewódzki": {
+   "n_images": 3
+  },
+  "Marcin Prokop": {
+   "n_images": 4
+  },
+  "Mateusz Morawiecki": {
+   "n_images": 4
+  },
+  "Monika Olejnik": {
+   "n_images": 4
+  },
+  "Paweł Grzesiowski": {
+   "n_images": 2
+  },
+  "Piotr Kraśko": {
+   "n_images": 4
+  },
+  "Rafał Brzoska": {
+   "n_images": 4
+  },
+  "Rafał Trzaskowski": {
+   "n_images": 4
+  },
+  "Robert Lewandowski": {
+   "n_images": 4
+  },
+  "Sebastian Kulczyk": {
+   "n_images": 3
+  },
+  "Szymon Hołownia": {
+   "n_images": 4
+  },
+  "Sławomir Mentzen": {
+   "n_images": 4
+  },
+  "Tomasz Sekielski": {
+   "n_images": 4
+  },
+  "Wojciech Cejrowski": {
+   "n_images": 4
+  }
+ }
+}

@@ -18,6 +18,11 @@ STORE_PATH = Path(os.environ.get("FTF_STORE", DATA / "store" / "ftf.sqlite"))
 ARTIFACTS = DATA / "artifacts"          # extracted frames, crops, captures
 REFERENCE_FACES = DATA / "reference_faces"
 EXPORTS = DATA / "exports"
+# Shipped with the code (not under FTF_ROOT/data, so a fresh clone and the Docker image have them):
+_PKG = Path(__file__).resolve().parent
+FACE_GALLERY_NPZ = _PKG / "assets" / "face_gallery.npz"      # precomputed mean ArcFace embedding per person
+FACE_GALLERY_JSON = _PKG / "assets" / "face_gallery.json"    # names + provenance of that file
+DEMO_DATASET = _PKG.parent / "tests" / "fixtures" / "synthetic_dataset"   # 8 invented cases (`python -m ftf demo`)
 
 for _p in (CACHE, ARTIFACTS, EXPORTS, STORE_PATH.parent):
     _p.mkdir(parents=True, exist_ok=True)

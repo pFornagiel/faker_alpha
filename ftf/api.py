@@ -655,7 +655,8 @@ _EXTRA_HINT = {"images": "obrazy ze stron docelowych — porównywane w widoku �
                "descriptive": "wyświetlane analitykowi, nigdy nie służą do łączenia"}
 
 
-def _indicator_groups(f: dict, corpus_df: Counter, items: dict, cl: dict) -> list[dict]:
+def _indicator_groups(f: dict, corpus_df: Counter, items: dict, cl: dict, limit: int | None = 12) -> list[dict]:
+    """`limit` caps the values listed per identifier type (the panel shows 12); None lists all (CLI --all-values)."""
     by_group = defaultdict(list)
     for t, vals in f.get("indicators", {}).items():
         if t not in DISPLAY_TYPES:
@@ -664,8 +665,9 @@ def _indicator_groups(f: dict, corpus_df: Counter, items: dict, cl: dict) -> lis
         by_group[_group_of(t)].append({
             "type": t, "type_label": signal_label(t),
             "values": [{"value": v, "display": display_value(t, v, cl), "df": corpus_df.get((t, v), 1),
-                        "thumb": (thumbs_for([v], [f]) or [None])[0] if t == "asset_phash" else None} for v in vals[:12]],
-            "more": max(0, len(vals) - 12)})
+                        "thumb": (thumbs_for([v], [f]) or [None])[0] if t == "asset_phash" else None}
+                       for v in (vals if limit is None else vals[:limit])],
+            "more": 0 if limit is None else max(0, len(vals) - limit)})
     return [{"group": g, "label": _group_label(g), "linking": g in GROUP_ORDER, "hint": GROUP_HINT.get(g) or _EXTRA_HINT[g],
              "items": sorted(by_group[g], key=lambda x: x["type_label"])}
             for g in sorted(by_group, key=_group_rank)]
@@ -1252,7 +1254,6 @@ REFERENCES = [
      "https://phash.org/docs/pubs/thesis_zauner.pdf"),
     ("deng2019", "Deng et al., ArcFace, CVPR 2019", "https://arxiv.org/abs/1801.07698"),
     ("guo2021", "Guo et al., SCRFD, 2021", "https://arxiv.org/abs/2105.04714"),
-    ("campos2020", "Campos et al., YAKE!, Information Sciences 2020", "https://doi.org/10.1016/j.ins.2019.09.013"),
     ("gower1971", "Gower, A general coefficient of similarity, Biometrics 1971", "https://doi.org/10.2307/2528823"),
     ("mullner2011", "Müllner, Modern hierarchical, agglomerative clustering algorithms, 2011", "https://arxiv.org/abs/1109.2378"),
     ("campello2013", "Campello et al., HDBSCAN, PAKDD 2013", "https://doi.org/10.1007/978-3-642-37456-2_14"),
@@ -1289,9 +1290,9 @@ def method_steps() -> list[dict]:
                  "materiały tworzą grupę”, przypisanie — „czy to wariant znanego materiału”, stąd najbliższy sąsiad. "
                  f"Duplikat: ten sam plik, to samo ID reklamy lub d ≤ {c.DUPLICATE_CUT}.", "refs": ["cover1967", "bendale2015"]},
         {"step": 5, "title": "Cechy opisowe",
-         "text": "Osoby (ArcFace + gazetteer), typ oszustwa, słowa kluczowe YAKE, kwoty, rejestrator / data utworzenia / NS / "
+         "text": "Osoby (ArcFace + gazetteer), typ oszustwa, słowa kluczowe, kwoty, rejestrator / data utworzenia / NS / "
                  "IP / lista CERT Polska, reklamodawca, podszyte medium i marki — wyświetlane analitykowi, nigdy nie łączą.",
-         "refs": ["deng2019", "guo2021", "campos2020"]},
+         "refs": ["deng2019", "guo2021"]},
     ]
 
 
@@ -1460,6 +1461,8 @@ def data_status():
             "last_added": max(((f.get("_material") or {}).get("created_at") or "" for f, _ in items.values()), default=None),
             "store": str(store.relative_to(config.ROOT)) if store.is_relative_to(config.ROOT) else str(store),
             "default_dataset": str((config.DATA / "organizer" / "dane").relative_to(config.ROOT)),
+            "default_dataset_exists": (config.DATA / "organizer" / "dane").is_dir(),
+            "demo_available": config.DEMO_DATASET.is_dir(),
             "llm_backend": config.LLM_BACKEND, "llm_backend_label": BACKEND_PL.get(config.LLM_BACKEND, config.LLM_BACKEND),
             "llm_available": {"claude_cli": bool(shutil.which("claude")), "gemini": bool(os.environ.get("GEMINI_API_KEY"))},
             "neo4j": bool(os.environ.get("NEO4J_URI")),
@@ -1471,7 +1474,11 @@ def load_dataset(req: DatasetReq):
     p = Path(req.path)
     p = p if p.is_absolute() else config.ROOT / p
     if not p.is_dir():
-        raise HTTPException(400, f"Folder nie istnieje: {req.path}")
+        raise HTTPException(400, f"Folder nie istnieje: {req.path}. Ścieżka jest liczona na komputerze, na którym działa "
+                                 f"serwer (w Dockerze: wewnątrz kontenera, katalog ./data to /app/data), względem {config.ROOT}.")
+    if not any(c.is_dir() for c in p.iterdir()):
+        raise HTTPException(400, f"Folder {req.path} nie ma podfolderów. Każdy podfolder zbioru to jeden przypadek; "
+                                 "pojedynczy plik dodaj na stronie „Analizuj materiał”.")
 
     def work(progress):
         n = eng().add_dataset(p, use_llm=req.use_llm, progress=progress, force=req.force)
@@ -1481,6 +1488,23 @@ def load_dataset(req: DatasetReq):
         return {"n": n, "campaigns": len(cl["campaigns"])}
 
     return submit("dataset", f"Import zbioru: {req.path}", work, {"path": req.path, "use_llm": req.use_llm, "force": req.force})
+
+
+@app.post("/api/demo")
+def load_demo():
+    """Import the synthetic dataset shipped with the code (invented cases: no LLM, no RDAP / DNS / crt.sh lookups)."""
+    p = config.DEMO_DATASET
+    if not p.is_dir():
+        raise HTTPException(404, "Zbiór demonstracyjny nie jest dołączony do tej instalacji (tests/fixtures/synthetic_dataset).")
+
+    def work(progress):
+        n = eng().add_dataset(p, use_llm=False, progress=progress, enrich_online=False)
+        progress("Przeliczanie kampanii…")
+        cl = eng().clustering(refresh=True)
+        eng().store.log("dataset", {"path": "zbiór demonstracyjny", "n": n, "campaigns": len(cl["campaigns"])})
+        return {"n": n, "campaigns": len(cl["campaigns"])}
+
+    return submit("dataset", "Import zbioru demonstracyjnego", work, {"path": "demo", "use_llm": False, "force": False})
 
 
 @app.post("/api/recluster")

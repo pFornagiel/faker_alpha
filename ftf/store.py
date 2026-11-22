@@ -26,8 +26,16 @@ def _blob_to_np(b: bytes):
 
 
 class Store:
-    def __init__(self, path: str | Path = config.STORE_PATH):
+    def __init__(self, path: str | Path = config.STORE_PATH, readonly: bool = False):
+        """`readonly=True` opens an existing store without creating the file, changing its journal mode or creating
+        tables (SQLite `mode=ro`); every write then fails with sqlite3.OperationalError. Used by the read commands of
+        the CLI, so that looking at a store another process serves can never modify it."""
         self.path = Path(path)
+        self.readonly = readonly
+        self._cache: dict[str, tuple[dict, dict]] | None = None
+        if readonly:
+            self.db = sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True, check_same_thread=False)
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.path, check_same_thread=False)
         self.db.execute("PRAGMA journal_mode=WAL")
@@ -38,7 +46,6 @@ class Store:
         CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);
         CREATE TABLE IF NOT EXISTS events(ts TEXT DEFAULT CURRENT_TIMESTAMP, kind TEXT, payload TEXT);
         """)
-        self._cache: dict[str, tuple[dict, dict]] | None = None
 
     # ------------------------------------------------------------------ materials
     def upsert(self, m: Material, features: dict, vectors: dict) -> None:

@@ -48,7 +48,7 @@ Every suspicious ad, landing page, archive, screenshot, video, URL, or free-text
 |   Stage 2 (_stage_visual_and_faces) Video keyframes (anti-black-frame),      |
 |                                     creative crop, UI filter, pHash,         |
 |                                     RapidOCR, QR, SCRFD+ArcFace              |
-|   Stage 3 (_stage_text)             Polish folding, gazetteer, YAKE/amounts, |
+|   Stage 3 (_stage_text)             folding, gazetteer, keywords, amounts,   |
 |                                     masked MinHash (page / creative), e5     |
 |   Stage 4 (_stage_llm)              Small closed-enum JSON (Claude CLI /     |
 |                                     Gemini / rule fallback) + cache          |
@@ -169,7 +169,7 @@ only) is defined in [`FEATURES_AND_ML_METHODOLOGY.md`](FEATURES_AND_ML_METHODOLO
   - **Gazetteer extraction** (`gazetteer.py`): Polish impersonated persons (word-boundary inflected regexes, with disambiguation so `"Agnieszka Lewandowska"` or `"Tomasz Lewandowski"` does not trigger `"Robert Lewandowski"`), spoofed brands, spoofed media outlets — all descriptive.
   - **`text` and `ocr` views**: two 128-permutation MinHash signatures over 4-word shingles, both on entity-masked text (`gazetteer.mask_entities()` replaces person names with `<per>`): `text.minhash_masked` over the landing-page text (titles + page text) and `text.minhash_ocr_masked` over the creative text (OCR of screenshots / keyframes + free text + ad-library metadata). Materials stored before the second field existed get it computed from the stored `text.ocr_text` at comparison time.
   - **`semantic` view** (`text.embed_text`): `multilingual-e5-small` (384-d ONNX int8) over up to 3 balanced 220-word windows (lead, middle, end), each L2-normalized before averaging; stored as vector kind `"text"`.
-  - **Keywords & amounts**: Polish `YAKE` top-15 keywords + currency amounts (`zł`, `PLN`, `EUR`, `USD`) — descriptive.
+  - **Keywords & amounts**: top-15 frequent words and two-word phrases (`text.keywords`) + currency amounts (`zł`, `PLN`, `EUR`, `USD`) — descriptive.
 - **Output**: `TextStage` (`text_summary`, `ocr_text`, `meta_text`, `text_vecs`).
 - **Incomplete-data resilience**: Short texts (`< 6` tokens) produce no MinHash (view unavailable). Without page text the `text` view is simply unavailable (a creative-only material is compared OCR-to-OCR through `ocr`); the e5 embedding then falls back to all available text (OCR + ad-library metadata + free text).
 

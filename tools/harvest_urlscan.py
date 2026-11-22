@@ -1,4 +1,18 @@
-"""Harvest historical urlscan.io scans of domains from the CERT Polska warning list into case folders.
+"""DANGEROUS, DISABLED BY DEFAULT. Do not run this unless the project owner explicitly asks for it.
+
+This tool writes copies of scam and phishing pages to disk: the rendered HTML together with the scammers' own
+JavaScript (`page.html`), screenshots, and full request lists with third-party URLs. That content is written by
+criminals. Opening a `page.html` in a browser runs their scripts, and a folder with thousands of phishing-kit
+copies is the kind of material that security tooling and the policies of shared machines object to.
+The corpus harvested in November 2026 was deleted from the laptop and from the compute server on 2026-11-22
+for security reasons. Only derived data was kept (feature stores, `research/experiments/`).
+
+`main()` refuses to run without `--i-accept-scam-content-on-this-machine`. If the corpus ever has to be rebuilt:
+use an isolated machine (a VM or a container with no access to personal or shared data), never open the saved
+pages in a browser, and delete the case folders as soon as feature extraction is done.
+Importing the pure helpers (`dns_ssl`, `to_har`) is safe: they do no network or disk access.
+
+What it does: harvest historical urlscan.io scans of domains from the CERT Polska warning list into case folders.
 
 Why: scam landing pages live for hours, but urlscan.io keeps the scan made while they were alive (rendered DOM,
 screenshot, every request with its response hash, IP/ASN, TLS data). This turns the label-free CERT list
@@ -7,8 +21,8 @@ screenshot, every request with its response hash, IP/ASN, TLS data). This turns 
 Only the documented public API is used, rate-limit headers are honoured, and the run is resumable.
 Works without a key (lower quotas); set URLSCAN_API_KEY to raise them.
 
-    python tools/harvest_urlscan.py --limit 2000 --stride 35     # spread over the whole 6-month list
-    python tools/harvest_urlscan.py --limit 500 --include-phishing
+    python tools/harvest_urlscan.py --i-accept-scam-content-on-this-machine --limit 2000 --stride 35
+    python tools/harvest_urlscan.py --i-accept-scam-content-on-this-machine --limit 500 --include-phishing
 
 Per case (folder name = listed domain):
     page.html              rendered DOM, prefixed with a Chrome-style "saved from url" marker
@@ -34,6 +48,19 @@ ROOT = Path(__file__).resolve().parents[1]
 CERT_URL = "https://hole.cert.pl/domains/v2/domains.json"
 API = "https://urlscan.io"
 UA = "scam-campaign-research/0.1 (python-requests)"
+
+ACCEPT_FLAG = "--i-accept-scam-content-on-this-machine"
+REFUSAL = f"""\
+harvest_urlscan.py is disabled by default and did not run. Nothing was downloaded.
+
+It saves copies of scam and phishing pages to disk (rendered HTML with the scammers' JavaScript, screenshots,
+request lists). The corpus harvested in November 2026 was deleted from every machine on 2026-11-22 for
+security reasons, and it should not be recreated unless the project owner explicitly asks for it.
+
+If that is the case: run it only on an isolated machine (VM or container without personal or shared data),
+never open the saved page.html files in a browser, delete the case folders after feature extraction,
+and pass {ACCEPT_FLAG}.
+"""
 
 # The CERT list mixes ad-driven scams with marketplace / courier / bank credential phishing. Those are a
 # different phenomenon (no ad, no celebrity, no landing-page funnel), so they are skipped by default.
@@ -255,7 +282,12 @@ def main() -> int:
     ap.add_argument("--batch", type=int, default=15, help="domains per search query")
     ap.add_argument("--out", default=str(ROOT / "data" / "harvest" / "urlscan"))
     ap.add_argument("--include-phishing", action="store_true", help="keep marketplace/courier/bank phishing domains")
+    ap.add_argument(ACCEPT_FLAG, dest="accept", action="store_true",
+                    help="required: confirms that copies of scam pages may be stored on this machine (see the top of this file)")
     a = ap.parse_args()
+    if not a.accept:
+        print(REFUSAL, file=sys.stderr)
+        return 2
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

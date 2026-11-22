@@ -1,0 +1,9 @@
+# SYNTHETIC reference labels for tests/fixtures/synthetic_dataset (material name, campaign label)
+syn-01-kardivix,kardivix
+syn-02-kardivix-bis,kardivix
+syn-03-kardivix-news,kardivix
+syn-04-fundusz,zloty-fundusz
+syn-05-fundusz-tekst,zloty-fundusz
+syn-06-loteria,loteria
+syn-07-kasyno,kasyno
+syn-08-krypto,krypto-akademia

@@ -222,6 +222,20 @@ class TestTextFeatures(unittest.TestCase):
         jac = text.jaccard_sig(s1, s2)
         self.assertGreaterEqual(jac, 0.70)
 
+    def test_keywords_rank_repeated_phrases_and_names_and_skip_stop_words(self):
+        ad = ("Złoty Fundusz to państwowy program. Złoty fundusz gwarantuje zysk bez ryzyka. "
+              "Zapisz się do 12.05, a Jan Kowalski z Elbląga już zarabia. Złoty fundusz czeka na Ciebie "
+              "na zloty-fundusz.example i https://www.fundusz.example/rejestracja.")
+        kw = text.keywords(ad)
+        self.assertEqual(kw[0], "złoty fundusz")
+        self.assertIn("jan kowalski", kw)
+        self.assertNotIn("złoty", kw)        # every occurrence is inside the chosen phrase
+        self.assertNotIn("fundusz", kw)
+        for word in ("bez", "się", "12.05", "już", "na", "example", "zloty-fundusz", "https", "rejestracja"):
+            self.assertNotIn(word, kw)
+        self.assertEqual(text.keywords(ad, n=3), kw[:3])
+        self.assertEqual(text.keywords("za krótki tekst"), [])
+
 
 def _sig(shared: int, seed: int) -> list[int]:
     """MinHash-like signature: the first `shared` of 128 slots equal across seeds -> Jaccard = shared / 128."""

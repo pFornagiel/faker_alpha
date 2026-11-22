@@ -12,7 +12,7 @@
 * **identyfikatory** — dokładne wartości, które operator używa ponownie (piksel, domena, ścieżka API backendu).
   Jeden wspólny, nietrywialny identyfikator łączy dwa materiały (deterministyczne łączenie rekordów [1]);
 * **widoki treści** — siedem podobieństw w [0, 1], każde standardową miarą z literatury, uśrednionych z równą wagą
-  po widokach dostępnych po obu stronach (współczynnik Gowera [13]).
+  po widokach dostępnych po obu stronach (współczynnik Gowera [12]).
 
 Pozostałe cechy (osoby, typ oszustwa, rejestrator, słowa kluczowe…) są pokazywane analitykowi, ale **nie łączą
 materiałów**, bo w naszych oznaczonych danych powtarzają się w różnych kampaniach. Cała metoda ma pięć stałych:
@@ -96,7 +96,7 @@ surowe cosinusy e5 między niepowiązanymi polskimi stronami scamowymi są bardz
 |---|---|---|
 | osoby | ArcFace [11] vs baza referencyjna 29 osób (detekcja SCRFD [11]; twarz użyta, gdy wynik detektora ≥ `FACE_DET_THRESHOLD` i bok ≥ `FACE_MIN_SIDE`; tożsamość, gdy cosinus ≥ `FACE_MATCH_THRESHOLD`) + nazwiska z gazetteera | ci sami celebryci są w wielu niezależnych kampaniach (huby) |
 | `scam_type` | LLM / reguły (zamknięty słownik) | wspólny dla różnych kampanii |
-| słowa kluczowe | YAKE [12] | tematyka, nie operator |
+| słowa kluczowe | najczęstsze słowa i frazy dwuwyrazowe (`text.keywords`) | tematyka, nie operator |
 | kwoty | regex (`zł`, `PLN`, `EUR`) | kontekst |
 | rejestrator, data utworzenia, serwery NS, IP, obecność na liście CERT Polska | RDAP, DNS, crt.sh, lista CERT PL | rejestrator wspólny dla różnych kampanii; kontekst dla analityka |
 | nazwa reklamodawcy, podszyte medium, marki | OCR, LLM, gazetteer | kontekst; nazwy nie są unikalne |
@@ -111,7 +111,7 @@ Do łączenia trafia wyłącznie nazwa produktu.
 
 1. **Must-link**: para dzieląca ≥ 1 liczony identyfikator jest połączona; domknięcie przechodnie union-find →
    składowe must-link [1, 2].
-2. **Odległość treściowa** (Gower [13], średnia po dostępnych widokach):
+2. **Odległość treściowa** (Gower [12], średnia po dostępnych widokach):
    ```
    d(a,b) = 1 − (1/k) · Σ_{v ∈ V(a,b)} sim_v(a,b),   V(a,b) = widoki dostępne po obu stronach, k = |V(a,b)|
    ```
@@ -122,7 +122,7 @@ Brak wag i priorytetów: każdy dostępny widok wnosi dokładnie `sim_v / k`.
 
 ## 3. Grupowanie (`ftf/cluster.py`)
 
-* **Algorytm**: aglomeracyjne klastrowanie ze **średnim wiązaniem** (UPGMA) na `D`, `scipy.cluster.hierarchy` [14].
+* **Algorytm**: aglomeracyjne klastrowanie ze **średnim wiązaniem** (UPGMA) na `D`, `scipy.cluster.hierarchy` [13].
   Odległość dwóch klastrów to średnia `D` po wszystkich parach między nimi — pojedyncze przypadkowe podobieństwo nie
   skleja klastrów (w przeciwieństwie do single linkage). Składowe must-link łączą się najpierw (na wysokości 0) i żadne cięcie ich nie dzieli.
 * **Kampanie** = cięcie dendrogramu (`fcluster`) na wysokości `config.CAMPAIGN_CUT` (= 0,6).
@@ -132,13 +132,13 @@ Brak wag i priorytetów: każdy dostępny widok wnosi dokładnie `sim_v / k`.
 * **Relacja pary** (`Link.relation`): `duplicate` | `same_campaign` (wspólny identyfikator lub `d ≤ CAMPAIGN_CUT`) |
   `similar` (`d ≤ FAMILY_CUT`) | `none`. Przynależność do kampanii wynika z dendrogramu, więc dwa materiały jednej
   kampanii mogą być połączone tylko pośrednio.
-* **Baseline**: HDBSCAN [15] na tej samej macierzy `D`, pokazywany w UI do porównania.
+* **Baseline**: HDBSCAN [14] na tej samej macierzy `D`, pokazywany w UI do porównania.
 
 ## 4. Nowy materiał — przypisanie otwarte (`cluster.assign`)
 
 Grupowanie wsadowe odpowiada na pytanie „które materiały tworzą grupę” (średnie wiązanie). Przypisanie nowego
 materiału odpowiada na inne pytanie — „czy to wariant materiału, który już znamy?” — dlatego używa **najbliższego
-sąsiada** (1-NN [19]) z progiem odrzucenia (zbiór otwarty [16]). Średnia odległość do całej kampanii karałaby wariant
+sąsiada** (1-NN [18]) z progiem odrzucenia (zbiór otwarty [15]). Średnia odległość do całej kampanii karałaby wariant
 kampanii, którą spajają tylko identyfikatory, a której materiały mają różną treść.
 
 1. wspólny identyfikator z materiałami dokładnie jednej kampanii → `known_campaign`; z ≥ 2 kampaniami →
@@ -190,7 +190,7 @@ Protokół zgodny z planem testów organizatora:
    przycięty i przekompresowany, podmieniona domena z usuniętymi ID w URL, podmienione nazwisko → oczekiwane
    `known_campaign`.
 3. **Materiały niepowiązane** → oczekiwane `new_campaign`.
-4. **Z etykietami**: ARI [17] i B-cubed P/R [18] względem etykiet oraz baseline'u HDBSCAN; pairwise P/R/F1 z tej
+4. **Z etykietami**: ARI [16] i B-cubed P/R [17] względem etykiet oraz baseline'u HDBSCAN; pairwise P/R/F1 z tej
    samej tablicy zliczeń par co ARI.
 
 **Ograniczenia**
@@ -205,7 +205,7 @@ Protokół zgodny z planem testów organizatora:
   oznaczonych danych.
 * Cloaking: część stron pokazuje treść tylko polskim IP mobilnym — zapisujemy to, co widział crawler, i profil,
   który to zobaczył.
-* Licencje: wagi InsightFace (SCRFD/ArcFace) tylko do badań niekomercyjnych; pozostałe modele MIT/Apache-2.0.
+* Licencje: wagi InsightFace (SCRFD/ArcFace) tylko do badań niekomercyjnych; pozostałe modele MIT/Apache-2.0. Pełna lista licencji jest w README.
 
 ## 8. Literatura
 
@@ -220,11 +220,10 @@ Protokół zgodny z planem testów organizatora:
 9. Cui i in., *Tracking Phishing Attacks Over Time*, WWW 2017. <https://doi.org/10.1145/3038912.3052654>
 10. Zauner, *Implementation and Benchmarking of Perceptual Image Hash Functions*, 2010. <https://phash.org/docs/pubs/thesis_zauner.pdf>
 11. Deng i in., *ArcFace*, CVPR 2019. <https://arxiv.org/abs/1801.07698> · Guo i in., SCRFD. <https://arxiv.org/abs/2105.04714>
-12. Campos i in., *YAKE!*, Information Sciences 2020. <https://doi.org/10.1016/j.ins.2019.09.013>
-13. Gower, *A general coefficient of similarity*, Biometrics 1971. <https://doi.org/10.2307/2528823>
-14. Müllner, *Modern hierarchical, agglomerative clustering algorithms*, 2011. <https://arxiv.org/abs/1109.2378>
-15. Campello i in., HDBSCAN, PAKDD 2013. <https://doi.org/10.1007/978-3-642-37456-2_14>
-16. Bendale, Boult, *Towards Open World Recognition*, CVPR 2015. <https://arxiv.org/abs/1412.5687>
-17. Hubert, Arabie, *Comparing partitions* (ARI), 1985. <https://doi.org/10.1007/BF01908075>
-18. Amigó i in., B-cubed, Information Retrieval 2009. <https://doi.org/10.1007/s10791-008-9066-8>
-19. Cover, Hart, *Nearest neighbor pattern classification*, IEEE Trans. Inf. Theory 13(1):21–27, 1967. <https://doi.org/10.1109/TIT.1967.1053964>
+12. Gower, *A general coefficient of similarity*, Biometrics 1971. <https://doi.org/10.2307/2528823>
+13. Müllner, *Modern hierarchical, agglomerative clustering algorithms*, 2011. <https://arxiv.org/abs/1109.2378>
+14. Campello i in., HDBSCAN, PAKDD 2013. <https://doi.org/10.1007/978-3-642-37456-2_14>
+15. Bendale, Boult, *Towards Open World Recognition*, CVPR 2015. <https://arxiv.org/abs/1412.5687>
+16. Hubert, Arabie, *Comparing partitions* (ARI), 1985. <https://doi.org/10.1007/BF01908075>
+17. Amigó i in., B-cubed, Information Retrieval 2009. <https://doi.org/10.1007/s10791-008-9066-8>
+18. Cover, Hart, *Nearest neighbor pattern classification*, IEEE Trans. Inf. Theory 13(1):21–27, 1967. <https://doi.org/10.1109/TIT.1967.1053964>

@@ -164,9 +164,26 @@ def faces_in_image(im: Image.Image, min_side: int = config.FACE_MIN_SIDE) -> lis
 
 
 # ----------------------------------------------------------------------------- reference gallery
-@lru_cache(maxsize=1)
-def gallery() -> tuple[list[str], np.ndarray, dict]:
-    """Reference DB: data/reference_faces/<Person Name>/*.jpg -> mean ArcFace embedding per person.
+def shipped_gallery() -> tuple[list[str], np.ndarray, dict]:
+    """Precomputed reference embeddings shipped with the code (ftf/assets/face_gallery.*): one mean ArcFace vector
+    per person, made by `tools/build_face_gallery.py --export`. No photos and no network are needed to use them."""
+    try:
+        j = json.loads(config.FACE_GALLERY_JSON.read_text(encoding="utf-8"))
+        with np.load(config.FACE_GALLERY_NPZ, allow_pickle=False) as d:
+            vecs = d["vecs"].astype(np.float32)
+        names = list(j["names"])
+        if vecs.ndim != 2 or vecs.shape != (len(names), 512):
+            raise ValueError(f"shape {vecs.shape} for {len(names)} names")
+        return names, vecs, j.get("meta", {})
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        log.warning("shipped face gallery unreadable: %s", exc)
+    return [], np.zeros((0, 512), np.float32), {}
+
+
+def _photo_gallery() -> tuple[list[str], np.ndarray, dict]:
+    """data/reference_faces/<Person Name>/*.jpg -> mean ArcFace embedding per person.
 
     Cached safely as numeric .npz (allow_pickle=False) + JSON metadata sidecar (with mtime/size sig).
     """
@@ -175,6 +192,8 @@ def gallery() -> tuple[list[str], np.ndarray, dict]:
     cache_npz = root / "_gallery_cache.npz"
     cache_json = root / "_gallery_cache.json"
     files = sorted(p for p in root.glob("*/*") if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"))
+    if not files:
+        return [], np.zeros((0, 512), np.float32), {}
     sig = [[str(p.relative_to(root)), p.stat().st_size, int(p.stat().st_mtime_ns)] for p in files]
 
     if cache_npz.exists() and cache_json.exists():
@@ -200,13 +219,33 @@ def gallery() -> tuple[list[str], np.ndarray, dict]:
         vecs.append((m / (np.linalg.norm(m) + 1e-9)).astype(np.float32))
         meta[name] = {"n_images": len(vs)}
     arr = np.stack(vecs) if vecs else np.zeros((0, 512), np.float32)
-    if files:
-        np.savez(cache_npz, vecs=arr)
-        cache_json.write_text(
-            json.dumps({"names": names, "meta": meta, "sig": sig}, ensure_ascii=False, indent=1),
-            encoding="utf-8",
-        )
+    np.savez(cache_npz, vecs=arr)
+    cache_json.write_text(
+        json.dumps({"names": names, "meta": meta, "sig": sig}, ensure_ascii=False, indent=1),
+        encoding="utf-8",
+    )
     return names, arr, meta
+
+
+@lru_cache(maxsize=1)
+def gallery() -> tuple[list[str], np.ndarray, dict]:
+    """Reference DB = the shipped embeddings plus the local photos in data/reference_faces/.
+
+    A person with local photos uses the embedding computed from them; everyone else comes from the shipped file.
+    So the tool identifies the reference persons right after installation, and `tools/build_face_gallery.py`
+    is only needed to add persons or rebuild the file (a partial photo download never shrinks the gallery).
+    """
+    names, vecs, meta = _photo_gallery()
+    names, rows, meta = list(names), list(vecs), dict(meta)
+    s_names, s_vecs, s_meta = shipped_gallery()
+    for i, name in enumerate(s_names):
+        if name not in meta and name not in names:
+            names.append(name)
+            rows.append(s_vecs[i])
+            meta[name] = {**s_meta.get(name, {}), "shipped": True}
+    order = sorted(range(len(names)), key=lambda i: names[i])
+    arr = np.stack([rows[i] for i in order]).astype(np.float32) if order else np.zeros((0, 512), np.float32)
+    return [names[i] for i in order], arr, meta
 
 
 def identify(vec: np.ndarray, thresh: float = config.FACE_MATCH_THRESHOLD) -> tuple[str | None, float]:

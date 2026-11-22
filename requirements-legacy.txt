@@ -1,0 +1,5 @@
+# Only for the previous Streamlit demonstrator (app.py), kept in the repo as a historical version.
+# The analyst panel, the CLI and the Docker image do not need these.
+#   uv pip install --python .venv/bin/python -r requirements-legacy.txt && .venv/bin/streamlit run app.py
+pandas>=2.2
+streamlit>=1.40

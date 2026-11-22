@@ -4,6 +4,7 @@ import type { CampaignCard, MetricsOverview, Overview } from "@/lib/api"
 import { CAMPAIGN_CUT, fmtP, matLabel, plural, useApi } from "@/lib/format"
 import { DistanceHistogramChart, SignalAttributionChart } from "@/components/charts"
 import { CampaignBadge, CampaignDot, ErrorState, Loading, PageHeader, Section, Stats, Thumb } from "@/components/common"
+import { DatasetImport } from "@/components/dataset-import"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 
@@ -15,15 +16,18 @@ export default function OverviewPage() {
   if (error || !data) return <ErrorState error={error} />
   if (!data.n_materials) {
     return (
-      <Empty className="border bg-card py-16">
-        <EmptyHeader>
-          <EmptyTitle className="text-xl">W bazie nie ma jeszcze materiałów</EmptyTitle>
-          <EmptyDescription className="text-base">
-            Wczytaj zbiór przypadków poleceniem <code>python -m ftf.cli ingest &lt;folder&gt;</code> albo przeanalizuj pierwszy materiał.
-          </EmptyDescription>
-        </EmptyHeader>
-        <Button asChild size="lg"><Link to="/analyse">Analizuj materiał</Link></Button>
-      </Empty>
+      <div className="space-y-6">
+        <Empty className="border bg-card py-12">
+          <EmptyHeader>
+            <EmptyTitle className="text-xl">W bazie nie ma jeszcze materiałów</EmptyTitle>
+            <EmptyDescription className="text-base">
+              Wczytaj poniżej zbiór przypadków albo zbiór demonstracyjny. Możesz też przeanalizować pojedynczy materiał: adres URL, plik lub tekst.
+            </EmptyDescription>
+          </EmptyHeader>
+          <Button asChild variant="outline"><Link to="/analyse">Analizuj pojedynczy materiał</Link></Button>
+        </Empty>
+        <DatasetImport showResultLink={false} />
+      </div>
     )
   }
 

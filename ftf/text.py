@@ -1,6 +1,6 @@
 """Text features (Polish): normalisation, MinHash signatures of word 4-gram shingles (Broder 1997) on
 entity-masked text, multilingual-e5-small embeddings (ONNX int8; Wang et al. 2024) and, for display only,
-YAKE keywords (Campos et al. 2020) and money amounts."""
+frequent keywords and money amounts."""
 from __future__ import annotations
 
 import re
@@ -120,22 +120,61 @@ def embed_text(text: str) -> np.ndarray | None:
 
 
 # ----------------------------------------------------------------------------- keywords, amounts
+_KW_FRAGMENT = re.compile(r"[.,;:!?()\[\]{}<>\"'„”“«»/\\|•·–—\n\r\t]+")
+_KW_EDGE = re.compile(r"^[^\w]+|[^\w]+$")
+_KW_LINK = re.compile(r"(?:https?://|www\.)\S+|[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:/\S*)?")
+# keyword-only additions to STOP_PL: abbreviations and page furniture
+_KW_STOP = STOP_PL | set("""bez godz min sek tys mln mld ok np itp itd nr ul tel med www http https com html
+pochodzi przeczytaj czytaj wiecej zobacz kliknij""".split())
+
+
 def keywords(text: str, n: int = 15) -> list[str]:
+    """Up to `n` frequent content words and two-word phrases, for display only (never used to link).
+
+    Words are lowercased. A word counts when it has at least 3 characters, no digit and is not a stop word.
+    A word written with a capital letter anywhere except at the start of a fragment scores half a point more,
+    which favours names and brands. A phrase is two adjacent counted words inside one fragment. It is kept
+    when it repeats or when both words are capitalised (a name), and it scores one more than its count.
+    Rank: score, then first position. A word is dropped when every occurrence is inside a chosen phrase.
+    Links and domain names are removed first: they are identifiers and are shown as such."""
     if not text or len(text) < 40:
         return []
-    import yake
-
-    try:
-        kw = yake.KeywordExtractor(lan="pl", n=2, top=n * 2, dedupLim=0.7)
-        out = []
-        for k, _ in kw.extract_keywords(text[:20000]):
-            kf = fold(k)
-            if any(w in STOP_PL for w in kf.split()) and len(kf.split()) == 1:
+    words: dict[str, list] = {}       # folded key -> [display, count, first position, capitalised]
+    pairs: dict[tuple[str, str], list] = {}
+    pos = 0
+    for fragment in _KW_FRAGMENT.split(_KW_LINK.sub(" ", text[:20000])):
+        prev, prev_cap = None, False
+        for i, raw in enumerate(fragment.split()):
+            word = _KW_EDGE.sub("", raw)
+            w, key = word.lower(), fold(word)
+            pos += 1
+            if len(w) < 3 or key in _KW_STOP or any(c.isdigit() for c in w) or "_" in w:
+                prev = None
                 continue
-            out.append(k.lower())
-        return list(dict.fromkeys(out))[:n]
-    except Exception:
-        return []
+            cap = word[0].isupper()
+            entry = words.setdefault(key, [w, 0, pos, False])
+            entry[1] += 1
+            entry[3] = entry[3] or (cap and i > 0)
+            if prev is not None:
+                pair = pairs.setdefault((prev, key), [f"{words[prev][0]} {w}", 0, pos, False])
+                pair[1] += 1
+                pair[3] = pair[3] or (cap and prev_cap)
+            prev, prev_cap = key, cap
+    ranked = [(c + 1, -first, disp, pair) for pair, (disp, c, first, name) in pairs.items() if c >= 2 or name]
+    ranked += [(c + 0.5 * cap, -first, disp, (key,)) for key, (disp, c, first, cap) in words.items()]
+    ranked.sort(key=lambda r: (-r[0], -r[1]))
+    out: list[str] = []
+    in_phrase: dict[str, int] = {}    # word -> occurrences covered by chosen phrases
+    for _, _, disp, keys in ranked:
+        if len(out) >= n:
+            break
+        if len(keys) == 1 and in_phrase.get(keys[0], 0) >= words[keys[0]][1]:
+            continue
+        out.append(disp)
+        if len(keys) == 2:
+            for k in keys:
+                in_phrase[k] = in_phrase.get(k, 0) + pairs[keys][1]
+    return out
 
 
 AMOUNT_RX = re.compile(r"(\d[\d  .,]{0,12}\d|\d)\s*(zł|zl|pln|eur|€|usd|\$|tys\.? ?zł|tys\.?)", re.I)

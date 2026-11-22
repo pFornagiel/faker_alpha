@@ -555,6 +555,8 @@ export interface DataStatus {
   last_added: string | null
   store: string
   default_dataset: string
+  default_dataset_exists: boolean
+  demo_available: boolean
   llm_backend: string
   llm_backend_label: string
   llm_available: { claude_cli: boolean; gemini: boolean }

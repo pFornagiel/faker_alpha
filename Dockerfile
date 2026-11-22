@@ -20,6 +20,8 @@ COPY tools ./tools
 COPY README.md ./
 COPY docs ./docs
 COPY research ./research
+# demo dataset: 8 invented cases for `python -m ftf demo` and the "Wczytaj zbiór demonstracyjny" button
+COPY tests/fixtures ./tests/fixtures
 # models (~310 MB: e5 + SCRFD/ArcFace) baked into the image so the demo works offline
 RUN python tools/download_models.py
 # optional: headless browser for live URL capture

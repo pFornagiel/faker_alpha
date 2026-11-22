@@ -1,11 +1,13 @@
 services:
   app:
     build: .
-    ports: ["8765:8765"]
+    ports: ["${FTF_PORT:-8765}:8765"]   # FTF_PORT=8770 docker compose up -d when 8765 is taken
     volumes:
       - ./data:/app/data            # dataset, store (sqlite), caches, reference faces, exports
     environment:
       - FTF_LLM=${FTF_LLM:-auto}    # claude CLI is not inside the container -> Gemini (GEMINI_API_KEY) or rules
+      - FTF_STORE=${FTF_STORE:-data/store/ftf.sqlite}   # relative to /app, i.e. inside ./data
+      - FTF_ENRICH=${FTF_ENRICH:-1}  # 0 = no RDAP / DNS / crt.sh lookups
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
@@ -16,6 +18,8 @@ services:
     command: ["python", "-m", "ftf.scheduler", "--every", "30", "--analyse"]
     volumes: ["./data:/app/data"]
     environment:
+      - FTF_STORE=${FTF_STORE:-data/store/ftf.sqlite}
+      - FTF_ENRICH=${FTF_ENRICH:-1}
       - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     profiles: ["scheduler"]

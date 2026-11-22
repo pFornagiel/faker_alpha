@@ -200,7 +200,10 @@ def load_dataset(root: str | Path, source: str = "organizer") -> list[Material]:
     root = Path(root)
     subs = [p for p in sorted(root.iterdir(), key=lambda p: (len(p.name), p.name)) if p.is_dir()]
     if len(subs) == 1 and not any(f.is_file() for f in root.iterdir()):
-        return load_dataset(subs[0], source)
+        inner = list(subs[0].iterdir())
+        # a lone sub-folder holding only folders is a wrapper; one holding files is a single case
+        if inner and all(p.is_dir() for p in inner):
+            return load_dataset(subs[0], source)
     return [load_folder(s, source=source, name=s.name) for s in subs]
 
 

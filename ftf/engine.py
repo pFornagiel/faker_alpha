@@ -19,21 +19,24 @@ class Engine:
         self._clustering = None
 
     # ------------------------------------------------------------------ ingest
-    def add(self, m: ingest.Material, use_llm: bool = True, progress=None, force: bool = False) -> tuple[dict, dict]:
+    def add(self, m: ingest.Material, use_llm: bool = True, progress=None, force: bool = False,
+            enrich_online: bool | None = None) -> tuple[dict, dict]:
         if self.store.has(m.id) and not force:
             f, v = self.store.all()[m.id]
             return f, v
-        f, v = analyze(m, use_llm=use_llm, progress=progress)
+        f, v = analyze(m, use_llm=use_llm, progress=progress, enrich_online=enrich_online)
         self.store.upsert(m, f, v)
         self._clustering = None
         return f, v
 
-    def add_dataset(self, root: str | Path, use_llm: bool = True, progress=None, force: bool = False) -> int:
+    def add_dataset(self, root: str | Path, use_llm: bool = True, progress=None, force: bool = False,
+                    enrich_online: bool | None = None) -> int:
+        """`enrich_online`: None = follow FTF_ENRICH, False = no RDAP / DNS / crt.sh lookups (the demo dataset)."""
         ms = ingest.load_dataset(root)
         for i, m in enumerate(ms):
             if progress:
                 progress(f"[{i + 1}/{len(ms)}] {m.name}")
-            self.add(m, use_llm=use_llm, progress=None, force=force)
+            self.add(m, use_llm=use_llm, progress=None, force=force, enrich_online=enrich_online)
         return len(ms)
 
     # ------------------------------------------------------------------ analysis

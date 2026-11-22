@@ -1,6 +1,13 @@
+# build context = only what the Dockerfile copies; everything else stays out (faster build, no secrets in the context)
+.git/
 .venv/
+.env
+.ruff_cache/
+**/__pycache__/
 web/node_modules/
 web/dist/
 data/
 models/
-**/__pycache__/
+video/
+presentation/
+rules/
