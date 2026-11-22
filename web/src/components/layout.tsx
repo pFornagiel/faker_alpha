@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router"
 import { useQuery } from "@tanstack/react-query"
-import { BookOpen, ChartScatter, Grid3x3, Layers, LayoutGrid, Network, Plus, Search } from "lucide-react"
+import { BookOpen, ChartScatter, FlaskConicalOff, Grid3x3, Layers, LayoutGrid, Network, Plus, Search } from "lucide-react"
 
 import { api, type SearchResult } from "@/lib/api"
 import { matLabel } from "@/lib/format"
@@ -25,6 +25,7 @@ const NAV = [
   { to: "/matrix", label: "Macierz", icon: Grid3x3, match: (p: string) => p.startsWith("/matrix") || p.startsWith("/pair") },
   { to: "/materials", label: "Materiały", icon: LayoutGrid, match: (p: string) => p.startsWith("/materials") || p.startsWith("/trace") },
   { to: "/glossary", label: "Słowniczek", icon: BookOpen, match: (p: string) => p.startsWith("/glossary") },
+  { to: "/rejected-features", label: "Odrzucone cechy", icon: FlaskConicalOff, match: (p: string) => p.startsWith("/rejected-features") },
 ]
 
 function AppSidebar() {

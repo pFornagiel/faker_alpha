@@ -15,6 +15,7 @@ const PairPage = lazy(() => import("@/pages/pair"))
 const TracePage = lazy(() => import("@/pages/trace"))
 const AnalysePage = lazy(() => import("@/pages/analyse"))
 const GlossaryPage = lazy(() => import("@/pages/glossary"))
+const RejectedFeaturesPage = lazy(() => import("@/pages/rejected-features"))
 
 function NotFound() {
   return <p className="text-muted-foreground">Nie ma takiej strony.</p>
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="trace" element={<TracePage />} />
             <Route path="analyse" element={<AnalysePage />} />
             <Route path="glossary" element={<GlossaryPage />} />
+            <Route path="rejected-features" element={<RejectedFeaturesPage />} />
             {/* old workspace URLs */}
             <Route path="relations" element={<Navigate to="/graph" replace />} />
             <Route path="metrics" element={<Navigate to="/space" replace />} />
