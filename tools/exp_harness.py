@@ -183,6 +183,7 @@ class Bench:
         if p.exists() and not rebuild:
             z = np.load(p)
             self.d, self.ML, self.views, self.in_store = z["d"], z["ML"], z["views"], z["in_store"]
+            self._repair_views()
         else:
             from multiprocessing import get_context
 
@@ -213,14 +214,46 @@ class Bench:
             self.d[ix] = np.minimum(np.triu(d, 1) + np.triu(d, 1).T + np.eye(n), 1.0)
             self.ML[ix] = ml | ml.T
             for k in range(len(VIEWS)):
-                up = np.triu(vs[k], 1)
+                up = np.where(np.triu(np.ones((n, n), bool), 1), vs[k], np.nan)      # np.triu would zero-fill
                 self.views[k][ix] = np.where(np.isnan(up), up.T, up)
             self.in_store = np.zeros(N, bool)
             self.in_store[row] = True
             np.savez_compressed(p, d=self.d, ML=self.ML, views=self.views, in_store=self.in_store)
         np.fill_diagonal(self.d, 0.0)
+        k = (~np.isnan(self.views)).sum(0)
+        g = np.where(k > 0, 1.0 - np.nansum(self.views, 0) / np.maximum(k, 1), 1.0)
+        self.views_check = float(np.abs(g - self.d)[self.iu].max())                  # 0 when the views reproduce d
         self.camp = self.cluster(self.d, self.ML)
         self.CAMP = (self.camp[:, None] == self.camp[None, :]) & self.iu
+
+    def _repair_views(self) -> None:
+        """Caches written before the fix hold 0 where a view is unavailable, and only the upper triangle
+        (np.triu zero-fills). Restore NaN from per-page availability, as in ftf.similarity.views, and symmetry."""
+        if np.isnan(self.views).any():
+            return
+        p = CACHE / "views_available.npy"
+        if p.exists():
+            av = np.load(p)
+        else:
+            from ftf import similarity
+            from ftf.store import Store
+
+            by_name = {n: i for i, n in enumerate(self.names)}
+            av = np.zeros((len(VIEWS), self.N), bool)
+            for f, v in Store(STORE).all().values():
+                i = by_name.get(f.get("name"))
+                if i is None:
+                    continue
+                av[0, i] = bool((f.get("text") or {}).get("minhash_masked"))
+                av[1, i] = bool(similarity.ocr_signature(f))
+                av[2, i] = v.get("text") is not None and len(v["text"]) > 0
+                av[3, i] = v.get("dom") is not None and len(v["dom"]) > 0
+                av[4, i] = bool(similarity._images(f))
+            np.save(p, av)
+        for k in range(len(VIEWS)):
+            up = np.triu(self.views[k], 1)
+            self.views[k] = np.where(av[k][:, None] & av[k][None, :], up + up.T, np.nan)
+        self.view_available = av
 
     @staticmethod
     def cluster(d: np.ndarray, must: np.ndarray, cut: float = CAMPAIGN_CUT) -> np.ndarray:
