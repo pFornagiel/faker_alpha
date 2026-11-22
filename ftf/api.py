@@ -670,7 +670,7 @@ def _indicator_groups(f: dict, corpus_df: Counter, items: dict, cl: dict) -> lis
 
 
 def view_status(f: dict, v: dict | None) -> list[dict]:
-    """Which of the five content views a material can be compared on, and what each one holds."""
+    """Which of the content views a material can be compared on, and what each one holds."""
     from .similarity import _images, ocr_signature
 
     v = v or {}
@@ -683,6 +683,8 @@ def view_status(f: dict, v: dict | None) -> list[dict]:
         "ocr": (ocr_signature(f) is not None, plural(len(t.get("ocr_text") or ""), "znak", "znaki", "znaków") + " odczytanych z kreacji"),
         "semantic": (sem is not None and len(sem) > 0, "wektor znaczenia tekstu (384 liczby)"),
         "html": (dom is not None and len(dom) > 0, "szablon znaczników HTML strony"),
+        "css": (v.get("css") is not None and len(v["css"]) > 0, "zbiór nazw klas CSS strony"),
+        "js": (v.get("js") is not None and len(v["js"]) > 0, "szkielet własnych skryptów strony"),
         "images": (n_img > 0, plural(n_img, "odcisk obrazu", "odciski obrazów", "odcisków obrazów")),
     }
     return [{"view": k, "label": view_label(k), "hint": VIEW_HINT[k], "available": bool(have[k][0]),

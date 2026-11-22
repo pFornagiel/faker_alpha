@@ -35,6 +35,8 @@ VIEW_HINT = {
     "ocr": "ta sama miara na tekście kreacji (OCR zrzutów i klatek wideo, treść reklamy), osoby zamaskowane",
     "semantic": "cosinus embeddingów multilingual-e5-small po odjęciu średniej korpusu (Mu & Viswanath 2018)",
     "html": "MinHash-Jaccard 5-gramów znaczników HTML (Cui et al. 2017)",
+    "css": "MinHash-Jaccard zbioru nazw klas CSS strony; części generowane automatycznie są zamaskowane",
+    "js": "MinHash-Jaccard 5-gramów tokenów własnych skryptów strony; napisy i liczby są zamaskowane",
     "images": "odsetek obrazów mniejszego zbioru z odpowiednikiem pHash w odległości Hamminga ≤ "
               f"{config.PHASH_HAMMING} (Zauner 2010)",
 }

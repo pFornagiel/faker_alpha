@@ -22,7 +22,7 @@ from typing import Callable
 import numpy as np
 from datasketch import MinHash
 
-from . import config, enrich, faces, gazetteer, llm, net, text, vision, web
+from . import config, enrich, faces, gazetteer, lang, llm, net, text, vision, web
 from .ingest import Material, read_meta
 
 log = logging.getLogger(__name__)
@@ -50,6 +50,8 @@ class WebStage:
     landing_ips: set[str] = field(default_factory=set)
     server_hdrs: dict[str, int] = field(default_factory=dict)
     dom_sigs: list[list[int]] = field(default_factory=list)
+    css_sigs: list[list[int]] = field(default_factory=list)
+    js_sigs: list[list[int]] = field(default_factory=list)
     page_info: list[dict] = field(default_factory=list)
     file_shas: set[str] = field(default_factory=set)
     har_images: list[tuple[str, bytes]] = field(default_factory=list)
@@ -188,9 +190,15 @@ def _stage_web(m: Material, meta: dict, say: Callable[[str], None]) -> WebStage:
                 for s in sh:
                     mh.update(s.encode())
                 st.dom_sigs.append(mh.hashvalues.tolist())
+                for sigs, toks, seed, need in ((st.css_sigs, e["class_vocabulary"], 13, config.MIN_CLASS_NAMES),
+                                               (st.js_sigs, e["script_shingles"], 17, config.MIN_SCRIPT_SHINGLES)):
+                    sig = text.set_sig(toks, seed, need)
+                    if sig:
+                        sigs.append(sig)
                 st.page_info.append({
                     "kind": pg["kind"], "file": p.name, "title": e["title"], "saved_url": e["saved_url"],
                     "lang": e["lang"], "generator": e["generator"], "n_tags": len(e["tags"]),
+                    "n_classes": len(e["class_vocabulary"]), "n_script_shingles": len(e["script_shingles"]),
                     "forms": e["forms"][:5], "linked_domains": e["linked_domains"][:20],
                     "comments": e["comments"][:5], "scripts": [s[:120] for s in e["scripts"][:25]],
                 })
@@ -220,6 +228,10 @@ def _stage_web(m: Material, meta: dict, say: Callable[[str], None]) -> WebStage:
             st.indicators.setdefault("advertiser_id", set()).add(str(a["advertiser_id"]).strip())
         if a.get("advertiser"):
             st.indicators.setdefault("advertiser_name", set()).add(gazetteer.fold(a["advertiser"]))
+    for d in meta.get("dns", []):
+        batch = web.cert_batch(d)
+        if batch:
+            st.indicators.setdefault("cert_batch", set()).add(batch)
 
     # Non-CDN IPs (exact CIDR filtering) & accurate Cloudflare detection on landing host IPs
     landing_domains = {
@@ -380,6 +392,8 @@ def _stage_text(m: Material, web_s: WebStage, vis_s: VisualStage, meta: dict, sa
         # entity-masked word 4-gram MinHash: landing-page text (view "text") and creative text (view "ocr")
         "minhash_masked": text.minhash_sig(page_text, masked=True) if page_text else None,
         "minhash_ocr_masked": text.minhash_sig(creative_text, masked=True) if creative_text else None,
+        # language of each text; a pair in two different known languages is not compared word by word
+        "lang": lang.language(page_text), "lang_ocr": lang.language(creative_text),
     }
 
     say("text embedding")
@@ -512,7 +526,8 @@ def _assemble_features(
     if vis_s.videos:
         feats["videos"] = vis_s.videos
 
-    raw_vecs: dict[str, list] = {"faces": vis_s.face_vecs, "text": text_s.text_vecs, "dom": web_s.dom_sigs}
+    raw_vecs: dict[str, list] = {"faces": vis_s.face_vecs, "text": text_s.text_vecs, "dom": web_s.dom_sigs,
+                                 "css": web_s.css_sigs, "js": web_s.js_sigs}
     vectors = {k: (np.stack(v) if len(v) and not isinstance(v[0], list) else v) for k, v in raw_vecs.items()}
     return feats, vectors
 

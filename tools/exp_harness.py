@@ -52,7 +52,7 @@ CORPUS = Path(os.environ.get("FTF_CORPUS", DATA_ROOT / "data" / "harvest" / "url
 STORE = Path(os.environ.get("FTF_HARVEST_STORE", DATA_ROOT / "data" / "store" / "ftf_harvest.sqlite"))
 CACHE = Path(os.environ.get("FTF_EXP_CACHE", DATA_ROOT / "data" / "harvest" / "exp_cache"))
 RESULTS = ROOT / "research" / "experiments"
-VIEWS = ("text", "ocr", "semantic", "html", "images")
+from ftf.similarity import VIEWS  # noqa: E402  (the product's content views, in its order)
 CAMPAIGN_CUT = 0.6
 
 

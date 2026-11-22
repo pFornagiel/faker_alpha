@@ -54,6 +54,16 @@ def minhash_sig(text: str, masked: bool = False) -> list[int] | None:
     return m.hashvalues.tolist() if m is not None else None
 
 
+def set_sig(tokens, seed: int, min_tokens: int = 1) -> list[int] | None:
+    """MinHash signature of a token set (class names, script shingles); None below `min_tokens` distinct tokens."""
+    toks = {t for t in tokens if t}
+    if len(toks) < min_tokens:
+        return None
+    m = MinHash(num_perm=NUM_PERM, seed=seed)
+    m.update_batch([t.encode("utf-8", "replace") for t in sorted(toks)])
+    return m.hashvalues.tolist()
+
+
 def jaccard_sig(a: list[int] | None, b: list[int] | None) -> float | None:
     if not a or not b:
         return None

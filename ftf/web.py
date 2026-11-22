@@ -270,6 +270,9 @@ def extract_html(html: str, base_url: str = "") -> dict:
     base = base_url or saved_url
     canon = soup.find("link", rel=lambda r: r and "canonical" in r)
     og_url = soup.find("meta", attrs={"property": "og:url"})
+    # read both now: a tag inside <noscript> / <template> loses its attributes when those are removed below
+    canon_href = (canon.get("href") or "") if canon else ""
+    og_href = (og_url.get("content") or "") if og_url else ""
     title = (soup.title.string or "").strip() if soup.title and soup.title.string else ""
     metas = {}
     for m in soup.find_all("meta"):
@@ -281,6 +284,8 @@ def extract_html(html: str, base_url: str = "") -> dict:
         if c.strip() and not c.strip().startswith("saved from url")
     ][:20]
     scripts = [s.get("src") for s in soup.find_all("script") if s.get("src")]
+    inline_scripts = [s.get_text() for s in soup.find_all("script")
+                      if not s.get("src") and not _JS_DATA_TYPE.search(s.get("type") or "")]
     inline_js = "\n".join(s.get_text() for s in soup.find_all("script") if not s.get("src"))[:400_000]
     css = [l.get("href") for l in soup.find_all("link") if l.get("href") and "stylesheet" in (l.get("rel") or [])]
     icons = [l.get("href") for l in soup.find_all("link") if l.get("href") and any("icon" in r for r in (l.get("rel") or []))]
@@ -301,7 +306,7 @@ def extract_html(html: str, base_url: str = "") -> dict:
 
     ind: dict[str, set[str]] = {}
     merge_ind(ind, regex_indicators(html))
-    for u in [saved_url, canon.get("href") if canon else "", og_url.get("content") if og_url else ""]:
+    for u in [saved_url, canon_href, og_href]:
         if u and u.startswith("http"):
             merge_ind(ind, url_indicators(u))
     for f in forms:
@@ -323,14 +328,85 @@ def extract_html(html: str, base_url: str = "") -> dict:
             if d and not is_generic(d):
                 out_domains.add(d)
     return {
-        "title": title, "saved_url": saved_url, "canonical": canon.get("href") if canon else "",
-        "og_url": og_url.get("content") if og_url else "", "metas": metas, "comments": comments,
+        "title": title, "saved_url": saved_url, "canonical": canon_href,
+        "og_url": og_href, "metas": metas, "comments": comments,
         "text": text, "scripts": scripts, "css": css, "icons": icons, "forms": forms,
         "links": links[:500], "images": imgs[:300], "tags": tags, "classes": classes,
+        "class_vocabulary": class_vocabulary(classes),
+        "script_shingles": script_shingles([x[:400_000] for x in inline_scripts]),
         "linked_domains": sorted(out_domains), "inline_js_len": len(inline_js), "indicators": ind,
         "lang": (soup.html.get("lang") if soup.html else "") or "",
         "generator": metas.get("generator", ""),
     }
+
+
+# ------------------------------------------------------------------ kit structure: class names, script skeletons
+_CLASS_GENERATED = re.compile(r"(?<![a-z])[0-9a-f]{5,}(?![a-z])|\d+", re.I)        # css-1x2y3z, data-v-4f3a, col-12
+_CLASS_HASHED = re.compile(r"(^|[-_])(?=[A-Za-z0-9]*[A-Z])(?=[A-Za-z0-9]*[a-z])[A-Za-z0-9]{5,8}$")   # sc-bdVaJa
+
+
+def class_vocabulary(classes) -> set[str]:
+    """CSS class names of a page with generated parts masked. A re-skinned kit changes text, brand and images
+    but keeps its own class names, so the set identifies the template (view "css")."""
+    out = set()
+    for c in classes:
+        if 2 <= len(c) <= 60 and c[0] not in "{$<":
+            out.add(_CLASS_HASHED.sub(r"\1#", _CLASS_GENERATED.sub("#", c)))
+    return out
+
+
+_JS_TOKEN = re.compile(r"""
+    (?P<com>/\*.*?\*/|//[^\n]*)
+  | (?P<str>"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)
+  | (?P<num>\b0[xX][0-9a-fA-F]+\b|\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\.\d+)
+  | (?P<id>[A-Za-z_$][\w$]*)
+  | (?P<op>=>|===|!==|==|!=|<=|>=|&&|\|\||\+\+|--|\+=|-=|\*=|/=|\?\.|\.\.\.|[^\s\w])
+""", re.S | re.X)
+_JS_DATA_TYPE = re.compile(r"json|template|html|x-|importmap|speculationrules|text/plain", re.I)
+# Snippets every site embeds (analytics, consent, CDN challenges): they say "uses this service", not "same kit".
+_JS_PUBLIC = re.compile(
+    r"googletagmanager|gtag\(|dataLayer|fbq\(|connect\.facebook\.net|ttq\.|analytics\.tiktok|clarity\(|hotjar|"
+    r"mc\.yandex|ym\(|__CF\$cv\$params|/cdn-cgi/|cloudflare|grecaptcha|turnstile|_paq|intercom|tawk\.to|"
+    r"crisp\.chat|wp-emoji|wpemoji|elementorFrontend|Shopify\.|wixBiSession|adsbygoogle|snaptr\(|pintrk\(|"
+    r"hj\(|_linkedin|twq\(|OneTrust|cookieconsent|__lovable|sentry|bugsnag|newrelic|NREUM", re.I)
+JS_MIN_CHARS, JS_MIN_TOKENS = 200, 30
+
+
+def script_shingles(scripts: list[str], k: int = 5) -> set[str]:
+    """Token k-grams of a page's own inline scripts with comments dropped and string / number literals masked
+    (identifiers kept). Two deployments of one kit differ in the literals (domain, pixel ID, texts) and keep the
+    code, so the shingle set identifies the kit (view "js")."""
+    out: set[str] = set()
+    for src in scripts:
+        src = src.strip()
+        if len(src) < JS_MIN_CHARS or _JS_PUBLIC.search(src):
+            continue
+        if src[0] in "{[" and not re.search(r"\bfunction\b|=>", src[:4000]):
+            continue                                       # a JSON blob without a type attribute
+        toks = []
+        for m in _JS_TOKEN.finditer(src):
+            kind = m.lastgroup
+            if kind != "com":
+                toks.append("S" if kind == "str" else "0" if kind == "num" else m.group())
+        if len(toks) >= JS_MIN_TOKENS:
+            out.update(" ".join(toks[i:i + k]) for i in range(len(toks) - k + 1))
+    return out
+
+
+def cert_batch(d: dict) -> str:
+    """Issuance minute of a host's own TLS certificate, from capture metadata (dns_ssl.json), else "".
+
+    Certificates requested in one batch start in the same minute. A certificate counts as the host's own only if
+    every name on it lies under the host's registrable domain: hosting platforms serve one wildcard certificate
+    (`*.pages.dev`) to all customers, and that would link unrelated tenants. Without the name list nothing is
+    emitted."""
+    start, names = str(d.get("tls_valid_from") or ""), d.get("tls_san") or []
+    host = registrable_domain(str(d.get("hostname") or d.get("apex_domain") or ""))
+    if len(start) < 16 or not names or not host:
+        return ""
+    if any(registrable_domain(str(n).lstrip("*.")) != host for n in names):
+        return ""
+    return start[:16]
 
 
 def tag_shingles(tags: list[str], k: int = 5) -> set[str]:

@@ -39,7 +39,7 @@ LLM_TIMEOUT = int(os.environ.get("FTF_LLM_TIMEOUT", "120"))
 IDENTIFIER_GROUP = {
     "ad_id": "ad_library", "advertiser_id": "ad_library",
     "landing_domain": "domains", "redirect_domain": "domains", "page_host": "domains", "ocr_domain": "domains",
-    "tds_host": "domains",
+    "tds_host": "domains", "cert_batch": "domains",
     "fb_pixel": "tracking_ids", "tiktok_pixel": "tracking_ids", "ga": "tracking_ids", "gtm": "tracking_ids",
     "gads": "tracking_ids", "tenant_uuid": "tracking_ids", "affiliate": "tracking_ids", "adset": "tracking_ids",
     "campaign_param": "tracking_ids",
@@ -51,6 +51,8 @@ MAX_DF = 0.5            # a shared value counts only if held by <= 50 % of mater
 
 # B. Content views -> Gower (1971) distance d = 1 - mean(available view similarities).
 PHASH_HAMMING = 4       # two images match when their 64-bit pHashes differ in <= 4 bits (Zauner 2010)
+MIN_CLASS_NAMES = 10    # view "css" needs at least this many distinct class names on a page
+MIN_SCRIPT_SHINGLES = 30   # view "js" needs at least this many distinct token 5-grams of own inline scripts
 
 # C. Clustering: average linkage (UPGMA) on D (0 inside a must-link component, else d); fcluster cuts.
 DUPLICATE_CUT = 0.05    # d <= this -> duplicate

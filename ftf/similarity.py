@@ -9,9 +9,13 @@ B. Content views, one standard similarity each in [0, 1]:
      ocr       the same measure on the entity-masked text of the creative (OCR of screenshots / keyframes, ad copy)
      semantic  cosine of multilingual-e5-small embeddings after corpus mean-centring (Wang 2024; Mu & Viswanath 2018)
      html      MinHash Jaccard of HTML tag 5-gram shingles, max over page pairs (Cui et al. 2017)
+     css       MinHash Jaccard of the page's CSS class names, generated parts masked, max over page pairs
+     js        MinHash Jaccard of token 5-grams of own inline scripts with literals masked, max over page pairs
      images    pHash overlap coefficient: share of the smaller image set with a match at Hamming <= PHASH_HAMMING (Zauner 2010)
    Gower (1971) distance: d = 1 - mean(sim_v over views available on both sides); no view -> d = 1, comparable = False.
    Because d is a plain mean, each view contributes exactly sim_v / k.
+   `text` and `ocr` compare words, so for two texts in different known languages they are unavailable, not 0:
+   a translated copy of a page shares no word shingles by construction (missing value in Gower's sense).
 """
 from __future__ import annotations
 
@@ -20,12 +24,13 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from . import config, web
+from . import config, lang, web
 from .text import jaccard_sig, minhash_sig
 
-VIEWS = ("text", "ocr", "semantic", "html", "images")
+VIEWS = ("text", "ocr", "semantic", "html", "css", "js", "images")
 VIEW_PL = {"text": "tekst strony", "ocr": "tekst kreacji (OCR)", "semantic": "znaczenie tekstu (e5)", "html": "struktura HTML",
-           "images": "obrazy"}
+           "css": "klasy CSS", "js": "szkielet skryptów", "images": "obrazy"}
+_PAGE_SIG_VIEWS = (("html", "dom"), ("css", "css"), ("js", "js"))       # view -> vector kind, one signature per page
 GROUP_PL = {"ad_library": "biblioteka reklam", "domains": "domena", "tracking_ids": "identyfikator śledzący",
             "contacts": "kontakt", "kit_files": "plik / szablon kitu", "product": "produkt / platforma"}
 TYPE_PL = {
@@ -38,7 +43,7 @@ TYPE_PL = {
     "whatsapp": "WhatsApp", "wallet": "portfel krypto", "script_hash": "identyczny skrypt (hash)",
     "api_template": "szablon API backendu", "form_endpoint": "endpoint formularza", "path_template": "szablon ścieżki URL",
     "product": "nazwa produktu / platformy", "asset_phash": "obraz na stronie", "advertiser_name": "nazwa reklamodawcy",
-    "ip": "adres IP (spoza CDN)",
+    "ip": "adres IP (spoza CDN)", "cert_batch": "certyfikat TLS wystawiony w tej samej minucie",
 }
 
 
@@ -114,6 +119,12 @@ def ocr_signature(f: dict) -> list[int] | None:
     return minhash_sig(t["ocr_text"], masked=True) if t.get("ocr_text") else None
 
 
+def _creative_lang(t: dict) -> str | None:
+    """Language of the creative text; short OCR text gives none, then the page's language stands in."""
+    lo = t.get("lang_ocr")
+    return lo if lo and lo != lang.UNKNOWN else t.get("lang")
+
+
 def _unit(x) -> np.ndarray:
     x = np.atleast_2d(np.asarray(x, dtype=np.float64)).mean(0)
     return x / (np.linalg.norm(x) + 1e-12)
@@ -153,16 +164,17 @@ def views(ida: str, fa: dict, va: dict, idb: str, fb: dict, vb: dict, corpus: Co
     out: dict[str, float] = {}
     ta, tb = fa.get("text") or {}, fb.get("text") or {}
     j = jaccard_sig(ta.get("minhash_masked"), tb.get("minhash_masked"))
-    if j is not None:
+    if j is not None and not lang.differ(ta.get("lang"), tb.get("lang")):
         out["text"] = j
     j = jaccard_sig(corpus.ocr_of(ida, fa), corpus.ocr_of(idb, fb))
-    if j is not None:
+    if j is not None and not lang.differ(_creative_lang(ta), _creative_lang(tb)):
         out["ocr"] = j
     if ida in corpus.sem and idb in corpus.sem:
         out["semantic"] = float(np.clip(corpus.sem[ida] @ corpus.sem[idb], 0.0, 1.0))
-    da, db = va.get("dom"), vb.get("dom")
-    if da is not None and db is not None and len(da) and len(db):
-        out["html"] = max(jaccard_sig(list(x), list(y)) or 0.0 for x in np.atleast_2d(da) for y in np.atleast_2d(db))
+    for view, kind in _PAGE_SIG_VIEWS:
+        da, db = va.get(kind), vb.get(kind)
+        if da is not None and db is not None and len(da) and len(db):
+            out[view] = max(jaccard_sig(list(x), list(y)) or 0.0 for x in np.atleast_2d(da) for y in np.atleast_2d(db))
     A, B = sorted((_images(fa), _images(fb)), key=len)
     if A:
         hits = sum(any(bin(int(x, 16) ^ int(y, 16)).count("1") <= config.PHASH_HAMMING for y in B) for x in A)

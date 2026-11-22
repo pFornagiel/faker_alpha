@@ -418,5 +418,78 @@ class TestSimilarityAndClustering(unittest.TestCase):
         self.assertIn("odległość treści", txt)
 
 
+class PageStructureSignalsTests(unittest.TestCase):
+    """Class-vocabulary and script-skeleton views, the language rule and the certificate-batch identifier."""
+
+    def test_extract_html_survives_canonical_inside_noscript(self):
+        from ftf import web
+
+        html = ('<html><head><title>t</title><noscript><link rel="canonical" href="https://shop.example/x">'
+                '<meta property="og:url" content="https://shop.example/y"></noscript></head><body><p>hello</p></body></html>')
+        e = web.extract_html(html)
+        self.assertTrue(e["title"] == "t" and "hello" in e["text"])
+
+
+    def test_class_vocabulary_masks_generated_parts(self):
+        from ftf import web
+
+        v = web.class_vocabulary(["lead-form__step", "css-1x2y3z9", "col-12", "sc-bdVaJa", "a", "x" * 80])
+        self.assertTrue("lead-form__step" in v and "col-#" in v)
+        self.assertTrue("css-1x2y3z9" not in v and "sc-bdVaJa" not in v)
+        self.assertTrue("a" not in v and "x" * 80 not in v)
+
+
+    def test_script_shingles_ignore_literals_and_public_snippets(self):
+        from ftf import web
+
+        kit = "function send(a){var u='%s';fetch(u+'/lead',{method:'POST',body:JSON.stringify({id:%d,name:a})}).then(function(r){return r.json()}).then(function(d){if(d.ok){window.location=u+'/thanks'}else{alert('%s')}});}" * 2
+        a = web.script_shingles([kit % ("https://one.example", 11, "Error", "https://one.example", 11, "Error")])
+        b = web.script_shingles([kit % ("https://two.example", 2907, "Błąd", "https://two.example", 2907, "Błąd")])
+        self.assertTrue(a and a == b)
+        self.assertTrue(web.script_shingles(["window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}" * 5]) == set())
+        self.assertTrue(web.script_shingles(["var a=1;"]) == set())
+
+
+    def test_cert_batch_only_for_own_certificate(self):
+        from ftf import web
+
+        own = {"hostname": "shop.example.com", "tls_valid_from": "2026-11-02T12:54:47.000Z", "tls_san": ["example.com", "*.example.com"]}
+        self.assertTrue(web.cert_batch(own) == "2026-11-02T12:54")
+        self.assertTrue(web.cert_batch({**own, "hostname": "tenant.pages.dev", "tls_san": ["*.pages.dev"]}) == "")
+        self.assertTrue(web.cert_batch({**own, "tls_san": ["example.com", "other.net"]}) == "")
+        self.assertTrue(web.cert_batch({k: v for k, v in own.items() if k != "tls_san"}) == "")
+
+
+    def test_language_detection_and_differ(self):
+        from ftf import lang
+
+        pl = "To jest strona, na której można się zarejestrować i już dziś zacząć zarabiać, ale nie jest to oferta dla każdego. " * 3
+        en = "This is the page where you can register and start earning today, but it is not an offer for everyone and that is fine. " * 3
+        self.assertTrue(lang.language(pl) == "pl" and lang.language(en) == "en")
+        self.assertTrue(lang.language("krótki tekst") == lang.UNKNOWN)
+        self.assertTrue(lang.differ("pl", "en") and not lang.differ("pl", "pl"))
+        self.assertTrue(not lang.differ("pl", lang.UNKNOWN) and not lang.differ(None, "en"))
+
+
+    def test_views_skip_word_views_across_languages_and_add_structure_views(self):
+        from ftf import similarity, text
+
+        sig = text.minhash_sig("jeden dwa trzy cztery piec szesc siedem osiem dziewiec dziesiec")
+        other = text.minhash_sig("one two three four five six seven eight nine ten eleven")
+        css = text.set_sig({f"kit-{i}" for i in range(20)}, 13, 10)
+        fa = {"text": {"minhash_masked": sig, "minhash_ocr_masked": sig, "lang": "pl", "lang_ocr": "und"}}
+        fb = {"text": {"minhash_masked": other, "minhash_ocr_masked": other, "lang": "en"}}
+        fc = {"text": {"minhash_masked": other, "minhash_ocr_masked": other, "lang": "pl"}}
+        va, vb = {"css": [css]}, {"css": [css], "js": [css]}
+        corpus = similarity.Corpus({"a": (fa, va), "b": (fb, vb), "c": (fc, {})})
+        cross = similarity.views("a", fa, va, "b", fb, vb, corpus)
+        self.assertTrue("text" not in cross and "ocr" not in cross)   # different languages: not comparable word by word
+        self.assertTrue(cross["css"] == 1.0 and "js" not in cross)   # js only on one side
+        same = similarity.views("a", fa, va, "c", fc, {}, corpus)
+        self.assertTrue(same["text"] < 0.2 and same["ocr"] < 0.2)   # same language: compared, and dissimilar
+        link = similarity.pair("a", fa, va, "b", fb, vb, corpus)
+        self.assertTrue(link.distance == 0.0 and link.comparable)
+
+
 if __name__ == "__main__":
     unittest.main()

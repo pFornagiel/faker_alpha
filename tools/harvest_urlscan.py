@@ -173,6 +173,21 @@ def to_har(result: dict) -> dict:
                     "pages": [{"title": page_url}], "entries": entries}}
 
 
+def dns_ssl(page: dict, result: dict | None) -> dict:
+    """Host, network and certificate facts of the scanned page. `tls_san` (the names on the certificate of the
+    primary response) lets the product tell a host's own certificate from a hosting platform's shared one."""
+    primary = next((q for q in ((result or {}).get("data") or {}).get("requests") or []
+                    if (q.get("request") or {}).get("primaryRequest")), None)
+    sec = (((primary or {}).get("response") or {}).get("response") or {}).get("securityDetails") or {}
+    return {
+        "hostname": page.get("domain"), "ip": page.get("ip"), "asn": page.get("asn"), "asnname": page.get("asnname"),
+        "country": page.get("country"), "server": page.get("server"), "tls_issuer": page.get("tlsIssuer"),
+        "tls_valid_from": page.get("tlsValidFrom"), "tls_valid_days": page.get("tlsValidDays"),
+        "tls_age_days": page.get("tlsAgeDays"), "apex_domain": page.get("apexDomain"),
+        "tls_san": sec.get("sanList") or ([sec["subjectName"]] if sec.get("subjectName") else []),
+    }
+
+
 def _complete(case: Path) -> bool:
     mf = case / "capture_manifest.json"
     if not mf.exists():
@@ -216,12 +231,7 @@ def save_case(cl: Client, out: Path, domain: str, hit: dict, cert_row: dict) -> 
         (case / "network.har").write_text(json.dumps(har), encoding="utf-8")
         (case / "urlscan_result.json").write_text(json.dumps(result), encoding="utf-8")
         redirects = [e["request"]["url"] for e in har["log"]["entries"] if 300 <= (e["response"]["status"] or 0) < 400]
-    (case / "dns_ssl.json").write_text(json.dumps({
-        "hostname": page.get("domain"), "ip": page.get("ip"), "asn": page.get("asn"), "asnname": page.get("asnname"),
-        "country": page.get("country"), "server": page.get("server"), "tls_issuer": page.get("tlsIssuer"),
-        "tls_valid_from": page.get("tlsValidFrom"), "tls_valid_days": page.get("tlsValidDays"),
-        "tls_age_days": page.get("tlsAgeDays"), "apex_domain": page.get("apexDomain"),
-    }, ensure_ascii=False), encoding="utf-8")
+    (case / "dns_ssl.json").write_text(json.dumps(dns_ssl(page, result), ensure_ascii=False), encoding="utf-8")
     manifest = {
         "tool": "urlscan.io", "page_url": task.get("url") or url, "final_url": url, "title": page.get("title"),
         "captured_at": task.get("time"), "redirects": redirects[:20], "urlscan_uuid": uuid,
