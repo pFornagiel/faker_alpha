@@ -6,32 +6,57 @@ import { useApi } from "@/lib/format"
 import { ErrorState, Loading, PageHeader, RelationBadge } from "@/components/common"
 
 const SECTIONS = [
-  ["pojecia", "Podstawowe pojęcia"],
-  ["identyfikatory", "Co porównujemy: identyfikatory"],
-  ["widoki", "Co porównujemy: treść"],
-  ["miary", "Miary"],
-  ["wyniki", "Relacje pary"],
-  ["decyzje", "Decyzje"],
-  ["grupowanie", "Grupowanie i przestrzeń cech"],
-  ["jakosc", "Testy jakości"],
+  ["dane", "Dane wejściowe"],
+  ["identyfikatory", "Cechy: identyfikatory"],
+  ["tresc", "Cechy: treść"],
+  ["opisowe", "Cechy opisowe"],
+  ["grupowanie", "Grupowanie w kampanie"],
+  ["relacje", "Relacja pary"],
+  ["nowy", "Klasyfikacja nowego materiału"],
+  ["porownanie", "Porównanie metod grupowania"],
+  ["ewaluacja", "Ewaluacja"],
 ] as const
 
 const pct = (x: number) => `${Math.round(x * 100)}%`
+const sentence = (t: string) => `${t.charAt(0).toUpperCase()}${t.slice(1)}.`
+
+/** What each identifier group contains and where it is read from. The type list under it comes from the API. */
+const GROUP_TEXT: Record<string, string> = {
+  ad_library: "Numer reklamy i numer konta reklamodawcy nadane przez bibliotekę reklam platformy.",
+  domains:
+    "Domena rejestrowalna (eTLD+1) strony docelowej, kolejnych przekierowań i systemu dystrybucji ruchu (TDS) oraz domena odczytana z kreacji przez OCR. " +
+    "Domeny usług ogólnodostępnych, np. CDN i analityki, są pomijane. Na hostingu współdzielonym porównywany jest pełny host klienta.",
+  tracking_ids:
+    "Identyfikatory kont w usługach analitycznych i reklamowych zapisane w kodzie strony (Facebook Pixel, TikTok Pixel, Google Analytics, Tag Manager, Google Ads), " +
+    "identyfikator konta w kreatorze stron oraz parametry afiliacyjne i identyfikatory kampanii w adresie URL.",
+  contacts: "Numer telefonu, adres e-mail, konto Telegram lub WhatsApp, adres portfela kryptowalut znalezione w treści strony albo reklamy.",
+  kit_files:
+    "Elementy zestawu phishingowego (phishing kit): skrót SHA-1 treści skryptu, żądanie do backendu (metoda i ścieżka, części zmienne zamaskowane), " +
+    "adres, na który formularz wysyła dane, oraz szablon ścieżki URL.",
+  product: "Nazwa reklamowanego produktu lub platformy, wyodrębniona przez model językowy albo reguły słownikowe.",
+}
+
+const DECISION_TEXT = (c: Methodology["constants"]): Record<string, string> => ({
+  duplicate: `Ten sam plik, ten sam numer reklamy albo d ≤ ${c.duplicate_cut} względem materiału w bazie.`,
+  known_campaign: `Wspólny identyfikator z kampanią w bazie albo najbliższy sąsiad w odległości d ≤ ${c.campaign_cut}.`,
+  merge_proposal: "Wspólne identyfikatory z dwiema kampaniami jednocześnie. Kampanie mogą być jedną i wymagają decyzji analityka.",
+  new_campaign: `Brak wspólnego identyfikatora i d > ${c.campaign_cut} do każdego materiału w bazie.`,
+})
 
 export default function GlossaryPage() {
   const { data: m, error, isLoading } = useApi<Methodology>("/api/methodology")
   if (isLoading) return <Loading rows={4} />
   if (error || !m) return <ErrorState error={error} />
   const c = m.constants
+  const decisionText = DECISION_TEXT(c)
+  const view = (id: string) => m.views.find((v) => v.view === id)?.label ?? id
+  const space = <Link to="/space" className="underline underline-offset-4">Przestrzeń cech</Link>
 
   return (
     <div className="max-w-5xl space-y-8">
       <PageHeader
         title="Słowniczek"
-        description={<>
-          Krótkie definicje: co porównujemy między dwoma materiałami i jakimi miarami. Progi i listy są pobierane z bieżącej konfiguracji.
-          Porównanie metod grupowania na tych samych danych: <Link to="/space" className="underline underline-offset-4">Przestrzeń cech</Link>.
-        </>}
+        description="Cechy wyodrębniane z materiału oraz metody ich porównywania i grupowania. Progi są odczytywane z bieżącej konfiguracji."
       />
 
       <nav aria-label="Sekcje słowniczka">
@@ -44,109 +69,159 @@ export default function GlossaryPage() {
         </ul>
       </nav>
 
-      <Group id="pojecia" title="Podstawowe pojęcia">
-        <Term name="Materiał">Jeden przypadek w bazie: reklama (zrzut, wideo lub tekst) razem z tym, co udało się zebrać ze strony, do której prowadzi.</Term>
-        <Term name="Kreacja">To, co widać w samej reklamie: obraz, klatki wideo, tekst reklamy.</Term>
-        <Term name="Strona docelowa">Strona, na którą prowadzi reklama (landing page). Daje tekst strony, strukturę HTML i większość śladów technicznych.</Term>
-        <Term name="Ślad">Każda wartość wyciągnięta z materiału, np. domena, piksel, telefon, osoba. Ślad jest albo identyfikatorem (łączy), albo opisem (nie łączy).</Term>
-        <Term name="Identyfikator">Ślad, który łączy: ta sama wartość w dwóch materiałach oznacza tę samą kampanię (połączenie pewne, must-link).</Term>
-        <Term name="Ślad opisowy">
-          Osoby, typ oszustwa, rejestrator, IP, nazwa reklamodawcy. Pokazujemy je, ale nie łączą materiałów: ten sam celebryta czy hosting pojawia się
-          w wielu niezależnych kampaniach.
+      <Group id="dane" title="Dane wejściowe">
+        <Term name="Materiał">Jednostka analizy: reklama (zrzut ekranu, wideo lub tekst) wraz ze stroną docelową, jeśli udało się ją pobrać.</Term>
+        <Term name="Kreacja reklamowa">Treść samej reklamy: obraz, klatki wideo, tekst.</Term>
+        <Term name="Strona docelowa (landing page)">Strona, do której prowadzi reklama. Źródło tekstu, kodu HTML, obrazów i większości identyfikatorów.</Term>
+        <Term name="Kampania">Grupa materiałów przypisanych jednemu operatorowi: mają wspólny identyfikator albo odległość treści d ≤ {c.campaign_cut}.</Term>
+        <Term name="Rodzina kampanii">
+          Kampanie o podobnej treści, ale bez wspólnego identyfikatora (d ≤ {c.family_cut}). Zwykle ten sam zestaw phishingowy użyty przez różnych operatorów.
         </Term>
-        <Term name="Kampania">Grupa materiałów, za którą najpewniej stoi ten sam operator. Łączy je identyfikator albo bardzo podobna treść (d ≤ {c.campaign_cut}).</Term>
-        <Term name="Rodzina kampanii">Kampanie o podobnej treści, ale bez wspólnego identyfikatora (d ≤ {c.family_cut}). Często ten sam szablon u różnych operatorów.</Term>
       </Group>
 
       <Group
         id="identyfikatory"
-        title="Co porównujemy: identyfikatory"
-        intro={<>
-          Porównanie dokładne: wartość jest wspólna albo nie. Liczy się tylko wartość obecna w co najwyżej {pct(c.max_df)} materiałów (zob. <i>df</i> niżej).
-        </>}
+        title="Cechy: identyfikatory"
+        intro="Wartości porównywane dokładnie: dwa materiały mają tę samą wartość albo nie. W panelu każda wyodrębniona wartość jest nazywana śladem."
       >
         {m.identifier_groups.map((g) => (
           <Term key={g.group} name={g.label}>
-            {g.hint}
+            {GROUP_TEXT[g.group] ?? g.hint}
             <span className="mt-0.5 block text-xs text-muted-foreground">{g.types.map((t) => t.label).join(" · ")}</span>
           </Term>
         ))}
-        <Term name="identyczny plik">Ten sam plik (skrót sha256) w obu materiałach, czyli duplikat.</Term>
+        <Term name="Identyczny plik">Ten sam skrót SHA-256 pliku w obu materiałach. Para jest duplikatem.</Term>
       </Group>
 
       <Group
-        id="widoki"
-        title="Co porównujemy: treść"
-        intro="Gdy brak wspólnego identyfikatora, porównujemy treść w kilku widokach. Każdy widok daje podobieństwo s od 0 (nic wspólnego) do 1 (identyczne)."
+        id="tresc"
+        title="Cechy: treść"
+        intro="Pięć miar podobieństwa treści, każda w skali od 0 do 1. Decydują o grupowaniu, gdy materiały nie mają wspólnego identyfikatora."
       >
-        {m.views.map((v) => <Term key={v.view} name={v.label}>{v.hint}</Term>)}
-      </Group>
-
-      <Group id="miary" title="Miary">
-        <Term name="Odległość treści d">
-          <Formula>d = 1 − średnia s z widoków dostępnych po obu stronach</Formula>
-          Brakujący widok jest pomijany, a nie liczony jako 0. Gdy żaden widok nie jest wspólny, d = 1 i para jest nieporównywalna (współczynnik Gowera).
+        <Term name={view("text")}>
+          Współczynnik Jaccarda zbiorów 4-gramów słów w tekście strony docelowej, szacowany metodą MinHash ze 128 permutacjami (Broder 1997).
+          Przed porównaniem imiona i nazwiska są zastępowane znacznikiem, żeby ta sama osoba w dwóch tekstach nie zawyżała podobieństwa.
         </Term>
-        <Term name="Bliskość p">
-          <Formula>p = 1 przy wspólnym identyfikatorze, w przeciwnym razie p = 1 − d</Formula>
-          Jedna liczba do sortowania i kolorowania par. Para z p = 1 i dużym d jest połączona identyfikatorem mimo innej treści.
+        <Term name={view("ocr")}>Ta sama miara na tekście reklamy: tekst odczytany przez OCR ze zrzutów i klatek wideo oraz treść reklamy.</Term>
+        <Term name={view("semantic")}>
+          Podobieństwo kosinusowe wektorów tekstu (embeddingów) z modelu multilingual-e5-small. Od każdego wektora odejmowana jest średnia z bazy
+          (Mu i Viswanath 2018), ponieważ teksty z jednej dziedziny mają wysokie podobieństwo wyjściowe.
         </Term>
-        <Term name="df i MAX_DF">
-          <i>df</i> to liczba materiałów, w których występuje dana wartość. Wartość liczy się jako identyfikator tylko, gdy df / N ≤ {pct(c.max_df)}.
-          Zbyt popularne wartości, np. wspólny CDN, są pomijane. Wartość, którą mają tylko dwa porównywane materiały, liczy się zawsze.
+        <Term name={view("html")}>
+          Współczynnik Jaccarda 5-gramów kolejnych znaczników HTML, szacowany metodą MinHash (Cui i in. 2017). Wykrywa ten sam szablon strony przy zmienionym tekście.
         </Term>
-        <Term name="Jaccard / MinHash">
+        <Term name={view("images")}>
+          Udział obrazów mniejszego zbioru, które mają w drugim materiale odpowiednik: odległość Hamminga między 64-bitowymi skrótami percepcyjnymi pHash
+          nie przekracza {c.phash_hamming} bitów (Zauner 2010). Skrót pHash nie zmienia się istotnie po kompresji i przeskalowaniu obrazu.
+        </Term>
+        <Term name="Współczynnik Jaccarda">
           <Formula>J(A, B) = |A ∩ B| / |A ∪ B|</Formula>
-          Udział wspólnych fragmentów (n-gramów) w obu tekstach. MinHash szybko przybliża J przy pomocy krótkich podpisów.
+          Udział elementów wspólnych w sumie dwóch zbiorów. Tutaj elementami są n-gramy.
         </Term>
-        <Term name="n-gram">Ciąg n kolejnych elementów: 4 słowa dla tekstu, 5 znaczników dla HTML. Porównanie n-gramów wyłapuje przeklejone fragmenty, a nie tylko te same słowa.</Term>
-        <Term name="Maskowanie osób">Przed porównaniem tekstu imiona i nazwiska są zastępowane znacznikiem, żeby ten sam celebryta nie zbliżał niezależnych kampanii.</Term>
-        <Term name="Cosinus embeddingów">
-          Podobieństwo znaczenia dwóch tekstów jako cosinus kąta między ich wektorami (model multilingual-e5-small). Najpierw odejmujemy średni wektor
-          bazy, żeby wspólny „język oszustwa” nie zawyżał wyników.
-        </Term>
-        <Term name="pHash i odległość Hamminga">
-          pHash to 64-bitowy odcisk obrazu odporny na kompresję i skalowanie. Dwa obrazy pasują, gdy odciski różnią się na co najwyżej {c.phash_hamming} bitach.
-          Widok „obrazy” to odsetek obrazów mniejszego zbioru, które mają taki odpowiednik.
-        </Term>
-        <Term name="Odległość do grupowania D">D = 0 dla materiałów połączonych identyfikatorem, także pośrednio przez inne materiały. W pozostałych przypadkach D = d.</Term>
-        <Term name="Średnie wiązanie i dendrogram">
-          Grupowanie hierarchiczne (UPGMA): krok po kroku łączymy dwie najbliższe grupy, a odległość między grupami to średnie D wszystkich par.
-          Dendrogram rysuje te złączenia; cięcie na wysokości {c.campaign_cut} daje kampanie, a na wysokości {c.family_cut} rodziny.
-        </Term>
-        <Term name="Najbliższy sąsiad (1-NN)">Nowy materiał bez wspólnego identyfikatora trafia do kampanii najbliższego znanego materiału, jeśli d ≤ {c.campaign_cut}. W przeciwnym razie to nowy wzorzec.</Term>
+        <Term name="n-gram">Ciąg n kolejnych elementów: 4 słów w tekście, 5 znaczników w HTML. Zgodne n-gramy oznaczają skopiowany fragment, a nie tylko te same słowa.</Term>
+        <Term name="MinHash">Podpis zbioru o stałej długości. Udział zgodnych pozycji w dwóch podpisach jest estymatorem współczynnika Jaccarda.</Term>
       </Group>
 
-      <Group id="wyniki" title="Relacje pary" intro="Wynik porównania dwóch materiałów z bazy.">
-        {m.relations.map((r) => <Term key={r.relation} name={<RelationBadge relation={r.relation} />}>{r.hint}</Term>)}
-      </Group>
-
-      <Group id="decyzje" title="Decyzje dla nowego materiału" intro="Wynik analizy nowego materiału względem całej bazy.">
-        {m.decisions.map((d) => <Term key={d.decision} name={d.label}>{d.hint}</Term>)}
-      </Group>
-
-      <Group id="grupowanie" title="Grupowanie i przestrzeń cech" intro={<>Metody, które można porównać na stronie <Link to="/space" className="underline underline-offset-4">Przestrzeń cech</Link>. Kampanie w całym panelu wyznacza metoda FakeTrace; pozostałe są punktem odniesienia.</>}>
-        <Term name="FakeTrace (UPGMA z must-link)">
-          Materiały ze wspólnym identyfikatorem są sklejane na stałe (odległość D = 0), resztę łączy średnie wiązanie (UPGMA) na odległości treści d.
-          Drzewo jest cięte na wysokości {c.campaign_cut}: wszystko, co połączyło się niżej, to jedna kampania.
+      <Group
+        id="opisowe"
+        title="Cechy opisowe"
+        intro="Widoczne w panelu, ale nieużywane do łączenia materiałów, bo ta sama wartość występuje w niezależnych kampaniach."
+      >
+        <Term name="Osoby">
+          Twarze wykrywa detektor SCRFD (wynik ≥ {c.face_det_threshold}, bok twarzy ≥ {c.face_min_side} px). Wektor ArcFace każdej twarzy jest porównywany
+          z bazą referencyjną; dopasowanie wymaga podobieństwa kosinusowego ≥ {c.face_match_threshold}. Nazwiska są też wyszukiwane w tekście.
         </Term>
-        <Term name="Sama treść">To samo średnie wiązanie i ten sam próg, ale bez identyfikatorów. Pokazuje, ile kampanii dałoby się znaleźć wyłącznie po treści.</Term>
-        <Term name="Pojedyncze wiązanie">Dwie grupy łączą się, gdy choć jedna para jest bliżej niż próg. Jeden materiał-łącznik potrafi skleić odległe grupy (efekt łańcucha).</Term>
-        <Term name="Pełne wiązanie">Dwie grupy łączą się dopiero, gdy każda para jest bliżej niż próg. Daje ciasne, ostrożne grupy.</Term>
-        <Term name="HDBSCAN">Szuka gęstych skupisk bez progu odległości. Materiały spoza gęstych skupisk oznacza jako szum zamiast na siłę przypisywać je do grupy.</Term>
-        <Term name="Louvain">Wykrywanie społeczności w grafie powiązań: dzieli graf tak, by krawędzi wewnątrz grup było dużo, a między grupami mało.</Term>
-        <Term name="MDS">Skalowanie wielowymiarowe: rozkłada materiały na płaszczyźnie tak, by odległości na rysunku jak najwierniej oddawały odległości d. Deterministyczne; dobrze zachowuje duże odległości.</Term>
-        <Term name="t-SNE">Rzut zachowujący sąsiedztwo: bliskie materiały lądują obok siebie, ale odległości między dalekimi grupami nic nie znaczą.</Term>
-        <Term name="Silhouette">Dla każdego materiału: o ile bliżej mu do własnej grupy niż do najbliższej obcej, od −1 do 1. Średnia mówi, czy grupy są zwarte i rozdzielone.</Term>
-        <Term name="ARI">Skorygowany indeks Randa: zgodność dwóch podziałów. 1 = identyczny podział, ok. 0 = jak losowy.</Term>
+        <Term name="Typ oszustwa, marka, medium">Atrybuty przypisywane przez model językowy albo reguły słownikowe: typ oszustwa oraz marka i medium, pod które podszywa się materiał.</Term>
+        <Term name="Adres IP, nazwa reklamodawcy">Zapisywane jako kontekst. Ten sam serwer lub ta sama nazwa nie wskazują jednego operatora.</Term>
       </Group>
 
-      <Group id="jakosc" title="Testy jakości" intro={<>Uruchamiane z wiersza poleceń: <code className="text-xs">python tools/evaluate.py --labels data/labels_dane.csv</code>.</>}>
-        <Term name="Usuń i przypisz ponownie">Materiał usuwamy z bazy i analizujemy od nowa. Powinien wrócić do swojej kampanii, a materiał, który był w bazie sam, powinien zostać rozpoznany jako nowy wzorzec.</Term>
-        <Term name="Sztuczny wariant">Zmieniona kopia materiału (przycięty zrzut, podmieniona domena, inne nazwisko…). Powinna trafić do kampanii materiału źródłowego.</Term>
-        <Term name="F1 par">Dla każdej pary: czy decyzja „ta sama kampania / nie” zgadza się z etykietą. F1 łączy precyzję i kompletność tych decyzji (1 = wszystkie trafne).</Term>
-        <Term name="B-cubed P / R">
-          Liczone z perspektywy każdego materiału. Precyzja: jaka część jego kampanii naprawdę do niej należy. Kompletność: jaką część prawdziwej kampanii odnaleziono.
+      <Group id="grupowanie" title="Grupowanie w kampanie">
+        <Term name="Ograniczenie must-link">
+          Dwa materiały ze wspólnym identyfikatorem należą do jednej kampanii niezależnie od treści. Relacja jest przechodnia: jeśli A łączy się z B, a B z C,
+          wszystkie trzy trafiają do tej samej kampanii.
+        </Term>
+        <Term name="Częstość dokumentowa (df)">
+          Liczba materiałów, w których występuje dana wartość. Wartość jest identyfikatorem tylko wtedy, gdy df / N ≤ {pct(c.max_df)}; wartości powszechne
+          nie wskazują operatora (ta sama idea co IDF, Spärck Jones 1972). Wartość obecna w co najwyżej dwóch materiałach jest uwzględniana zawsze.
+        </Term>
+        <Term name="Odległość treści d">
+          <Formula>d = 1 − średnia podobieństw s z miar dostępnych dla obu materiałów</Formula>
+          Współczynnik Gowera (1971): miara niedostępna dla jednego z materiałów jest pomijana, a nie liczona jako 0. Gdy żadna miara nie jest dostępna dla obu, d = 1.
+        </Term>
+        <Term name="Odległość D">
+          <Formula>D = 0 dla materiałów połączonych identyfikatorem, w pozostałych parach D = d</Formula>
+          Macierz D jest wejściem grupowania.
+        </Term>
+        <Term name="Grupowanie hierarchiczne, metoda średnich połączeń (UPGMA)">
+          W każdym kroku łączone są dwie najbliższe grupy. Odległość między grupami to średnia D po wszystkich parach materiałów z obu grup.
+          Kolejność połączeń zapisuje dendrogram.
+        </Term>
+        <Term name="Progi cięcia dendrogramu">
+          Cięcie na wysokości {c.duplicate_cut} wyznacza duplikaty, na {c.campaign_cut} kampanie, na {c.family_cut} rodziny kampanii.
+        </Term>
+        <Term name="Podobieństwo pary p">
+          <Formula>p = 1 przy wspólnym identyfikatorze, w przeciwnym razie p = 1 − d</Formula>
+          W panelu podpisane jako bliskość. Służy do sortowania par i wyznacza grubość linii na grafie.
+        </Term>
+      </Group>
+
+      <Group id="relacje" title="Relacja pary" intro="Wynik porównania dwóch materiałów z bazy, od najsilniejszej.">
+        {m.relations.map((r) => <Term key={r.relation} name={<RelationBadge relation={r.relation} />}>{sentence(r.hint)}</Term>)}
+      </Group>
+
+      <Group id="nowy" title="Klasyfikacja nowego materiału" intro="Nowy materiał jest porównywany ze wszystkimi materiałami w bazie. Wynikiem jest jedna z czterech decyzji.">
+        <Term name="Najbliższy sąsiad (1-NN) z progiem odrzucenia">
+          Materiał bez wspólnego identyfikatora otrzymuje kampanię najbliższego materiału w bazie, jeśli d ≤ {c.campaign_cut} (Cover i Hart 1967).
+          Powyżej progu nie jest przypisywany do żadnej znanej kampanii (rozpoznawanie w zbiorze otwartym, open-set).
+        </Term>
+        {m.decisions.map((d) => <Term key={d.decision} name={d.label}>{decisionText[d.decision] ?? d.hint}</Term>)}
+      </Group>
+
+      <Group
+        id="porownanie"
+        title="Porównanie metod grupowania"
+        intro={<>Strona {space} stosuje kilka metod do tych samych macierzy odległości. Kampanie w panelu wyznacza pierwsza z nich; pozostałe są punktem odniesienia.</>}
+      >
+        <Term name="FakeTrace">Metoda średnich połączeń (UPGMA) na odległości D, czyli z ograniczeniami must-link, cięta na wysokości {c.campaign_cut}.</Term>
+        <Term name="Sama treść">Ta sama metoda i ten sam próg na odległości d, bez identyfikatorów. Różnica względem FakeTrace pokazuje wkład identyfikatorów.</Term>
+        <Term name="Pojedyncze wiązanie (single linkage)">
+          Odległość między grupami to odległość najbliższej pary. Grupy mogą łączyć się przez pojedyncze materiały pośrednie (efekt łańcuchowy).
+        </Term>
+        <Term name="Pełne wiązanie (complete linkage)">Odległość między grupami to odległość najdalszej pary. Grupy są mniejsze i bardziej jednorodne.</Term>
+        <Term name="HDBSCAN">
+          Grupowanie gęstościowe bez progu odległości, najmniejsza grupa to 2 materiały (Campello i in. 2013). Materiały poza obszarami gęstymi są oznaczane jako szum.
+        </Term>
+        <Term name="Louvain">
+          Wykrywanie społeczności w grafie przez maksymalizację modularności (Blondel i in. 2008). Wierzchołkami są materiały, krawędziami pary powiązane, wagą p.
+        </Term>
+        <Term name="MDS">
+          Klasyczne skalowanie wielowymiarowe (Torgerson 1952): rozmieszcza materiały na płaszczyźnie tak, by odległości na rysunku odpowiadały d.
+          Wynik jest deterministyczny i najlepiej zachowuje duże odległości.
+        </Term>
+        <Term name="t-SNE">
+          Rzut zachowujący sąsiedztwo (van der Maaten i Hinton 2008). Bliskie materiały leżą obok siebie; odległości między odległymi grupami nie podlegają interpretacji.
+        </Term>
+        <Term name="Współczynnik silhouette">
+          Dla każdego materiału porównuje średnią odległość do własnej grupy ze średnią odległością do najbliższej obcej grupy, w skali od −1 do 1 (Rousseeuw 1987).
+          Wysoka średnia oznacza grupy zwarte i rozdzielone.
+        </Term>
+        <Term name="Skorygowany indeks Randa (ARI)">Zgodność dwóch podziałów tego samego zbioru (Hubert i Arabie 1985): 1 oznacza podziały identyczne, wartość bliska 0 zgodność losową.</Term>
+      </Group>
+
+      <Group id="ewaluacja" title="Ewaluacja" intro={<>Uruchamiana z wiersza poleceń: <code className="text-xs">python tools/evaluate.py --labels data/labels_dane.csv</code>.</>}>
+        <Term name="Leave-one-out">
+          Każdy materiał jest kolejno usuwany z bazy i klasyfikowany ponownie. Oczekiwany wynik to jego kampania, a dla materiału, który był w kampanii sam, nowa kampania.
+        </Term>
+        <Term name="Warianty syntetyczne">
+          Zmodyfikowane kopie materiału: sama kreacja, sama strona docelowa, obraz po ponownej kompresji, zmieniona domena, zmienione nazwisko.
+          Oczekiwany wynik to kampania materiału źródłowego.
+        </Term>
+        <Term name="Precyzja, czułość i F1 dla par">
+          Każda para materiałów jest decyzją binarną „ta sama kampania” i jest porównywana z etykietą. F1 to średnia harmoniczna precyzji i czułości.
+        </Term>
+        <Term name="B-cubed">
+          Precyzja i czułość liczone osobno dla każdego materiału i uśredniane (Bagga i Baldwin 1998). Precyzja: jaka część jego grupy ma tę samą etykietę.
+          Czułość: jaka część materiałów z tą etykietą znalazła się w jego grupie.
         </Term>
       </Group>
     </div>
